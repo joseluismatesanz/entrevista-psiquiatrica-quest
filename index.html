@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f7f5" />
+  <title>Asistente de valoración psiquiátrica · V0.2</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">PROTOTIPO CLÍNICO · SOLO CASOS FICTICIOS</p>
+        <h1>Asistente de valoración psiquiátrica</h1>
+      </div>
+      <div class="privacy-chip" aria-label="Privacidad activa">◉ Sesión efímera</div>
+    </header>
+
+    <section class="privacy-banner">
+      <strong>Privacidad por diseño</strong>
+      <span>Sin historial clínico · sin almacenamiento local deliberado · datos ficticios únicamente en esta versión.</span>
+    </section>
+
+    <nav class="steps" aria-label="Flujo de trabajo">
+      <button class="step active" data-step="input">1. Entrada</button>
+      <button class="step" data-step="review">2. Revisión</button>
+      <button class="step" data-step="report">3. Informe</button>
+    </nav>
+
+    <section id="screen-input" class="screen active">
+      <div class="card recorder-card">
+        <div>
+          <p class="section-label">ENTRADA DEL CASO</p>
+          <h2>Entrevista desde el móvil</h2>
+          <p class="muted">La grabación real permanece desactivada hasta validar el procesamiento efímero y la anonimización previa.</p>
+        </div>
+
+        <button id="recordButton" class="record-button" type="button" aria-pressed="false">
+          <span class="record-dot"></span>
+          <span id="recordLabel">Iniciar entrevista</span>
+        </button>
+        <div class="privacy-status-grid">
+          <div><span class="status-ok">✓</span><b>Audio</b><small>No se guarda como archivo</small></div>
+          <div><span class="status-ok">✓</span><b>Historial</b><small>No se conserva entre sesiones</small></div>
+          <div><span class="status-warn">!</span><b>Micrófono real</b><small>Bloqueado en V0.2</small></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row-between">
+          <div>
+            <p class="section-label">PRUEBA SEGURA</p>
+            <h2>Cargar caso ficticio</h2>
+          </div>
+          <select id="caseSelect" aria-label="Seleccionar caso ficticio">
+            <option value="selfharm">Adolescente · autolesiones</option>
+            <option value="autism">TEA · desregulación conductual</option>
+            <option value="psychosis">Posible primer episodio psicótico</option>
+          </select>
+        </div>
+        <textarea id="caseText" rows="13" spellcheck="false"></textarea>
+        <div class="actions">
+          <button id="loadCase" class="secondary">Restaurar caso ficticio</button>
+          <button id="analyzeCase" class="primary">Analizar borrador</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-review" class="screen">
+      <div class="review-grid">
+        <article class="card">
+          <p class="section-label">FUENTES</p>
+          <h2>Quién aporta cada dato</h2>
+          <div id="sourcesList" class="tag-list"></div>
+        </article>
+        <article class="card">
+          <p class="section-label">DATOS NO EXPLORADOS</p>
+          <h2>No completar por inferencia</h2>
+          <ul id="missingList" class="clinical-list"></ul>
+        </article>
+        <article class="card warning-card">
+          <p class="section-label">DISCREPANCIAS</p>
+          <h2>Versiones que deben conservarse</h2>
+          <ul id="conflictList" class="clinical-list"></ul>
+        </article>
+        <article class="card alert-card">
+          <p class="section-label">REVISIÓN DE SEGURIDAD</p>
+          <h2>Elementos que requieren valoración clínica</h2>
+          <ul id="alertList" class="clinical-list"></ul>
+        </article>
+      </div>
+      <div class="actions sticky-actions">
+        <button class="secondary" data-go="input">Volver</button>
+        <button class="primary" data-go="report">Generar informe estructurado</button>
+      </div>
+    </section>
+
+    <section id="screen-report" class="screen">
+      <div class="card">
+        <div class="row-between report-heading">
+          <div>
+            <p class="section-label">BORRADOR CLÍNICO</p>
+            <h2>Informe estructurado</h2>
+          </div>
+          <span class="draft-badge">Requiere validación médica</span>
+        </div>
+        <div id="reportEditor" class="report-editor" contenteditable="true" role="textbox" aria-label="Informe clínico editable"></div>
+      </div>
+
+      <div class="validation-card card">
+        <label class="checkline">
+          <input type="checkbox" id="validateCheck" />
+          <span>He revisado el contenido y asumo la validación clínica del informe.</span>
+        </label>
+        <div class="actions">
+          <button class="secondary" data-go="review">Revisar datos</button>
+          <button id="copyReport" class="primary" disabled>Copiar informe validado</button>
+          <button id="destroySession" class="danger">Cancelar y destruir sesión</button>
+        </div>
+        <p id="sessionMessage" class="muted small"></p>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
