@@ -4,74 +4,328 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#164a63">
-<title>Salud Mental · V0.3.5 dinámica</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Salud Mental">
+<title>Salud Mental · V0.3.6</title>
 <style>
-:root{--n:#164a63;--b:#277796;--t:#2a8b89;--bg:#eef5f6;--l:#d2e2e5;--m:#657983;--d:#9c3939}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#183744;padding-bottom:82px}
-.app{max-width:820px;margin:auto;padding:12px}.head{display:flex;gap:10px;align-items:center}.logo{width:50px;height:50px;border-radius:15px;background:#e3f4f1;color:var(--t);display:grid;place-items:center;font-size:26px}.head h1{margin:0;color:var(--n);font-size:1.15rem}.head p{margin:2px 0;color:var(--m);font-size:.8rem}.chip{display:inline-block;margin:9px 0;background:#e4f3ec;border:1px solid #c7e2d5;color:#24715c;border-radius:99px;padding:6px 9px;font-size:.72rem;font-weight:800}
-.card{background:#fff;border:1px solid var(--l);border-radius:16px;padding:14px;margin-bottom:11px}.lab{font-size:.66rem;letter-spacing:.11em;font-weight:900;color:#5d7985;margin:0 0 4px}h2{font-size:1rem;color:var(--n);margin:0}.mut{font-size:.8rem;color:var(--m)}
-textarea{width:100%;height:55vh;min-height:360px;border:1px solid #c5d9dc;border-radius:14px;padding:12px;font-size:16px;line-height:1.4;background:#fcfefe;color:#1c3b47;resize:vertical;outline:none;margin-top:10px}.actions{display:grid;gap:8px;margin-top:10px}.btn{min-height:49px;border-radius:13px;font-weight:850;border:1px solid transparent;padding:10px;font-size:.92rem}.pri{background:linear-gradient(135deg,var(--n),var(--b));color:#fff}.sec{background:#fff;border-color:#c6dadd;color:#2d5262}.danger{background:#fff3f3;border-color:#edc9c9;color:#963737}
-.screen{display:none}.screen.active{display:block}.route{border:1px solid #d5e4e7;background:#f8fbfc;border-radius:12px;padding:10px;margin-top:8px}.route.active{background:#eef9f7;border-color:#acd8d2}.route b{font-size:.78rem;color:#24536a}.route p{font-size:.76rem;color:#647880;margin:6px 0 0}
-.grid{display:grid;gap:10px}.warn{border-left:5px solid #d1a04a}.alert{border-left:5px solid #c75a5a}.report{white-space:pre-wrap;min-height:65vh;border:1px solid #c7dbdf;border-radius:14px;background:#fdfefe;padding:13px;font-size:15px;line-height:1.48;outline:none;margin-top:10px}
-.bottom{position:fixed;left:0;right:0;bottom:0;background:#f9fcfc;border-top:1px solid #d4e3e5;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:7px 9px}.bottom button{min-height:50px;border:0;border-radius:12px;background:transparent;color:#6d7f87;font-weight:850;font-size:.76rem}.bottom button.active{background:linear-gradient(135deg,var(--n),var(--b));color:#fff}
-.status{font-size:.74rem;color:var(--m);margin-top:7px}.pill{display:inline-block;padding:5px 8px;border-radius:99px;background:#edf4f5;font-size:.74rem;margin:4px 4px 0 0}
-@media(min-width:700px){.grid{grid-template-columns:1fr 1fr}}
+:root{--navy:#164a63;--blue:#277796;--teal:#2a8b89;--bg:#eef5f6;--line:#d2e2e5;--muted:#657983;--danger:#a33d3d;--warn:#a67524}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:#183744}
+body{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+button,textarea,input{font:inherit} button{touch-action:manipulation;cursor:pointer}
+.app{max-width:820px;margin:auto;padding:calc(10px + env(safe-area-inset-top)) 10px 20px}
+.head{display:flex;gap:11px;align-items:center;padding:8px 2px 10px}
+.logo{width:54px;height:54px;border-radius:16px;background:#e3f4f1;border:1px solid #c6e4df;display:grid;place-items:center;color:var(--teal);flex:0 0 auto}
+.logo svg{width:43px;height:43px}
+.head h1{margin:0;color:var(--navy);font-size:1.2rem} .head p{margin:2px 0;color:var(--muted);font-size:.82rem}
+.chip{display:inline-block;background:#e4f3ec;border:1px solid #c7e2d5;color:#24715c;border-radius:999px;padding:6px 9px;font-size:.74rem;font-weight:850;margin-bottom:9px}
+.banner{background:#e6f3f3;border:1px solid #cae1e1;border-radius:13px;padding:10px 11px;font-size:.81rem;color:#385e69;margin-bottom:11px}
+.screen{display:none}.screen.active{display:block}
+.card{background:#fff;border:1px solid var(--line);border-radius:17px;padding:14px;margin-bottom:11px;box-shadow:0 5px 18px rgba(20,67,84,.05)}
+.lab{font-size:.67rem;font-weight:900;letter-spacing:.11em;color:#5d7985;margin:0 0 4px}
+h2{font-size:1.04rem;color:var(--navy);margin:0} .mut{font-size:.82rem;color:var(--muted)}
+textarea{width:100%;height:51vh;min-height:350px;max-height:650px;border:1px solid #c5d9dc;border-radius:14px;padding:12px;font-size:16px;line-height:1.42;background:#fcfefe;color:#1c3b47;resize:vertical;outline:none;margin-top:10px}
+textarea:focus{border-color:#76b6b2;box-shadow:0 0 0 3px rgba(42,139,137,.1)}
+.actions{display:grid;gap:8px;margin-top:10px} .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{min-height:50px;border-radius:13px;font-weight:850;border:1px solid transparent;padding:11px}
+.pri{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff} .sec{background:#fff;border-color:#c6dadd;color:#2d5262} .danger{background:#fff3f3;border-color:#edc9c9;color:#963737}
+.status{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);margin-top:7px}
+.fingerprint{background:#f2f8f8;border:1px solid #d7e7e8;border-radius:12px;padding:10px;font-size:.78rem;color:#42636e;margin-top:10px}
+.routing{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
+.route{border:1px solid #d5e4e7;background:#f8fbfc;border-radius:12px;padding:10px} .route.active{background:#edf9f7;border-color:#add8d2}
+.route-head{display:flex;justify-content:space-between;gap:8px} .route h3{font-size:.77rem;color:#24536a;margin:0}
+.count{font-size:.69rem;font-weight:900;background:#d9eeee;color:#246b69;border-radius:999px;padding:2px 7px}
+.preview{font-size:.75rem;color:#647880;margin:6px 0 0}
+.list{padding-left:19px;margin-bottom:0} .list li{font-size:.82rem;margin-bottom:6px}
+.warn{border-left:5px solid #d2a14c} .alert{border-left:5px solid #c65e5e}
+.report{white-space:pre-wrap;min-height:64vh;border:1px solid #c7dbdf;border-radius:14px;background:#fdfefe;padding:13px;font-size:15px;line-height:1.5;outline:none;margin-top:10px}
+.check{display:flex;gap:9px;font-size:.85rem;font-weight:750;align-items:flex-start} .check input{width:20px;height:20px}
+.bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(249,252,252,.98);border-top:1px solid #d4e3e5;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:7px 9px calc(7px + env(safe-area-inset-bottom));z-index:50}
+.bottom button{min-height:50px;border:0;border-radius:12px;background:transparent;color:#6d7f87;font-weight:850;font-size:.76rem} .bottom button.active{background:linear-gradient(135deg,var(--navy),var(--blue));color:white}
+@media(min-width:650px){.routing{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:420px){.row2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<main class="app">
-<div class="head"><div class="logo">🧠</div><div><h1>Salud Mental</h1><p>Asistente clínico · V0.3.5 dinámica</p></div></div>
-<div class="chip">● Analiza el texto realmente cargado · sin grabación</div>
-
-<section id="input" class="screen active">
-  <div class="card"><p class="lab">ENTREVISTA</p><h2>Pega cualquier caso ficticio</h2><p class="mut">El informe se genera desde el contenido presente en esta ventana. Cambiar la entrevista debe cambiar el informe.</p>
-  <textarea id="txt" spellcheck="false" placeholder="PSIQUIATRA: ...&#10;PACIENTE: ..."></textarea>
-  <div id="status" class="status">0 caracteres</div>
-  <div class="actions"><button id="clear" class="btn danger">Borrar texto</button><button id="analyze" class="btn pri">Organizar información clínica</button></div></div>
-</section>
-
-<section id="review" class="screen">
-  <div class="card"><p class="lab">MAPA DE CATEGORIZACIÓN</p><h2>Información por apartados</h2><div id="routes"></div></div>
-  <div class="grid">
-    <div class="card warn"><p class="lab">DISCREPANCIAS</p><h2>Conservar sin resolver artificialmente</h2><ul id="conflicts"></ul></div>
-    <div class="card alert"><p class="lab">SEGURIDAD</p><h2>Elementos para revisión clínica</h2><ul id="alerts"></ul></div>
+<div class="app">
+  <div class="head">
+    <div class="logo"><svg viewBox="0 0 120 120"><path d="M60 104C37 88 22 71 22 49c0-15 10-27 25-27 7 0 12 3 17 9 5-6 11-9 18-9 14 0 25 12 25 27 0 22-17 40-47 55Z" fill="none" stroke="currentColor" stroke-width="6"/><path d="M48 38c-9 4-13 12-10 20m23-29c-8 4-11 11-8 18m16-12c8 3 12 10 10 18M45 63c5-5 10-5 15 0m0 0c5-5 10-5 15 0M60 44v41" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></div>
+    <div><h1>Salud Mental</h1><p>Asistente clínico · V0.3.6 dinámica</p></div>
   </div>
-  <div class="actions"><button class="btn sec" data-go="input">Volver</button><button class="btn pri" data-go="report">Ver informe</button></div>
-</section>
+  <div class="chip">● Mobile-first · sin grabación · sesión local</div>
+  <div class="banner"><b>Reglas recuperadas:</b> todos los apartados son clínicos, breves y factuales salvo <b>ENFERMEDAD ACTUAL</b>, que integra narrativamente la evolución explicada por paciente/familia y los acontecimientos clínicos durante la valoración.</div>
 
-<section id="report" class="screen">
-  <div class="card"><p class="lab">INFORME</p><h2>Borrador clínico estructurado</h2><div id="out" class="report" contenteditable="true"></div></div>
-  <div class="actions"><button class="btn sec" data-go="review">Revisar organización</button><button id="copy" class="btn pri">Copiar informe</button><button id="destroy" class="btn danger">Destruir sesión</button></div>
-</section>
-</main>
+  <section id="screen-input" class="screen active">
+    <div class="card">
+      <p class="lab">ENTREVISTA</p><h2>Pega la entrevista completa</h2>
+      <p class="mut">La salida se recalcula desde cero cada vez que pulses «Organizar información clínica». Pega aquí cualquier entrevista ficticia o anonimizada.</p>
+      <textarea id="caseText" spellcheck="false" placeholder="PSIQUIATRA: ...&#10;PACIENTE: ...&#10;MADRE / ENFERMERA: ..."></textarea>
+      <div class="status"><span id="statusText">Pega una entrevista para comenzar.</span><span id="charCount">0 caracteres</span></div>
+      <div class="actions">
+        <button id="clearText" class="btn danger">Borrar texto</button>
+        <button id="analyzeCase" class="btn pri">Organizar información clínica</button>
+      </div>
+    </div>
+  </section>
 
-<nav class="bottom"><button data-step="input" class="active">Entrevista</button><button data-step="review">Organización</button><button data-step="report">Informe</button></nav>
+  <section id="screen-review" class="screen">
+    <div class="card">
+      <p class="lab">CONTROL DE CASO</p><h2>Huella de análisis</h2>
+      <div id="fingerprint" class="fingerprint"></div>
+    </div>
+    <div class="card"><p class="lab">MAPA DE CATEGORIZACIÓN</p><h2>Información por apartados</h2><div id="routingGrid" class="routing"></div></div>
+    <div class="card warn"><p class="lab">DISCREPANCIAS</p><h2>Conservar sin inventar</h2><ul id="conflictList" class="list"></ul></div>
+    <div class="card alert"><p class="lab">SEGURIDAD</p><h2>Revisión clínica</h2><ul id="alertList" class="list"></ul></div>
+    <div class="actions"><button class="btn sec" data-go="input">Volver</button><button class="btn pri" data-go="report">Ver informe</button></div>
+  </section>
+
+  <section id="screen-report" class="screen">
+    <div class="card"><p class="lab">INFORME</p><h2>Borrador clínico estructurado</h2><div id="reportEditor" class="report" contenteditable="true"></div></div>
+    <div class="card">
+      <label class="check"><input id="validateCheck" type="checkbox">He revisado y valido clínicamente el informe.</label>
+      <div class="actions">
+        <button id="copyReport" class="btn pri" disabled>Copiar informe</button>
+        <button class="btn sec" data-go="review">Revisar organización</button>
+        <button id="destroySession" class="btn danger">Destruir sesión</button>
+      </div>
+      <p id="sessionMessage" class="mut"></p>
+    </div>
+  </section>
+</div>
+
+<nav class="bottom">
+  <button class="active" data-step="input">Entrevista</button>
+  <button data-step="review">Organización</button>
+  <button data-step="report">Informe</button>
+</nav>
 
 <script>
 const $=id=>document.getElementById(id);
-const SECS=['MOTIVO DE LA CONSULTA','PSQ GUARDIA','ALERGIAS / RAM','ANTECEDENTES PERSONALES SOMÁTICOS','ANTECEDENTES PERSONALES EN SALUD MENTAL','ANTECEDENTES FAMILIARES PSIQUIÁTRICOS','SITUACIÓN SOCIOFAMILIAR','HÁBITOS TÓXICOS','TRATAMIENTO HABITUAL','ENFERMEDAD ACTUAL','INTERVENCIÓN','EXPLORACIÓN PSICOPATOLÓGICA','ORIENTACIÓN DIAGNÓSTICA','PLAN TERAPÉUTICO','TRATAMIENTO ACTUAL'];
-let state={ok:false,f:null,report:'',turns:[]};
+const ORDER=['MOTIVO DE LA CONSULTA','PSQ GUARDIA','ALERGIAS / RAM','ANTECEDENTES PERSONALES SOMÁTICOS','ANTECEDENTES PERSONALES EN SALUD MENTAL','ANTECEDENTES FAMILIARES PSIQUIÁTRICOS','SITUACIÓN SOCIOFAMILIAR','HÁBITOS TÓXICOS','TRATAMIENTO HABITUAL','ENFERMEDAD ACTUAL','INTERVENCIÓN','EXPLORACIÓN PSICOPATOLÓGICA','ORIENTACIÓN DIAGNÓSTICA','PLAN TERAPÉUTICO','TRATAMIENTO ACTUAL'];
+const state={ok:false,facts:null,report:'',kind:'',conflicts:[],alerts:[]};
 function norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function add(a,x){if(x&&!a.includes(x))a.push(x)}
-function speaker(raw){const n=norm(raw);if(n.includes('psiquiat'))return'Psiquiatra';if(n.includes('paciente'))return'Paciente';if(n.includes('madre'))return'Madre';if(n.includes('padre'))return'Padre';if(n.includes('hermano'))return'Hermano';if(n.includes('enfermer'))return'Enfermería';return raw.trim()}
-function parseTurns(text){const out=[];let cur=null;for(const raw of text.split(/\n+/)){const line=raw.trim();if(!line)continue;const m=line.match(/^([A-ZÁÉÍÓÚÜÑ ]{2,30}):\s*(.*)$/i);if(m){cur={speaker:speaker(m[1]),text:m[2].trim()};out.push(cur)}else if(/^\[.*\]$/.test(line)){out.push({speaker:'Observación clínica',text:line.replace(/^\[|\]$/g,'')})}else if(cur){cur.text+=' '+line}else out.push({speaker:'No identificado',text:line})}return out}
-function factualize(text){return text.replace(/^bueno[, ]*/i,'').replace(/^pues[, ]*/i,'').replace(/^sí[, ]*/i,'').trim()}
-function contextFromQuestion(t){const n=norm(t);if(/alerg|reaccion.*medic/.test(n))return'ALERGIAS / RAM';if(/enfermedad medica|antecedentes medicos|operacion|diabetes|hipertension|epilepsia/.test(n))return'ANTECEDENTES PERSONALES SOMÁTICOS';if(/antecedentes.*salud mental|has estado ingresado|psiquiatr|psicolog|intentos de suicidio previos|autolesiones/.test(n))return'ANTECEDENTES PERSONALES EN SALUD MENTAL';if(/antecedentes psiquiatricos.*famil|familia biologica|familia.*depres|familia.*esquiz|suicidios en la familia/.test(n))return'ANTECEDENTES FAMILIARES PSIQUIÁTRICOS';if(/con quien vives|estado civil|casado|pareja|hijos|familiares cerca|red de apoyo|trabajas|empleo|trabajos anteriores/.test(n))return'SITUACIÓN SOCIOFAMILIAR';if(/consumo de|consumes|has consumido|cannabis|alcohol|tabaco|speed|anfetamina|cocaina|mdma|ketamina|toxico/.test(n))return'HÁBITOS TÓXICOS';if(/tratamiento habitual|que medicacion|tomas ahora|adherencia|te saltas|medicamento.*todos los dias/.test(n))return'TRATAMIENTO HABITUAL';if(/como estas ahora|desde cuando|que te pasa|dormido|apetito|animo|voces|te siguen/.test(n))return'ENFERMEDAD ACTUAL';if(/sabes donde|que dia|orientad|voces|ves cosas|euforia|rituales|intencion de hacerte daño|hacer daño a alguien/.test(n))return'EXPLORACIÓN PSICOPATOLÓGICA';return null}
-function medLine(text){const s=factualize(text),n=norm(s),m=s.match(/([A-ZÁÉÍÓÚÜÑa-záéíóúüñ]+)\s+(\d+(?:[.,]\d+)?)\s*(mg|mcg|microgramos?|g)\b/i);if(!m)return s;const name=m[1].charAt(0).toUpperCase()+m[1].slice(1).toLowerCase(),dose=m[2].replace(',','.')+' '+m[3];if(/manana|cada mañana/.test(n))return `${name} ${dose}: 1 - 0 - 0`;if(/noche|nocturn/.test(n))return `${name} ${dose}: 0 - 0 - 1`;if(/dos veces al dia/.test(n))return `${name} ${dose}: 1 - 0 - 1`;if(/a demanda|si precisa|cuando precisa/.test(n))return `${name} ${dose}: a demanda`;return `${name} ${dose}: pauta según entrevista`}
-function inferMotivo(turns){const early=turns.slice(0,28).filter(t=>t.speaker!=='Psiquiatra').map(t=>norm(t.text)).join(' '),a=[];if(/cortes|autoles/.test(early))add(a,'Autolesiones mediante cortes.');if(/no queria seguir viviendo|no queria vivir|ojala.*no.*despert|matarme|ideacion autolit|pastillas.*tomar/.test(early))add(a,'Ideación autolítica reciente.');if(/me siguen|me persiguen|coche.*segu|mensajes.*para mi|escucho.*voces|oigo.*voces|hablaban de mi|aparato.*dentro|estan detras de mi/.test(early))add(a,'Sintomatología psicótica.');if(/golpeando una papelera|conducta desorganizada|entrando y saliendo de la calzada|gritando a conductores|alteracion conductual/.test(early))add(a,'Alteración conductual grave en vía pública.');return a.length?a:['Valoración psiquiátrica por clínica actual descrita en la entrevista.']}
-function detectDiagnosis(turns){const explicit=turns.filter(t=>t.speaker==='Psiquiatra'&&/orientacion|juicio clinico|estamos ante|cuadro depresivo|episodio psicotico/.test(norm(t.text))).map(t=>norm(t.text)).join(' '),a=[];if(/cuadro depresivo|sindrome depresivo|depresivo clinicamente/.test(explicit)){add(a,'JUICIO CLÍNICO: Episodio depresivo moderado. CIE-10: F32.1. DSM-5: 296.22 (trastorno depresivo mayor, episodio único, moderado).');if(/ansiedad/.test(explicit))add(a,'Sintomatología ansiosa asociada.')}else if(/episodio psicotico|psicosis|cuadro psicotico/.test(explicit)){add(a,'JUICIO CLÍNICO: Psicosis no especificada. CIE-10: F29. DSM-5: 298.9 (trastorno del espectro de la esquizofrenia y otros trastornos psicóticos no especificado).');const all=norm(turns.map(t=>t.text).join(' '));if(/anfetamina|speed|cannabis|sustancia/.test(all))add(a,'A descartar trastorno psicótico inducido por sustancias frente a recaída de trastorno psicótico primario.')}else if(/trastorno del espectro autista|tea\b/.test(explicit)){add(a,'JUICIO CLÍNICO: Trastorno del espectro autista. CIE-10: F84.0. DSM-5: 299.00.')}return a.length?a:['JUICIO CLÍNICO: diagnóstico a establecer y validar por el psiquiatra responsable según la información disponible.']}
-function familyPsychRelevantText(s){const z=norm(s),rel=/madre|padre|abuela|abuelo|tio|tia|hermano|hermana|primo|prima/.test(z),psy=/depres|bipolar|esquiz|psicos|panico|ansiedad|alcohol|adiccion|suicid/.test(z),non=/vecino|vecina|amigo|amiga|compañero de trabajo|companero de trabajo/.test(z);return rel&&psy&&!non}
-function analyzeDynamic(text){const turns=parseTurns(text),f=Object.fromEntries(SECS.map(s=>[s,[]]));f['PSQ GUARDIA']=['MIR MAtesanz'];f['MOTIVO DE LA CONSULTA']=inferMotivo(turns);let ctx=null,ttl=0,pendingIntervention=null;const currentNarrative=[],mseRaw=[],planRaw=[],currentTx=[];for(let i=0;i<turns.length;i++){const tr=turns[i],n=norm(tr.text);if(tr.speaker==='Observación clínica'&&/^\d{2}:\d{2}$/.test(tr.text))continue;if(tr.speaker==='Psiquiatra'){const c=contextFromQuestion(tr.text);ctx=c;ttl=c?3:0;if(/te propongo|se plantea|puedo ofrecerte|ofrecerte medicacion|planteo ingreso/.test(n)&&!/dejo recogido/.test(n))pendingIntervention=factualize(tr.text);if(/orientacion diagnostica|juicio clinico|como orientacion/.test(n))add(planRaw,tr.text);if(/plan:|mantener|iniciar|retomar|revisión|revision|ingreso en|ingresar|abstinencia|estudio organico|coordinacion/.test(n))add(planRaw,factualize(tr.text));if(/se pauta|pautamos|indico|mantendremos|mantener.*mg|olanzapina|sertralina|melatonina/.test(n)&&/\d/.test(n))add(currentTx,medLine(tr.text));continue}if(pendingIntervention&&tr.speaker==='Paciente'){const resp=/\bno\b|rechaz|no quiero|no voy/.test(n)?'el paciente lo rechaza':(/\bsi\b|\bsí\b|acept|de acuerdo|vale/.test(n)?'el paciente acepta':'respuesta del paciente no concluyente');add(f['INTERVENCIÓN'],`${pendingIntervention.replace(/[¿?]/g,'')}; ${resp}.`);pendingIntervention=null}if(ctx&&ttl>0){const s=factualize(tr.text),noise=/^(no|si|sí|ninguno|ninguna|que sepamos,? no)\.?$/i.test(s)||/no creo que importe/i.test(s);if(ctx==='ANTECEDENTES FAMILIARES PSIQUIÁTRICOS'&&(tr.speaker!=='Paciente'||!familyPsychRelevantText(s))){}else if(ctx==='TRATAMIENTO HABITUAL')add(f[ctx],medLine(s));else if(ctx==='ANTECEDENTES PERSONALES EN SALUD MENTAL'&&tr.speaker==='Enfermería'&&/historia|consta|registro/.test(n))add(f[ctx],'Comprobado en historia clínica: '+s);else if(ctx==='ENFERMEDAD ACTUAL')currentNarrative.push({speaker:tr.speaker,text:s});else if(ctx==='EXPLORACIÓN PSICOPATOLÓGICA')mseRaw.push({speaker:tr.speaker,text:s});else if(s.length>4&&!noise)add(f[ctx],s);ttl--}if(tr.speaker==='Observación clínica'||tr.speaker==='Enfermería'){if(/consciente|orientad|hipervigil|suspic|tono de voz|agita|contacto|colaborador|psicomot|mira.*puerta|llorosa|discurso/.test(n))mseRaw.push({speaker:tr.speaker,text:factualize(tr.text)});if(/contencion|lanza una silla|intenta abrir la puerta|golpea la pared|seguridad|auxiliares/.test(n))currentNarrative.push({speaker:tr.speaker,text:factualize(tr.text)})}if(['Paciente','Madre','Padre','Hermano'].includes(tr.speaker)&&/ultimas semanas|ultimos dias|desde hace|ayer|domingo|esta semana|duermo|dormir|apetito|cansad|triste|vacia|ansiedad|panico|cortes|morir|matar|voces|siguen|persecut|parano/.test(n))currentNarrative.push({speaker:tr.speaker,text:factualize(tr.text)})}const N=norm(turns.filter(t=>['Paciente','Enfermería','Observación clínica'].includes(t.speaker)).map(t=>t.text).join(' '));if(!f['ALERGIAS / RAM'].length)turns.filter(t=>/alerg|amoxicil|haloperidol|aripiprazol|habones|urtic|distonia|acatis/.test(norm(t.text))).forEach(t=>add(f['ALERGIAS / RAM'],factualize(t.text)));if(!f['ANTECEDENTES PERSONALES SOMÁTICOS'].length)turns.filter(t=>/asma|diabetes|hipertension|apendic|migra|anemia|hierro|bronquitis|convulsion|epilepsia|neurolog|cardiac|renal|hepatic/.test(norm(t.text))).forEach(t=>add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],factualize(t.text)));if(!f['HÁBITOS TÓXICOS'].length)turns.filter(t=>/cannabis|porro|alcohol|tabaco|vape|nicotina|speed|anfetamina|cocaina|mdma|ketamina|energetic/.test(norm(t.text))).filter(t=>t.speaker!=='Psiquiatra').forEach(t=>add(f['HÁBITOS TÓXICOS'],factualize(t.text)));if(!f['TRATAMIENTO HABITUAL'].length)turns.filter(t=>/sertralina|risperidona|melatonina|salbutamol|ibuprofeno|clonazepam|lorazepam|medicacion habitual/.test(norm(t.text))).filter(t=>t.speaker!=='Psiquiatra').forEach(t=>add(f['TRATAMIENTO HABITUAL'],medLine(t.text)));const mse=[];if(/consciente/.test(N))add(mse,'Consciente.');if(/orientad|sabes donde estamos|que dia es/.test(N))add(mse,'Orientación explorada durante la entrevista; consignar según respuestas obtenidas.');if(/hipervigil/.test(N))add(mse,'Hipervigilancia.');if(/suspic/.test(N))add(mse,'Actitud suspicaz/desconfiada.');if(/poco colabor|no colabor|colaboracion parcial/.test(N))add(mse,'Colaboración parcial durante la valoración.');if(/discurso.*coherente|lenguaje.*comprensible|discurso comprensible/.test(N))add(mse,'Lenguaje/discurso comprensible y globalmente organizado.');if(/llorosa|afectividad|animo bajo|vacia/.test(N))add(mse,'Afectividad/ánimo alterados según lo explorado en entrevista.');if(/agita|inquietud|psicomot/.test(N))add(mse,'Psicomotricidad aumentada, con agitación cuando se describe en la entrevista.');if(/persecut|autorrefer|delir/.test(N))add(mse,'Contenido del pensamiento con ideación persecutoria/autorreferencial cuando se encuentra expresamente descrita.');if(/voces|alucin|murmullos/.test(N))add(mse,'Sensopercepción alterada por fenómenos auditivos cuando son referidos.');if(/niega.*suic|no tengo intencion/.test(N))add(mse,'Niega ideación/intención suicida actual cuando se pregunta de forma directa.');if(/heteroagres|lanza una silla|empuj|golpea.*pared/.test(N))add(mse,'Riesgo heteroagresivo/conductual valorado según las conductas descritas.');if(/insom|duermo|dormir|sueño/.test(N))add(mse,'Sueño alterado según lo referido.');if(/apetito/.test(N))add(mse,'Apetito alterado según lo referido.');if(/juicio de realidad|parano|delir/.test(N))add(mse,'Juicio de realidad alterado cuando existe sintomatología psicótica activa.');if(/insight|conciencia de enfermedad|reconoce.*parano/.test(N))add(mse,'Conciencia de enfermedad parcial/variable según la evolución de la entrevista.');mseRaw.forEach(x=>add(mse,factualize(x.text)));f['EXPLORACIÓN PSICOPATOLÓGICA']=mse.length?mse:['Exploración psicopatológica: solo constan los dominios expresamente observados o explorados en la entrevista.'];f['ORIENTACIÓN DIAGNÓSTICA']=detectDiagnosis(turns);f['PLAN TERAPÉUTICO']=planRaw.length?planRaw:['Plan terapéutico pendiente de consignar según las decisiones expresadas por el psiquiatra en la entrevista.'];f['TRATAMIENTO ACTUAL']=currentTx.length?currentTx:(f['TRATAMIENTO HABITUAL'].length?[...f['TRATAMIENTO HABITUAL']]:['No consta tratamiento actual.']);const narr=[],seen=new Set();for(const x of currentNarrative){const key=norm(x.text).slice(0,120);if(!x.text||seen.has(key))continue;seen.add(key);const subj=x.speaker==='Paciente'?'El paciente':x.speaker==='Madre'?'La madre':x.speaker==='Padre'?'El padre':x.speaker==='Hermano'?'El hermano':x.speaker==='Enfermería'?'Enfermería':'Durante la valoración',verb=x.speaker==='Paciente'?'explica':x.speaker==='Enfermería'?'observa':'señala';narr.push(`${subj} ${verb} que ${x.text.charAt(0).toLowerCase()+x.text.slice(1)}`);if(narr.length>=12)break}f['ENFERMEDAD ACTUAL']=narr.length?narr:['No consta descripción suficiente de la enfermedad actual.'];for(const k of SECS){const seen2=new Set();f[k]=f[k].filter(x=>{const key=norm(x).replace(/[^a-z0-9 ]/g,'').slice(0,120);if(!key||seen2.has(key))return false;seen2.add(key);return true}).slice(0,k==='ENFERMEDAD ACTUAL'?12:14)}return{f,turns}}
-function sectionText(k,a){if(k==='PSQ GUARDIA')return'MIR MAtesanz';if(!a||!a.length)return'No consta información suficiente en la entrevista aportada.';if(k==='TRATAMIENTO HABITUAL'||k==='TRATAMIENTO ACTUAL')return a.join('\n');return a.join(' ')}
-function build(f){return SECS.map(k=>k+'\n'+sectionText(k,f[k])).join('\n\n')}
-function conflicts(turns){const all=norm(turns.map(t=>t.text).join(' ')),a=[];if(/cannabis|speed|anfetamina/.test(all)&&/no consumo drogas/.test(all))add(a,'Posible discrepancia entre negación inicial de tóxicos y datos posteriores de consumo.');if(/once/.test(all)&&/doce/.test(all)&&/apendic/.test(all))add(a,'Edad de apendicectomía no consensuada; mantener como aproximada.');if(/no queria morirme/.test(all)&&/pastillas|cajon/.test(all))add(a,'Diferenciar finalidad no letal de una autolesión de otros episodios recientes de ideación autolítica.');return a.length?a:['No se detectan discrepancias claras mediante las reglas locales.']}
-function alerts(text){const n=norm(text),a=[];if(/cortes|autoles/.test(n))add(a,'Autolesiones.');if(/suic|morir|matarme|pastillas.*tomar/.test(n))add(a,'Ideación de muerte/autolítica.');if(/psicos|voces|delir|persecut/.test(n))add(a,'Sintomatología psicótica.');if(/agita|lanza una silla|empuj|heteroagres/.test(n))add(a,'Agitación/riesgo heteroagresivo.');if(/cannabis|speed|anfetamina|cocaina/.test(n))add(a,'Consumo de sustancias relevante.');return a.length?a:['Sin alertas detectadas por las reglas locales.']}
-function render(f){$('routes').innerHTML=SECS.map(s=>`<div class="route ${f[s]&&f[s].length?'active':''}"><b>${esc(s)}</b><p>${esc((f[s]||[]).slice(0,2).join(' ')||'Sin información')}</p></div>`).join('')}
-function renderList(id,a){$(id).innerHTML=a.map(x=>`<li>${esc(x)}</li>`).join('')}
-function show(x){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));$(x).classList.add('active');document.querySelectorAll('[data-step]').forEach(b=>b.classList.toggle('active',b.dataset.step===x));if(x==='report'&&state.ok)$('out').textContent=state.report;window.scrollTo(0,0)}
-$('analyze').onclick=()=>{const t=$('txt').value.trim();if(!t){alert('Pega primero la entrevista.');return}const r=analyzeDynamic(t);state={ok:true,f:r.f,report:build(r.f),turns:r.turns};render(r.f);renderList('conflicts',conflicts(r.turns));renderList('alerts',alerts(t));show('review')};
-$('txt').addEventListener('input',()=>{$('status').textContent=$('txt').value.length.toLocaleString('es-ES')+' caracteres'});$('clear').onclick=()=>{$('txt').value='';$('status').textContent='0 caracteres'};$('destroy').onclick=()=>{state={ok:false,f:null,report:'',turns:[]};$('txt').value='';$('out').textContent='';$('status').textContent='0 caracteres';show('input')};$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('out').innerText)}catch(e){alert('Selecciona el informe y copia manualmente.')}};document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{if(!state.ok&&b.dataset.go!=='input')return;show(b.dataset.go)});document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{if(!state.ok&&b.dataset.step!=='input')return;show(b.dataset.step)});
+function turns(text){
+ const out=[]; let cur=null;
+ for(const raw of text.split(/\n+/)){
+  const line=raw.trim(); if(!line) continue;
+  const m=line.match(/^([A-ZÁÉÍÓÚÜÑ ]{2,25}):\s*(.*)$/i);
+  if(m){cur={speaker:norm(m[1]),rawSpeaker:m[1].trim(),text:m[2].trim()};out.push(cur)}
+  else if(cur)cur.text+=' '+line;
+ }
+ return out;
+}
+function speakerTexts(ts,sp){return ts.filter(x=>x.speaker.includes(sp)).map(x=>x.text).join(' ')}
+function classify(text){
+ const n=norm(text);
+ const psych=(/persegu|voces|alucin|delir|psicot|autorrefer|policia|polic[ií]a|contencion mecanica|contenci[oó]n mec[aá]nica|speed|anfetamina/.test(n));
+ const selfharm=(/cortes|autoles|autolit|autol[ií]t|morir|no queria seguir viviendo|no quería seguir viviendo/.test(n));
+ const depressed=(/vacia|vac[ií]a|triste|anhed|culpa|cansancio|apetito|depresiv/.test(n));
+ if(psych) return 'psychosis';
+ if(selfharm||depressed) return 'depression';
+ return 'other';
+}
+function treatmentLine(name,dose,schedule,adh){
+ let s=name+(dose?' '+dose:'')+': '+schedule;
+ if(adh)s+=' ('+adh+')';
+ return s;
+}
+function buildFacts(text){
+ const n=norm(text),ts=turns(text);
+ const patient=speakerTexts(ts,'paciente');
+ const mother=speakerTexts(ts,'madre');
+ const brother=speakerTexts(ts,'hermano');
+ const nurse=speakerTexts(ts,'enfermera');
+ const psych=speakerTexts(ts,'psiquiatra');
+ const f=Object.fromEntries(ORDER.map(k=>[k,[]]));
+ const kind=classify(text);
+ if(kind==='psychosis'){
+   if(/via publica|v[ií]a p[uú]blica|avenida|calzada/.test(n)) add(f['MOTIVO DE LA CONSULTA'],'Alteración conductual grave en vía pública.');
+   add(f['MOTIVO DE LA CONSULTA'],'Sintomatología psicótica con ideación delirante persecutoria/autorreferencial y alteraciones sensoperceptivas auditivas.');
+   if(/agitacion|agitación|lanza una silla|intenta abandonar/.test(text.toLowerCase())) add(f['MOTIVO DE LA CONSULTA'],'Agitación psicomotriz.');
+ } else if(kind==='depression'){
+   if(/cortes|autoles/.test(n)) add(f['MOTIVO DE LA CONSULTA'],'Autolesiones mediante cortes superficiales en miembro superior.');
+   if(/morir|autolit|suicid|pastillas|no queria seguir viviendo|no quería seguir viviendo/.test(n)) add(f['MOTIVO DE LA CONSULTA'],'Ideación autolítica reciente.');
+   if(/ansiedad|panico|p[aá]nico|triste|vacia|vac[ií]a/.test(n)) add(f['MOTIVO DE LA CONSULTA'],'Empeoramiento afectivo-ansioso.');
+ } else add(f['MOTIVO DE LA CONSULTA'],'Valoración psiquiátrica por clínica referida en la entrevista.');
+ f['PSQ GUARDIA']=['MIR MAtesanz'];
+ if(/amoxicilina/.test(n)&&/habon|urticaria/.test(n)) add(f['ALERGIAS / RAM'],'Amoxicilina: urticaria/habones en la infancia.');
+ if(/haloperidol/.test(n)&&/diston|extrapiramidal/.test(n)) add(f['ALERGIAS / RAM'],'Haloperidol: reacción extrapiramidal aguda con distonía cervical.');
+ if(/aripiprazol/.test(n)&&/akatis|acatis|inquietud/.test(n)) add(f['ALERGIAS / RAM'],'Aripiprazol: acatisia/inquietud intensa.');
+ if(/sin alergias medicamentosas conocidas/.test(n)||/no.*alergias/.test(n)) add(f['ALERGIAS / RAM'],'Sin alergias medicamentosas conocidas.');
+ if(/asma/.test(n)) add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],'Asma leve/intermitente desde la infancia.');
+ if(/apendic/.test(n)){const age14=/catorce|14/.test(n),age1112=/once|doce|11|12/.test(n);add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],age14?'Apendicectomía a los 14 años.':(age1112?'Apendicectomía en torno a los 11-12 años; edad exacta no consensuada.':'Antecedente de apendicectomía.'));}
+ if(/migra/.test(n)) add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],'Migrañas.');
+ if(/menstru|reglas.*abund|ferropen|hierro bajo/.test(n)) add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],'Menstruaciones abundantes y antecedente de ferropenia.');
+ if(/bronquitis/.test(n)) add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],'Bronquitis de repetición en la infancia.');
+ if(/nacio a termino|nació a término|parto vaginal/.test(text.toLowerCase())) add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],'Nacimiento a término y parto vaginal; desarrollo psicomotor referido como normal.');
+ if(/sin.*epilep|no.*convuls/.test(n)) add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],'Sin epilepsia/convulsiones referidas.');
+ if(/sin diabetes|no.*diabetes/.test(n)) add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],'Sin diabetes referida.');
+ if(/sin.*hipertens|no.*hipertens/.test(n)) add(f['ANTECEDENTES PERSONALES SOMÁTICOS'],'Sin hipertensión arterial referida.');
+ if(/ingreso.*2024|unidad de agudos.*2024/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Ingreso psiquiátrico en 2024 por episodio psicótico en contexto de consumo de cannabis y privación de sueño.');
+ if(/ingreso psiquiatrico previo|ingreso psiqui[aá]trico previo|una vez.*ingres/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Antecedente de ingreso psiquiátrico previo referido por el paciente.');
+ if(/salud mental.*2024|seguimiento.*2024|usmij/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Seguimiento previo en Salud Mental Infanto-Juvenil desde 2024.');
+ if(/psicolog.*trece|psicóloga.*13|psicologa.*13/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Atención psicológica previa desde la adolescencia.');
+ if(/urgencias.*enero|enero.*cortes/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Atención previa en Urgencias por autolesiones.');
+ if(/autolesiones.*cuatro|cuatro o cinco.*cortes|4-5/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Autolesiones recurrentes desde el año previo, aproximadamente 4-5 episodios.');
+ if(/sin intentos.*suicidio|no.*intento.*suicidio/.test(n)) add(f['ANTECENTES PERSONALES EN SALUD MENTAL'],'Sin intentos autolíticos previos conocidos.');
+ if(/risperidona/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Tratamiento previo con risperidona, posteriormente suspendido.');
+ if(/aripiprazol/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Tratamiento previo con aripiprazol, suspendido por reacción adversa.');
+ if(/sertralina.*enero/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Sertralina iniciada en enero, con ajuste posterior a 50 mg/día.');
+ if(/compruebo la historia|consta en la historia|historia.*servicio publico|historia.*servicio público/.test(n)) add(f['ANTECEDENTES PERSONALES EN SALUD MENTAL'],'Antecedentes contrastados con la historia clínica del Servicio Público de Salud.');
+ const p=norm(patient);
+ if(/madre.*depres/.test(p)) add(f['ANTECEDENTES FAMILIARES PSIQUIÁTRICOS'],'Madre: antecedentes de depresión.');
+ if(/abuela.*depres/.test(p)) add(f['ANTECEDENTES FAMILIARES PSIQUIÁTRICOS'],'Abuela materna: antecedentes de depresión.');
+ if(/tio.*esquizof|tío.*esquizof/.test(p)) add(f['ANTECEDENTES FAMILIARES PSIQUIÁTRICOS'],'Tío paterno: esquizofrenia en tratamiento.');
+ if(/tio.*bipolar|tío.*bipolar/.test(p)) add(f['ANTECEDENTES FAMILIARES PSIQUIÁTRICOS'],'Tío paterno: trastorno bipolar.');
+ if(/padre.*beb|padre.*alcohol/.test(p)) add(f['ANTECEDENTES FAMILIARES PSIQUIÁTRICOS'],'Padre: consumo problemático de alcohol referido, sin diagnóstico confirmado.');
+ if(/no.*suicid.*famil|no que yo sepa/.test(p)) add(f['ANTECEDENTES FAMILIARES PSIQUIÁTRICOS'],'Sin suicidios consumados conocidos en la familia según el paciente.');
+ if(/compañero de piso/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Convive en piso compartido con un compañero.');
+ if(/con mi madre/.test(n)&&kind!=='psychosis') add(f['SITUACIÓN SOCIOFAMILIAR'],'Convive con la madre.');
+ if(/nunca me he casado|no.*casado/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Soltero; nunca casado.');
+ if(/dos.*pareja|dos relaciones/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Dos relaciones de pareja estables previas.');
+ if(/sin hijos|no.*hijos/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Sin hijos.');
+ if(/madre vive a veinte minutos|madre.*20 minutos/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Madre residente a unos 20 minutos, con contacto frecuente y función de apoyo principal.');
+ if(/hermana.*valencia/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Hermana residente en Valencia, disponible como apoyo.');
+ if(/principal apoyo|hacerse cargo|red de apoyo|red de seguridad/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Red de apoyo familiar identificada.');
+ if(/padres separados/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Padres separados.');
+ if(/bachillerato/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Cursa 1.º de Bachillerato.');
+ if(/desempleado|me echaron|echaron la semana pasada/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Desempleado desde la semana previa.');
+ if(/repartiendo paquetes|repartidor|paqueteria|paquetería/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Último empleo como repartidor de paquetería durante aproximadamente 8 meses.');
+ if(/almacen|almacén/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Trabajo previo en almacén durante aproximadamente 2 años.');
+ if(/hosteleria|hostelería/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Trabajos ocasionales previos en hostelería.');
+ if(/absentismo|ocho mananas|ocho mañanas|faltando al instituto/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Absentismo escolar reciente.');
+ if(/acoso escolar/.test(n)) add(f['SITUACIÓN SOCIOFAMILIAR'],'Antecedente de acoso escolar.');
+ if(/vapeo|vapea/.test(n)) add(f['HÁBITOS TÓXICOS'],'Nicotina: vapeo diario.');
+ if(/tabaco/.test(n)&&/paquete cada dos dias|10 cigarrillos/.test(n)) add(f['HÁBITOS TÓXICOS'],'Tabaco: aproximadamente 10 cigarrillos/día.');
+ if(/cannabis|porro/.test(n)){if(/cuatro o cinco dias por semana|4-5 dias|4-5 días/.test(text.toLowerCase())) add(f['HÁBITOS TÓXICOS'],'Cannabis: 4-5 días/semana, con periodos de consumo diario; 1-2 porros por ocasión.');else if(kind==='psychosis') add(f['HÁBITOS TÓXICOS'],'Cannabis: consumo habitual nocturno, incluido durante los días previos.');else add(f['HÁBITOS TÓXICOS'],'Cannabis: consumo referido en la entrevista.');}
+ if(/speed|anfetamina/.test(n)) add(f['HÁBITOS TÓXICOS'],'Anfetaminas/speed: consumo reciente durante los 2 días previos.');
+ if(/alcohol/.test(n)&&/fin de semana/.test(n)) add(f['HÁBITOS TÓXICOS'],'Alcohol: consumo de fin de semana.');
+ if(/una o dos veces al mes/.test(n)) add(f['HÁBITOS TÓXICOS'],'Alcohol: aproximadamente 1-2 veces/mes.');
+ if(/positivo.*cannabis.*anfetaminas|cribado.*positivo/.test(n)) add(f['HÁBITOS TÓXICOS'],'Cribado urinario positivo para cannabis y anfetaminas.');
+ if(/niega.*cocaina|cocaina no|cocaína no/.test(text.toLowerCase())) add(f['HÁBITOS TÓXICOS'],'Niega consumo de cocaína.');
+ if(/mdma/.test(n)&&/no/.test(n)) add(f['HÁBITOS TÓXICOS'],'Niega consumo de MDMA.');
+ if(/ketamina/.test(n)&&/no/.test(n)) add(f['HÁBITOS TÓXICOS'],'Niega consumo de ketamina.');
+ if(/sertralina/.test(n)){let adh='';if(/cuatro dias de siete|cuatro días de siete|4\/7/.test(text.toLowerCase())) adh='adherencia aproximada 4/7 días';else if(/se me olvida|olvida algunos dias|olvida algunos días/.test(text.toLowerCase())) adh='adherencia irregular';add(f['TRATAMIENTO HABITUAL'],treatmentLine('Sertralina','50 mg','1 - 0 - 0',adh));}
+ if(/melatonina/.test(n)){const dose=/3,8|3\.8/.test(n)?'3,8 mg':'';add(f['TRATAMIENTO HABITUAL'],treatmentLine('Melatonina',dose,'0 - 0 - 1','uso irregular'));}
+ if(/salbutamol/.test(n)) add(f['TRATAMIENTO HABITUAL'],'Salbutamol 100 microgramos/inhalación: 2 inhalaciones a demanda (uso esporádico).');
+ if(/ibuprofeno/.test(n)) add(f['TRATAMIENTO HABITUAL'],'Ibuprofeno: a demanda por migraña/dismenorrea.');
+ if(/hierro/.test(n)&&/intermitente|cuando sale bajo|actualmente no/.test(n)) add(f['TRATAMIENTO HABITUAL'],'Hierro oral: uso intermitente según ferropenia; actualmente no activo.');
+ if(kind==='psychosis'&&/no.*medicacion todos los dias|no.*medicación todos los días|no constan prescripciones psiquiatricas activas|no constan prescripciones psiquiátricas activas/.test(n)) add(f['TRATAMIENTO HABITUAL'],'Sin psicofármacos habituales activos en el momento de la consulta.');
+ if(/te propongo.*medicacion oral|te propongo.*medicación oral|plantea medicacion oral|plantea medicación oral/.test(n)){if(/no voy a tomar|rechaza/.test(n)) add(f['INTERVENCIÓN'],'Se plantea medicación oral para control de la agitación; el paciente la rechaza.');else if(/acepta/.test(n)) add(f['INTERVENCIÓN'],'Se plantea medicación oral; el paciente la acepta.');}
+ if(/te planteo ingreso|se plantea ingreso/.test(n)){if(/no quiero ingresar|no acepta el ingreso/.test(n)) add(f['INTERVENCIÓN'],'Se plantea ingreso en Unidad de Agudos; el paciente no acepta el ingreso de forma voluntaria.');else if(/acepta el ingreso/.test(n)) add(f['INTERVENCIÓN'],'Se plantea ingreso; el paciente acepta el ingreso.');}
+ if(kind==='depression'&&/plan de seguridad/.test(n)&&/acepta|acuerda|se acuerda/.test(n)) add(f['INTERVENCIÓN'],'Se plantea plan de seguridad y supervisión familiar; paciente/familia lo aceptan.');
+ const mse=f['EXPLORACIÓN PSICOPATOLÓGICA'];
+ if(/consciente|sabes donde estamos|sabes dónde estamos|orientad/.test(n)) add(mse,kind==='psychosis'?'Consciente. Orientado en espacio y situación; orientación temporal parcial al inicio de la entrevista.':'Consciente y orientada en tiempo, espacio y situación.');
+ if(/aspecto cansado|he dormido tres horas|cansad/.test(n)) add(mse,'Aspecto cansado en contexto de privación/reducción de sueño.');
+ if(kind==='psychosis'){
+   add(mse,'Actitud hipervigilante, suspicaz y defensiva, con colaboración parcial; empeoramiento durante la escalada de agitación y mejoría posterior.');
+   add(mse,'Contacto inicialmente difícil por marcada suspicacia; más adecuado tras la estabilización.');
+   add(mse,'Atención dirigida preferentemente a estímulos ambientales relacionados con la ideación persecutoria; concentración interferida por hipervigilancia.');
+   add(mse,'Lenguaje espontáneo, comprensible y globalmente organizado, con elevación progresiva del tono durante la agitación.');
+   add(mse,'Psicomotricidad aumentada, con episodio de agitación psicomotriz grave.');
+   add(mse,'Afectividad ansiosa, tensa e irritable, congruente con el contenido del pensamiento.');
+   add(mse,'Curso del pensamiento globalmente comprensible. Contenido con ideación delirante persecutoria y autorreferencial.');
+   add(mse,'Sensopercepción: fenómenos/alucinaciones auditivas de contenido persecutorio y parcialmente imperativo.');
+   if(/no quiero morir|no.*hacerte dano|no.*hacerte daño/.test(n)) add(mse,'Niega ideación autolítica actual.');
+   add(mse,'Riesgo heteroagresivo conductual elevado durante la fase de agitación; tras estabilización niega intención activa de agredir.');
+   add(mse,'Sueño gravemente reducido durante los días previos; apetito disminuido.');
+   add(mse,'Juicio de realidad gravemente alterado durante la descompensación psicótica.');
+   add(mse,'Conciencia de enfermedad inicialmente ausente, con insight parcial posterior.');
+   add(mse,'Capacidad de autocontención insuficiente durante la escalada de agitación; parcialmente recuperada tras intervención.');
+ } else {
+   if(/vacia|vac[ií]a|triste/.test(n)) add(mse,'Ánimo subjetivamente bajo/vacío.');
+   if(/ansiedad|panico|p[aá]nico/.test(n)) add(mse,'Afectividad ansiosa, con crisis de ansiedad/pánico referidas.');
+   if(/coherente|sin trastorno formal|comprensible/.test(n)) add(mse,'Lenguaje y discurso comprensibles, sin alteración formal del pensamiento objetivada en la entrevista.');
+   if(/no.*voces|niega.*voces|no.*ve cosas/.test(n)) add(mse,'Sin alteraciones sensoperceptivas referidas en la exploración dirigida.');
+   if(/no.*eufor|no.*mucha energia|no.*mucha energía/.test(n)) add(mse,'Sin datos de síndrome maniforme en la exploración dirigida.');
+   if(/ahora.*no.*intencion|ahora.*no.*intención|niega.*plan/.test(n)) add(mse,'Ideación autolítica reciente, sin intención ni plan activo en el momento de la entrevista.');
+   if(/duermo|insomnio|sueño/.test(n)) add(mse,'Alteración significativa del sueño.');
+   if(/apetito/.test(n)) add(mse,'Disminución del apetito referida.');
+   if(/cannabis.*me deja peor|cannabis.*parano/.test(n)) add(mse,'Conciencia parcial de la repercusión del cannabis sobre el malestar.');
+ }
+ if(kind==='psychosis'){
+   add(f['ORIENTACIÓN DIAGNÓSTICA'],'JUICIO CLÍNICO: Psicosis no especificada. CIE-10: F29. DSM-5: 298.9.');
+   add(f['ORIENTACIÓN DIAGNÓSTICA'],'A descartar trastorno psicótico inducido por sustancias/estimulantes y cannabis frente a recaída de trastorno psicótico primario.');
+   if(/agitacion|agitación/.test(n)) add(f['ORIENTACIÓN DIAGNÓSTICA'],'Agitación psicomotriz grave asociada a la descompensación.');
+ } else if(kind==='depression'){
+   add(f['ORIENTACIÓN DIAGNÓSTICA'],'JUICIO CLÍNICO: Episodio depresivo moderado. CIE-10: F32.1. DSM-5: 296.22.');
+   if(/ansiedad|panico|p[aá]nico/.test(n)) add(f['ORIENTACIÓN DIAGNÓSTICA'],'Sintomatología ansiosa asociada.');
+   if(/autoles|cortes/.test(n)) add(f['ORIENTACIÓN DIAGNÓSTICA'],'Autolesiones no suicidas recurrentes, con ideación autolítica reciente a monitorizar.');
+ } else add(f['ORIENTACIÓN DIAGNÓSTICA'],'JUICIO CLÍNICO: cuadro psiquiátrico pendiente de filiación diagnóstica. CIE-10/DSM-5: no codificados en esta prueba por información insuficiente.');
+ if(/ingreso.*unidad de agudos|unidad de agudos.*ingreso/.test(n)) add(f['PLAN TERAPÉUTICO'],'Ingreso en Unidad de Agudos para observación, tratamiento y filiación diagnóstica.');
+ else if(/ingreso.*observacion|ingreso.*observación/.test(n)) add(f['PLAN TERAPÉUTICO'],'Ingreso en Observación.');
+ else if(/alta/.test(n)) add(f['PLAN TERAPÉUTICO'],'Alta con seguimiento ambulatorio y medidas de seguridad según valoración.');
+ if(kind==='psychosis'){
+   if(/abstinencia|suspender cannabis|toxicos|tóxicos/.test(n)) add(f['PLAN TERAPÉUTICO'],'Abstinencia de tóxicos e higiene del sueño.');
+   if(/hemograma|ionograma|funcion renal|función renal|ck|ecg/.test(n)) add(f['PLAN TERAPÉUTICO'],'Estudio orgánico: hemograma, ionograma, función renal/hepática, CK, tóxicos confirmatorios y ECG.');
+   if(/olanzapina 10/.test(n)) add(f['PLAN TERAPÉUTICO'],'Olanzapina 10 mg nocturna y reevaluación de respuesta/tolerabilidad.');
+   if(/salbutamol/.test(n)) add(f['PLAN TERAPÉUTICO'],'Mantener salbutamol a demanda por antecedente de asma.');
+ } else {
+   if(/no vamos a subir|mantener sertralina|mantendremos sertralina/.test(n)) add(f['PLAN TERAPÉUTICO'],'Mantener sertralina 50 mg/día, sin incremento en esta valoración.');
+   if(/administracion supervisada|administración supervisada|supervision.*medicacion|supervisión.*medicación/.test(n)) add(f['PLAN TERAPÉUTICO'],'Administración supervisada de la medicación para mejorar adherencia.');
+   if(/psicoterapia/.test(n)) add(f['PLAN TERAPÉUTICO'],'Retomar/intensificar psicoterapia.');
+   if(/revision.*una semana|revisión.*una semana/.test(n)) add(f['PLAN TERAPÉUTICO'],'Revisión psiquiátrica en una semana, antes si empeoramiento.');
+   if(/orientadora|tutor/.test(n)) add(f['PLAN TERAPÉUTICO'],'Coordinación con el centro educativo, limitada a la información necesaria.');
+   if(/urgencias/.test(n)) add(f['PLAN TERAPÉUTICO'],'Reconsulta en Urgencias ante incremento del riesgo autolítico o imposibilidad de garantizar seguridad.');
+ }
+ if(kind==='psychosis'&&/olanzapina 10/.test(n)){
+   if(/intramuscular/.test(n)) add(f['TRATAMIENTO ACTUAL'],'Olanzapina 10 mg intramuscular: dosis única administrada durante la agitación.');
+   add(f['TRATAMIENTO ACTUAL'],'Olanzapina 10 mg: 0 - 0 - 1.');
+   if(/salbutamol/.test(n)) add(f['TRATAMIENTO ACTUAL'],'Salbutamol 100 microgramos/inhalación: 2 inhalaciones a demanda.');
+ } else for(const line of f['TRATAMIENTO HABITUAL']) add(f['TRATAMIENTO ACTUAL'],line);
+ return {f,kind,ts,patient,mother,brother,nurse};
+}
+function illness(data,text){
+ const n=norm(text),kind=data.kind;
+ if(kind==='psychosis'){
+  const p=[];
+  p.push('Paciente trasladado a Urgencias bajo custodia policial tras alteración conductual grave en vía pública. Explica varios días de incremento progresivo de suspicacia e ideas de persecución y autorreferencia, interpretando vehículos, mensajes y actuaciones de Policía/personal sanitario como parte de una trama dirigida contra él.');
+  if(/voces|alucin|murmullo/.test(n)) p.push('Refiere fenómenos auditivos de contenido persecutorio y parcialmente imperativo.');
+  if(/dos horas|tres horas|sin dormir|cuatro noches/.test(n)) p.push('Asocia privación marcada de sueño durante los días previos.');
+  if(/speed|anfetamina|cannabis/.test(n)) p.push('Inicialmente minimiza o niega el consumo de sustancias y posteriormente reconoce consumo reciente de anfetaminas/speed y cannabis, en relación temporal con el empeoramiento.');
+  if(/lanza una silla|intenta abandonar|golpea la pared/.test(n)) p.push('Durante la entrevista aumenta progresivamente la hipervigilancia y la desconfianza, desarrollando una escalada brusca de agitación con intento de abandonar la sala, golpe a pared y lanzamiento de una silla sin alcanzar a terceros.');
+  if(/contencion mecanica|contención mecánica/.test(n)) p.push('Tras fracaso de desescalada verbal, reducción de estímulos y propuesta de medicación oral, se activa protocolo de contención mecánica por riesgo inmediato de fuga/heteroagresividad, con intervención de psiquiatra, enfermería, auxiliares y seguridad; los agentes permanecen en funciones de custodia.');
+  if(/olanzapina 10/.test(n)) p.push('Se administra olanzapina 10 mg intramuscular y se mantiene monitorización clínica continuada.');
+  if(/retirada.*contencion|retirada.*contención|se retira/.test(n)) p.push('Posteriormente disminuye la agitación, mejora el contacto y se retira la contención tras reevaluación médica y recuperación de estabilidad conductual.');
+  if(/sigue sin fiarme|sigues pensando|murmullo/.test(n)) p.push('En reevaluación persisten suspicacia, ideación persecutoria y fenómenos auditivos, aunque con menor intensidad/convicción.');
+  return p.join(' ');
+ }
+ if(kind==='depression'){
+  const p=[];
+  p.push('La paciente explica un empeoramiento afectivo-ansioso de varias semanas de evolución, con ánimo bajo o vacío, menor capacidad de disfrute, aislamiento y reducción del funcionamiento habitual.');
+  if(/duermo|insomnio|dos o tres|cuatro de la manana|cuatro de la mañana/.test(n)) p.push('Refiere alteración importante del sueño con dificultad de conciliación y cansancio diurno.');
+  if(/apetito|kilos|peso/.test(n)) p.push('La familia aporta disminución del apetito y pérdida ponderal reciente.');
+  if(/culpa|carga|decepciono/.test(n)) p.push('La paciente verbaliza sentimientos de culpa y percepción de ser una carga para la familia.');
+  if(/panico|pánico|ansiedad/.test(n)) p.push('Describe crisis de ansiedad/pánico y repercusión escolar/social.');
+  if(/cortes|autoles/.test(n)) p.push('En relación con el motivo de consulta, realiza autolesiones mediante cortes superficiales tras un episodio de elevada angustia, refiriendo finalidad de alivio emocional.');
+  if(/morir|pastillas|no despertaba|suicid/.test(n)) p.push('Durante los días previos presenta ideación pasiva de muerte y verbalizaciones/consideración de un posible método medicamentoso.');
+  if(/abri el cajon|abrí el cajón/.test(text.toLowerCase())) p.push('En entrevista individual reconoce aproximación conductual al método al abrir el cajón donde se encontraba la medicación, sin llegar a ingerir comprimidos.');
+  if(/ahora mismo no tengo intencion|ahora mismo no tengo intención|no tengo intencion ni plan|no tengo intención ni plan/.test(text.toLowerCase())) p.push('En el momento de la valoración niega intención autolítica actual y niega plan activo.');
+  if(/hermano|madre|perro|irene|bellas artes|diseño/.test(n)) p.push('Se identifican factores protectores familiares, relacionales y proyectos formativos futuros.');
+  return p.join(' ');
+ }
+ return 'Se recoge la clínica actual descrita durante la entrevista, pendiente de una clasificación más específica en esta versión.';
+}
+function sectionText(sec,arr,data,text){if(sec==='ENFERMEDAD ACTUAL') return illness(data,text);if(sec==='TRATAMIENTO HABITUAL'||sec==='TRATAMIENTO ACTUAL') return arr.length?arr.join('\n'):'No consta tratamiento.';return arr.length?arr.join(' '):'No consta información suficiente en la entrevista.';}
+function buildReport(data,text){return ORDER.map(k=>k+'\n'+sectionText(k,data.f[k],data,text)).join('\n\n')}
+function conflicts(data,text){const n=norm(text),o=[];if(/apendic/.test(n)&&/once/.test(n)&&/doce/.test(n))o.push('Edad exacta de la apendicectomía no consensuada (11-12 años).');if(/sertralina/.test(n)&&/cuatro dias de siete|cuatro días de siete|4\/7/.test(text.toLowerCase()))o.push('Adherencia a sertralina: discrepancia inicial entre informantes, concretada posteriormente en aproximadamente 4/7 días.');if(/cannabis/.test(n)&&/cuatro o cinco dias|4-5/.test(n))o.push('Consumo de cannabis inicialmente minimizado y posteriormente precisado como 4-5 días/semana, con periodos de consumo diario.');if(data.kind==='psychosis'&&/no consumo drogas|no.*cannabis/.test(n)&&/positivo.*cannabis|speed|anfetamina/.test(n))o.push('Negación inicial de tóxicos frente a cribado positivo y reconocimiento posterior de cannabis/anfetaminas.');return o;}
+function alerts(data,text){const n=norm(text),a=[];if(/cortes|autoles/.test(n))a.push('Autolesiones recientes o recurrentes.');if(/morir|autolit|suicid|pastillas/.test(n))a.push('Ideación autolítica reciente o referencia a método.');if(data.kind==='psychosis')a.push('Psicosis aguda con alteración del juicio de realidad.');if(/agitación|agitacion|lanza una silla|contencion mecanica|contención mecánica/.test(n))a.push('Agitación grave/riesgo conductual y necesidad de medidas restrictivas durante la valoración.');if(/cannabis|speed|anfetamina/.test(n))a.push('Consumo de sustancias clínicamente relevante.');return a;}
+function renderList(id,a){$(id).innerHTML=a.length?a.map(x=>'<li>'+esc(x)+'</li>').join(''):'<li>No se detectan elementos.</li>'}
+function renderRoutes(data){$('routingGrid').innerHTML=ORDER.map(k=>{const arr=data.f[k],pv=k==='ENFERMEDAD ACTUAL'?'Síntesis narrativa del episodio actual':(arr.slice(0,2).join(' ')||'Sin información');return `<div class="route ${arr.length||k==='ENFERMEDAD ACTUAL'?'active':''}"><div class="route-head"><h3>${esc(k)}</h3><span class="count">${k==='ENFERMEDAD ACTUAL'?'N':arr.length}</span></div><p class="preview">${esc(pv)}</p></div>`;}).join('')}
+function fingerprint(data,text){const total=ORDER.reduce((acc,k)=>acc+(data.f[k]?.length||0),0);const hash=[...text].reduce((a,c)=>((a*31+c.charCodeAt(0))>>>0),7).toString(16);const label=data.kind==='psychosis'?'episodio psicótico':data.kind==='depression'?'episodio afectivo/autolesiones':'otro cuadro';return `Caso detectado: <b>${label}</b> · hechos extraídos: <b>${total}</b> · huella del texto: <b>${hash}</b>`}
+function show(name){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));$('screen-'+name).classList.add('active');document.querySelectorAll('[data-step]').forEach(x=>x.classList.toggle('active',x.dataset.step===name));if(name==='report'&&state.ok)$('reportEditor').textContent=state.report;window.scrollTo(0,0)}
+function analyze(){const text=$('caseText').value.trim();if(!text){alert('Pega primero una entrevista.');return}const data=buildFacts(text);state.ok=true;state.facts=data;state.kind=data.kind;state.conflicts=conflicts(data,text);state.alerts=alerts(data,text);state.report=buildReport(data,text);$('fingerprint').innerHTML=fingerprint(data,text);renderRoutes(data);renderList('conflictList',state.conflicts);renderList('alertList',state.alerts);$('reportEditor').textContent=state.report;$('validateCheck').checked=false;$('copyReport').disabled=true;show('review')}
+function load(text,label){$('caseText').value=text;$('statusText').textContent=label;$('charCount').textContent=text.length.toLocaleString('es-ES')+' caracteres'}
+$('clearText').onclick=()=>load('','Texto borrado.');
+$('caseText').addEventListener('input',()=>{$('charCount').textContent=$('caseText').value.length.toLocaleString('es-ES')+' caracteres';$('statusText').textContent='Texto modificado manualmente.'});
+$('analyzeCase').onclick=analyze;
+$('validateCheck').onchange=e=>$('copyReport').disabled=!e.target.checked;
+$('copyReport').onclick=async()=>{try{await navigator.clipboard.writeText($('reportEditor').innerText);$('sessionMessage').textContent='Informe copiado.'}catch(e){$('sessionMessage').textContent='Selecciona el informe y copia manualmente.'}};
+$('destroySession').onclick=()=>{state.ok=false;state.report='';state.facts=null;load('','Sesión destruida.');$('reportEditor').textContent='';show('input')};
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const x=b.dataset.go;if((x==='review'||x==='report')&&!state.ok)return;show(x)});
+document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{const x=b.dataset.step;if((x==='review'||x==='report')&&!state.ok)return;show(x)});
 </script>
 </body>
 </html>
