@@ -1,0 +1,48 @@
+name: Build Android APK
+
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-android-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Embed approved V0.3.7 app
+        run: |
+          mkdir -p android/app/src/main/assets
+          curl -fL "https://raw.githubusercontent.com/joseluismatesanz/entrevista-psiquiatrica-quest/5d0ad58fee219cca13372a9a67904a13215cde3b/index.html" -o android/app/src/main/assets/index.html
+
+      - name: Build APK
+        working-directory: android
+        run: gradle :app:assembleDebug
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk SaludMental-v0.3.8.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SaludMental-v0.3.8-APK
+          path: SaludMental-v0.3.8.apk
+          if-no-files-found: error

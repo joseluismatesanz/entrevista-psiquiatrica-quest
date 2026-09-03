@@ -1,0 +1,25 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.matesanz.saludmental'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.matesanz.saludmental"
+        minSdk 26
+        targetSdk 35
+        versionCode 38
+        versionName "0.3.8"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+}
