@@ -1,0 +1,19 @@
+{
+  "name": "Salud Mental · Asistente Clínico",
+  "short_name": "Salud Mental",
+  "description": "Asistente clínico de organización de entrevistas psiquiátricas. Prototipo sin grabación.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef5f6",
+  "theme_color": "#164a63",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
