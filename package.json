@@ -10,7 +10,7 @@
     "check": "node --check server/analyze.mjs && node --check server/http.mjs && node --check server/render-report.mjs && node --check server/clinical-invariants.mjs"
   },
   "dependencies": {
-    "openai": "^7.10.0"
+    "openai": "7.10.0"
   },
   "engines": {
     "node": ">=22"
