@@ -1,30 +1,15 @@
 # Entrevista Psiquiátrica Quest
 
-Prototipo mobile-first para convertir una entrevista psiquiátrica en un borrador clínico estructurado que siempre requiere revisión y validación médica.
+Prototipo mobile-first para transformar entrevistas psiquiátricas en un borrador clínico estructurado con revisión profesional obligatoria.
 
-## Estado actual — V0.2
+## Estado actual — V0.4
 
-Esta rama contiene un prototipo seguro de interfaz con:
+La rama de trabajo incorpora dos capas:
 
-- entrada de caso desde móvil;
-- botón de entrevista visible, con micrófono real deliberadamente bloqueado;
-- tres casos completamente ficticios;
-- identificación de fuentes de información;
-- datos no explorados;
-- discrepancias entre informantes;
-- alertas para revisión clínica;
-- borrador estructurado con la plantilla clínica acordada;
-- edición manual;
-- validación médica obligatoria antes de copiar;
-- acción de cancelar y destruir la sesión.
+1. **Frontend local determinista**, usado para validar organización, estilo clínico y UX.
+2. **Backend V0.4 text-only** con OpenAI Responses API + Structured Outputs, todavía sin despliegue productivo.
 
-## Privacidad
-
-En V0.2 no existe conexión con OpenAI ni con otros servicios externos. El prototipo no realiza solicitudes de red desde `app.js` y no utiliza `localStorage`, `sessionStorage`, IndexedDB ni cookies para guardar información clínica.
-
-El micrófono real permanece bloqueado hasta validar una arquitectura de captura efímera, transcripción controlada y anonimización previa.
-
-Ver `docs/PRIVACY_BY_DESIGN.md`.
+No hay grabación real en esta fase.
 
 ## Plantilla clínica
 
@@ -44,22 +29,37 @@ Ver `docs/PRIVACY_BY_DESIGN.md`.
 14. PLAN TERAPÉUTICO
 15. TRATAMIENTO ACTUAL
 
-## Regla clínica central
+La regla de redacción y routing vinculante está en `docs/CLINICAL_ROUTING_V0.4.md`.
 
-La ausencia de información nunca se convierte en un hallazgo negativo. Si un dominio no fue preguntado, observado o aportado, debe figurar como `No explorado`, `No consta` o permanecer explícitamente pendiente.
+## Backend V0.4
 
-Las versiones contradictorias de paciente, familiares y observación clínica deben conservarse por separado; el sistema no debe resolverlas inventando una única versión.
+Flujo:
 
-## Ejecutar el prototipo
+`texto -> Structured Outputs -> invariantes deterministas -> renderer por secciones -> borrador -> validación médica`
 
-Es una aplicación web estática. Se puede abrir `index.html` directamente en un navegador o servir la carpeta con cualquier servidor HTTP estático.
+Desarrollo local:
 
-## Próxima fase
+```bash
+cp .env.example .env
+npm install
+npm test
+npm run start:api
+```
 
-1. Validar clínicamente V0.2 con los tres casos ficticios.
-2. Convertir la extracción clínica a un esquema JSON estricto.
-3. Incorporar un backend sin secretos en frontend.
-4. Conectar generación estructurada con OpenAI usando únicamente contenido desidentificado y configuración de retención aprobada.
-5. Diseñar y validar la capa de transcripción/anonimización antes de habilitar el micrófono real.
+Endpoint: `POST /api/analyze`.
 
-Nunca introducir datos reales de pacientes en este repositorio ni en el prototipo mientras no exista una validación formal de seguridad y protección de datos.
+La API key nunca debe ir al navegador ni al repositorio. Ver `docs/OPENAI_BACKEND_V0.4.md`.
+
+## Privacidad
+
+- repositorio público: solo fixtures ficticios;
+- sin API keys;
+- sin persistencia deliberada de entrevistas;
+- `store:false` en Responses API;
+- sin audio real;
+- sin localStorage/IndexedDB para contenido clínico;
+- borrador siempre sujeto a validación médica.
+
+`store:false` no equivale por sí solo a Zero Data Retention. El uso con información identificable requiere controles institucionales de privacidad, seguridad y retención.
+
+**No usar con datos identificables de pacientes en esta fase.**
