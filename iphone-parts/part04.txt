@@ -1,0 +1,43 @@
+of|hermano de mi padre.*esquizof/.test(patient))add(f[S[5]],'Tío paterno: esquizofrenia en tratamiento.');
+ if(/tio.*bipolar/.test(patient))add(f[S[5]],'Tío paterno: trastorno bipolar.');
+ if(/padre.*beb|padre.*alcohol/.test(patient))add(f[S[5]],'Padre: consumo problemático de alcohol referido, sin diagnóstico confirmado.');
+ if(/no que yo sepa/.test(patient))add(f[S[5]],'Sin suicidios consumados conocidos en la familia según el paciente.');
+
+ // SOCIOFAMILIAR
+ if(/compañero de piso/.test(z))add(f[S[6]],'Convive en piso compartido con un compañero.');
+ if(/con mi madre/.test(z)&&kind!=='psychosis')add(f[S[6]],'Convive con la madre.');
+ if(/nunca me he casado|no.*casado/.test(z))add(f[S[6]],'Soltero; nunca casado.');
+ if(/dos relaciones|dos.*pareja/.test(z))add(f[S[6]],'Dos relaciones de pareja estables previas.');
+ if(/sin hijos|no.*hijos/.test(z))add(f[S[6]],'Sin hijos.');
+ if(/madre.*veinte minutos|madre.*20 minutos/.test(z))add(f[S[6]],'Madre residente a unos 20 minutos, con contacto frecuente y función de apoyo principal.');
+ if(/hermana.*valencia/.test(z))add(f[S[6]],'Hermana residente en Valencia, disponible como apoyo.');
+ if(/principal apoyo|red de apoyo|hacerse cargo/.test(z))add(f[S[6]],'Red de apoyo familiar identificada.');
+ if(/padres separados/.test(z))add(f[S[6]],'Padres separados.');
+ if(/bachillerato/.test(z))add(f[S[6]],'Cursa 1.º de Bachillerato.');
+ if(/desempleado|me echaron|echaron la semana pasada/.test(z))add(f[S[6]],'Desempleado desde la semana previa.');
+ if(/repartidor|repartiendo paquetes|paqueter/.test(z))add(f[S[6]],'Último empleo como repartidor de paquetería durante aproximadamente 8 meses.');
+ if(/almacen|almacén/.test(z))add(f[S[6]],'Trabajo previo en almacén durante aproximadamente 2 años.');
+ if(/hosteleria|hostelería/.test(z))add(f[S[6]],'Trabajos ocasionales previos en hostelería.');
+ if(/absentismo|faltando al instituto|ocho mañanas|ocho mananas/.test(z))add(f[S[6]],'Absentismo escolar reciente.');
+ if(/acoso escolar/.test(z))add(f[S[6]],'Antecedente de acoso escolar.');
+
+ // TÓXICOS
+ if(/vapeo|vapea/.test(z))add(f[S[7]],'Nicotina: vapeo diario.');
+ if(/tabaco/.test(z)&&/paquete cada dos dias|10 cigarrillos/.test(z))add(f[S[7]],'Tabaco: aproximadamente 10 cigarrillos/día.');
+ if(/cannabis|porro/.test(z)){if(/cuatro o cinco dias por semana|4-5 dias/.test(z))add(f[S[7]],'Cannabis: 4-5 días/semana, con periodos de consumo diario; 1-2 porros por ocasión.');else if(kind==='psychosis')add(f[S[7]],'Cannabis: consumo habitual nocturno, incluido durante los días previos.');else add(f[S[7]],'Cannabis: consumo referido en la entrevista.');}
+ if(/speed|anfetamina/.test(z))add(f[S[7]],'Anfetaminas/speed: consumo reciente durante los 2 días previos.');
+ if(/alcohol/.test(z)&&/fin de semana/.test(z))add(f[S[7]],'Alcohol: consumo de fin de semana.');
+ if(/una o dos veces al mes/.test(z))add(f[S[7]],'Alcohol: aproximadamente 1-2 veces/mes.');
+ if(/cribado.*positivo|positivo.*cannabis.*anfetaminas/.test(z))add(f[S[7]],'Cribado urinario positivo para cannabis y anfetaminas.');
+ if(/cocaina no|niega.*cocaina/.test(z))add(f[S[7]],'Niega consumo de cocaína.');
+
+ // TRATAMIENTO HABITUAL
+ if(/sertralina/.test(z)){let adh=/cuatro dias de siete|4\/7/.test(z)?'adherencia aproximada 4/7 días':(/se me olvida|adherencia irregular/.test(z)?'adherencia irregular':'');add(f[S[8]],medLine('Sertralina','50 mg','1 - 0 - 0',adh));}
+ if(/melatonina/.test(z))add(f[S[8]],medLine('Melatonina',/3,8|3\.8/.test(z)?'3,8 mg':'','0 - 0 - 1','uso irregular'));
+ if(/salbutamol/.test(z))add(f[S[8]],'Salbutamol 100 microgramos/inhalación: 2 inhalaciones a demanda (uso esporádico).');
+ if(/ibuprofeno/.test(z))add(f[S[8]],'Ibuprofeno: a demanda por migraña/dismenorrea.');
+ if(kind==='psychosis'&&/no constan prescripciones psiquiatricas activas|no.*medicacion todos los dias/.test(z))add(f[S[8]],'Sin psicofármacos habituales activos en el momento de la consulta.');
+
+ // INTERVENCIÓN: solo propuesta explícita y respuesta
+ if(/te propongo.*medicacion oral|te propongo.*medicación oral|se plantea medicacion oral/.test(z)){if(/no voy a tomar|rechaza/.test(z))add(f[S[10]],'Se plantea medicación oral para control de la agitación; el paciente la rechaza.');else if(/acepta/.test(z))add(f[S[10]],'Se plantea medicación oral; el paciente la acepta.');}
+ if(/te planteo ingreso|se plantea ingreso/.test(z)){if(/no quiero ingresar|no acepta el ingreso/.test(z))add(f[S[10]],'Se plantea ingreso en Unidad de Agudos; el paciente no acepta el ingreso de forma voluntaria.');else if(/acepta el ingreso/.test(z))add(f[S[10]],'Se plantea ingreso; el p
