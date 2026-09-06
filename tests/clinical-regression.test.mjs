@@ -7,6 +7,7 @@ import { analyzeTranscript } from "../server/analyze.mjs";
 function section(text = "", evidence_status = "not_provided", source_ids = []) {
   return { text, evidence_status, source_ids };
 }
+
 function med(overrides = {}) {
   return {
     raw_name: "",
@@ -24,6 +25,7 @@ function med(overrides = {}) {
     ...overrides,
   };
 }
+
 function baseAssessment() {
   const sections = {
     motivo_consulta: section(),
@@ -42,12 +44,14 @@ function baseAssessment() {
     plan_terapeutico: section(),
     tratamiento_actual: section(),
   };
+
   return {
     sources: [
       { id: "pat", label: "Paciente", kind: "patient" },
       { id: "psy", label: "Psiquiatra", kind: "psychiatrist" },
       { id: "mom", label: "Madre", kind: "mother" },
       { id: "ehr", label: "Historia clínica", kind: "ehr" },
+      { id: "obs", label: "Observación clínica", kind: "clinician_observation" },
     ],
     sections,
     medications: { habitual: [], current: [] },
@@ -67,7 +71,19 @@ function baseAssessment() {
   };
 }
 
-test("Caso 1: motivo directo, tratamiento por líneas y sin convertir NSSI en intento", () => {
+function setDiagnosis(a, diagnosis, cie10, dsm5, differential = []) {
+  a.diagnostic_judgment = {
+    primary_diagnosis: diagnosis,
+    cie10_code: cie10,
+    dsm5_code: dsm5,
+    provisional: true,
+    differential,
+    basis_summary: "Juicio de trabajo sustentado por la entrevista.",
+    requires_clinician_validation: true,
+  };
+}
+
+test("Caso 1: motivo directo, tratamiento por líneas, NSSI no se convierte en intento y diagnóstico consistente", () => {
   const a = baseAssessment();
   a.sections.motivo_consulta = section(
     "Autolesiones mediante cortes superficiales en miembro superior e ideación autolítica reciente.",
@@ -86,10 +102,12 @@ test("Caso 1: motivo directo, tratamiento por líneas y sin convertir NSSI en in
   );
   a.sections.intervencion = section("", "not_provided", []);
   a.sections.orientacion_diagnostica = section(
-    "JUICIO CLÍNICO: Episodio depresivo moderado. CIE-10: F32.1. DSM-5: 296.22.",
+    "Texto que no debe ser la fuente canónica.",
     "supported",
     ["pat"]
   );
+  setDiagnosis(a, "Episodio depresivo moderado", "F32.1", "296.22");
+
   a.medications.habitual = [
     med({
       raw_name: "sertralina",
@@ -120,16 +138,17 @@ test("Caso 1: motivo directo, tratamiento por líneas y sin convertir NSSI en in
   assert.match(report, /Sertralina 50 mg: 1 - 0 - 0/);
   assert.match(report, /Melatonina 3,8 mg: 0 - 0 - 1/);
   assert.doesNotMatch(report, /\nINTERVENCIÓN\n/);
+  assert.match(report, /JUICIO CLÍNICO: Episodio depresivo moderado\. CIE-10: F32\.1\. DSM-5: 296\.22\./);
   assert.equal(assessment.sections.psq_guardia.text, "MIR MAtesanz");
   assert.deepEqual(collectClinicalInvariantViolations(assessment), []);
 });
 
-test("Caso 2: familia solo paciente, intervención explícita y contención fuera de INTERVENCIÓN", () => {
+test("Caso 2: familia solo paciente, intervención explícita, contención en enfermedad actual y juicio F29", () => {
   const a = baseAssessment();
   a.sections.motivo_consulta = section(
     "Alteración conductual grave en vía pública. Sintomatología psicótica con ideación delirante persecutoria y alteraciones sensoperceptivas auditivas. Agitación psicomotriz.",
     "supported",
-    ["pat"]
+    ["pat", "psy"]
   );
   a.sections.antecedentes_salud_mental = section(
     "Ingreso en Unidad de Agudos en 11/2024 por episodio psicótico en contexto de cannabis y privación de sueño, comprobado en historia clínica.",
@@ -144,13 +163,26 @@ test("Caso 2: familia solo paciente, intervención explícita y contención fuer
   a.sections.enfermedad_actual = section(
     "Durante la entrevista presenta escalada de agitación tras fracaso de medidas menos restrictivas, precisando protocolo de contención mecánica, olanzapina intramuscular, monitorización y retirada posterior tras reevaluación.",
     "supported",
-    ["pat", "psy"]
+    ["pat", "psy", "obs"]
   );
   a.sections.intervencion = section(
     "Se plantea medicación oral; el paciente la rechaza. Se plantea ingreso en Unidad de Agudos; el paciente no acepta ingreso voluntario.",
     "supported",
     ["psy", "pat"]
   );
+  a.sections.exploracion_psicopatologica = section(
+    "Hipervigilante y suspicaz, con ideación persecutoria y fenómenos auditivos. Tras estabilización niega intención autolítica y heteroagresiva activa.",
+    "supported",
+    ["pat", "psy", "obs"]
+  );
+  setDiagnosis(
+    a,
+    "Psicosis no especificada",
+    "F29",
+    "298.9",
+    ["Trastorno psicótico inducido por sustancias", "Recaída de trastorno psicótico primario"]
+  );
+
   a.medications.habitual = [
     med({
       raw_name: "salbutamol",
@@ -199,10 +231,14 @@ test("Caso 2: familia solo paciente, intervención explícita y contención fuer
   );
   assert.match(report, /Olanzapina 10 mg: 0 - 0 - 1/);
   assert.match(report, /Salbutamol 100 microgramos\/inhalación: 2 inhalaciones a demanda/);
+  assert.match(report, /JUICIO CLÍNICO: Psicosis no especificada\. CIE-10: F29\. DSM-5: 298\.9\./);
+  assert.match(report, /Diagnóstico diferencial: Trastorno psicótico inducido por sustancias; Recaída de trastorno psicótico primario/);
+  assert.deepEqual(collectClinicalInvariantViolations(assessment), []);
 });
 
-test("Guardia clínica: elimina antecedentes familiares no sustentados por paciente", () => {
+test("Guarda clínica: elimina antecedentes familiares no sustentados exclusivamente por paciente", () => {
   const a = baseAssessment();
+  setDiagnosis(a, "Diagnóstico de prueba", "F99", "300.9");
   a.sections.antecedentes_familiares_psiquiatricos = section(
     "Tío paterno: trastorno bipolar.",
     "supported",
@@ -214,8 +250,27 @@ test("Guardia clínica: elimina antecedentes familiares no sustentados por pacie
   assert.ok(warnings.includes("family_history_non_patient_source_removed"));
 });
 
-test("Guardia clínica: nombre comercial se conserva cuando principio activo es desconocido", () => {
+test("Guarda clínica: elimina MSE sustentada solo por familiar/EHR", () => {
   const a = baseAssessment();
+  setDiagnosis(a, "Diagnóstico de prueba", "F99", "300.9");
+  a.sections.exploracion_psicopatologica = section(
+    "Autocuidado conservado. Orientada. Sin alteraciones sensoperceptivas.",
+    "supported",
+    ["mom", "ehr"]
+  );
+
+  const { assessment, warnings } = applyClinicalInvariants(a);
+  assert.equal(assessment.sections.exploracion_psicopatologica.text, "");
+  assert.equal(assessment.sections.exploracion_psicopatologica.evidence_status, "insufficient");
+  assert.ok(warnings.includes("mse_without_direct_assessment_source_removed"));
+  assert.ok(
+    assessment.missing_or_not_explored.some((x) => x.topic === "exploracion_psicopatologica")
+  );
+});
+
+test("Guarda clínica: nombre comercial se conserva cuando principio activo es desconocido", () => {
+  const a = baseAssessment();
+  setDiagnosis(a, "Diagnóstico de prueba", "F99", "300.9");
   a.medications.habitual = [
     med({
       raw_name: "MarcaX",
@@ -228,6 +283,24 @@ test("Guardia clínica: nombre comercial se conserva cuando principio activo es 
   assert.equal(assessment.medications.habitual[0].display_name, "MarcaX");
 });
 
+test("Guarda diagnóstica: CIE-10/DSM-5 incompletos no se renderizan como juicio cerrado", () => {
+  const a = baseAssessment();
+  a.diagnostic_judgment.primary_diagnosis = "Psicosis no especificada";
+  a.diagnostic_judgment.cie10_code = "F29";
+  a.diagnostic_judgment.dsm5_code = "";
+  a.sections.orientacion_diagnostica = section(
+    "JUICIO CLÍNICO: Psicosis no especificada. CIE-10: F29.",
+    "supported",
+    ["pat", "psy"]
+  );
+
+  const { assessment, warnings } = applyClinicalInvariants(a);
+  assert.equal(assessment.sections.orientacion_diagnostica.text, "");
+  assert.equal(assessment.sections.orientacion_diagnostica.evidence_status, "insufficient");
+  assert.ok(warnings.includes("diagnostic_codes_incomplete"));
+  assert.ok(collectClinicalInvariantViolations(assessment).includes("missing_dsm5_code"));
+});
+
 test("Backend OpenAI: usa Responses + Structured Outputs + store:false", async () => {
   const a = baseAssessment();
   a.sections.motivo_consulta = section(
@@ -236,7 +309,7 @@ test("Backend OpenAI: usa Responses + Structured Outputs + store:false", async (
     ["pat"]
   );
   a.sections.psq_guardia = section("MIR MAtesanz", "supported", []);
-  a.validation = { is_draft: true, clinician_validation_required: true };
+  setDiagnosis(a, "Episodio depresivo moderado", "F32.1", "296.22");
 
   let captured;
   const client = {
@@ -264,5 +337,6 @@ test("Backend OpenAI: usa Responses + Structured Outputs + store:false", async (
   assert.equal(captured.model, "gpt-5.6");
   assert.match(captured.input[0].content[0].text, /JSON/);
   assert.match(result.report, /MIR MAtesanz/);
+  assert.match(result.report, /CIE-10: F32\.1/);
   assert.equal(result.meta.store, false);
 });
