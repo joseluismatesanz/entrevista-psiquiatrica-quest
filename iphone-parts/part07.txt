@@ -1,0 +1,55 @@
+/.test(z)&&/doce/.test(z))a.push('Edad exacta de la apendicectomía no consensuada (11-12 años).');if(/sertralina/.test(z)&&/cuatro dias de siete|4\/7/.test(z))a.push('Adherencia a sertralina concretada en aproximadamente 4/7 días tras versiones iniciales diferentes.');if(/no consumo drogas/.test(z)&&/cribado.*positivo|speed|anfetamina/.test(z))a.push('Negación inicial de tóxicos frente a cribado positivo y reconocimiento posterior.');return a}
+function risks(text,kind){let z=n(text),a=[];if(/cortes|autoles/.test(z))a.push('Autolesiones recientes/recurrentes.');if(/morir|autolit|suicid|pastillas/.test(z))a.push('Ideación autolítica reciente o referencia a método.');if(kind==='psychosis')a.push('Psicosis aguda con alteración del juicio de realidad.');if(/agitacion|agitación|contencion mecanica|lanza una silla/.test(text.toLowerCase()))a.push('Agitación grave/riesgo conductual durante la valoración.');return a}
+function renderList(id,a){$(id).innerHTML=a.length?a.map(x=>'<li>'+esc(x)+'</li>').join(''):'<li>No se detectan elementos.</li>'}
+function show(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('[data-step]').forEach(x=>x.classList.toggle('active',x.dataset.step===id));if(id==='report'&&state.ok)$('out').textContent=state.report;window.scrollTo(0,0)}
+$('txt').oninput=()=>$('status').textContent=$('txt').value.length.toLocaleString('es-ES')+' caracteres';
+$('clear').onclick=()=>{$('txt').value='';$('status').textContent='0 caracteres'};
+$('analyze').onclick=()=>{let text=$('txt').value.trim();if(!text){alert('Pega primero una entrevista.');return}let d=extract(text);state={ok:true,kind:d.kind,facts:d,report:report(d,text)};let total=S.reduce((q,s)=>q+d.f[s].length,0),hash=[...text].reduce((a,c)=>((a*31+c.charCodeAt(0))>>>0),7).toString(16);$('fingerprint').innerHTML=`Tipo detectado: <b>${d.kind}</b> · hechos: <b>${total}</b> · huella: <b>${hash}</b>`;$('routes').innerHTML=S.map((s,i)=>`<div class="route ${d.f[s].length||i===9?'active':''}"><b>${esc(s)}</b><p>${esc(i===9?'Síntesis narrativa del episodio actual':(d.f[s].slice(0,2).join(' ')||'Sin información'))}</p></div>`).join('');renderList('conflicts',discrepancies(text));renderList('alerts',risks(text,d.kind));$('out').textContent=state.report;$('valid').checked=false;$('copy').disabled=true;show('review')};
+$('valid').onchange=e=>$('copy').disabled=!e.target.checked;
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('out').innerText)}catch(e){alert('Selecciona el informe y copia manualmente.')}};
+$('destroy').onclick=()=>{state={ok:false,report:'',facts:null,kind:''};$('txt').value='';$('out').textContent='';show('input')};
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{if(!state.ok&&b.dataset.go!=='input')return;show(b.dataset.go)});
+document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{if(!state.ok&&b.dataset.step!=='input')return;show(b.dataset.step)});
+
+let deferredInstallPrompt=null;
+const installCard=document.getElementById('installCard');
+const installButton=document.getElementById('installApp');
+const installHelp=document.getElementById('installHelp');
+
+function isStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
+}
+function isIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  if(!isStandalone()) installCard.style.display='block';
+});
+if(isIOS() && !isStandalone()){
+  installCard.style.display='block';
+  installButton.textContent='Cómo instalar en iPhone/iPad';
+  installHelp.textContent='En Safari: pulsa Compartir y elige “Añadir a pantalla de inicio”. Después se abrirá como una app independiente.';
+}
+installButton.addEventListener('click',async()=>{
+  if(isIOS()){
+    alert('En Safari: pulsa el botón Compartir y elige “Añadir a pantalla de inicio”.');
+    return;
+  }
+  if(deferredInstallPrompt){
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt=null;
+    installCard.style.display='none';
+  }else{
+    alert('Abre esta página en Chrome o Edge y usa “Instalar aplicación” / “Añadir a pantalla de inicio” desde el menú del navegador.');
+  }
+});
+window.addEventListener('appinstalled',()=>{installCard.style.display='none';});
+
+</script>
+</body></html>
