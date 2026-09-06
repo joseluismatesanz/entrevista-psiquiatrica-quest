@@ -1,0 +1,48 @@
+Case()))return'psychosis';
+ if(/contencion mecanica|contención mecánica|conducta desorganizada.*calzada|speed|anfetamina/.test(text.toLowerCase()))return'psychosis';
+ if(/cortes|autoles|autolit|suicid|vacia|vacía|triste|depresiv/.test(text.toLowerCase()))return'depression';
+ return'other'
+}
+function medLine(name,dose,pauta,adh=''){return `${name}${dose?' '+dose:''}: ${pauta}${adh?' ('+adh+')':''}`}
+function extract(text){
+ const z=n(text),t=parse(text),patient=n(who(t,'paciente')),f=Object.fromEntries(S.map(x=>[x,[]])),kind=type(text);
+ // MOTIVO, directo y no narrativo
+ if(kind==='psychosis'){if(/via publica|vía pública|avenida|calzada/.test(text.toLowerCase()))add(f[S[0]],'Alteración conductual grave en vía pública.');add(f[S[0]],'Sintomatología psicótica con ideación delirante persecutoria/autorreferencial y alteraciones sensoperceptivas auditivas.');if(/agitacion|agitación|lanza una silla/.test(text.toLowerCase()))add(f[S[0]],'Agitación psicomotriz.')}
+ else if(kind==='depression'){if(/cortes|autoles/.test(z))add(f[S[0]],'Autolesiones mediante cortes superficiales en miembro superior.');if(/morir|autolit|suicid|pastillas|no queria seguir viviendo/.test(z))add(f[S[0]],'Ideación autolítica reciente.');if(/ansiedad|panico|pánico|triste|vacia|vacía/.test(text.toLowerCase()))add(f[S[0]],'Empeoramiento afectivo-ansioso.')}
+ else add(f[S[0]],'Valoración psiquiátrica por clínica actual descrita en la entrevista.');
+ f[S[1]]=['MIR MAtesanz'];
+
+ // ALERGIAS / RAM
+ if(/amoxicilina/.test(z)&&/habon|urticaria/.test(z))add(f[S[2]],'Amoxicilina: urticaria/habones en la infancia.');
+ if(/haloperidol/.test(z)&&/diston|extrapiramidal/.test(z))add(f[S[2]],'Haloperidol: reacción extrapiramidal aguda con distonía cervical.');
+ if(/aripiprazol/.test(z)&&/akatis|acatis|inquietud/.test(z))add(f[S[2]],'Aripiprazol: acatisia/inquietud intensa.');
+ if(/sin alergias medicamentosas conocidas|no.*alergias/.test(z))add(f[S[2]],'Sin alergias medicamentosas conocidas.');
+
+ // SOMÁTICOS
+ if(/asma leve|asma desde pequeno|asma desde pequeño|asma de pequeno|asma de pequeño|tengo asma/.test(text.toLowerCase()))add(f[S[3]],'Asma leve/intermitente desde la infancia.');
+ if(/apendic/.test(z)){
+   if(/apendic.{0,100}(catorce|14)|(catorce|14).{0,100}apendic/.test(z))add(f[S[3]],'Apendicectomía a los 14 años.');
+   else if(/apendic.{0,120}(once|doce|11|12)|(once|doce|11|12).{0,120}apendic/.test(z))add(f[S[3]],'Apendicectomía en torno a los 11-12 años; edad exacta no consensuada.');
+   else add(f[S[3]],'Antecedente de apendicectomía.');
+ }
+ if(/migra/.test(z))add(f[S[3]],'Migrañas.');
+ if(/ferropen|hierro bajo|reglas.*abund|menstru.*abund/.test(z))add(f[S[3]],'Menstruaciones abundantes y antecedente de ferropenia.');
+ if(/bronquitis/.test(z))add(f[S[3]],'Bronquitis de repetición en la infancia.');
+ if(/nacio a termino|nació a término|parto vaginal/.test(text.toLowerCase()))add(f[S[3]],'Nacimiento a término y parto vaginal; desarrollo psicomotor referido como normal.');
+ if(/no.*convuls|sin.*epilep/.test(z))add(f[S[3]],'Sin epilepsia/convulsiones referidas.');
+
+ // SALUD MENTAL: paciente + comprobación de historia cuando aparece
+ if(/ingreso.*2024|unidad de agudos.*2024/.test(z))add(f[S[4]],'Ingreso psiquiátrico en 2024 por episodio psicótico en contexto de consumo de cannabis y privación de sueño.');
+ if(/salud mental.*2024|seguimiento.*2024|usmij/.test(z))add(f[S[4]],'Seguimiento previo en Salud Mental Infanto-Juvenil desde 2024.');
+ if(/psicolog.*trece|psicóloga.*13|psicologa.*13/.test(z))add(f[S[4]],'Atención psicológica previa desde la adolescencia.');
+ if(/urgencias.*enero|enero.*cortes/.test(z))add(f[S[4]],'Atención previa en Urgencias por autolesiones.');
+ if(/cuatro o cinco.*cortes|4-5.*autoles/.test(z))add(f[S[4]],'Autolesiones recurrentes desde el año previo, aproximadamente 4-5 episodios.');
+ if(/risperidona/.test(z))add(f[S[4]],'Tratamiento previo con risperidona, posteriormente suspendido.');
+ if(/aripiprazol/.test(z))add(f[S[4]],'Tratamiento previo con aripiprazol, suspendido por reacción adversa.');
+ if(/sertralina.*enero/.test(z))add(f[S[4]],'Sertralina iniciada en enero, con ajuste posterior a 50 mg/día.');
+ if(/compruebo la historia|consta en la historia|historia.*servicio publico|historia.*servicio público/.test(z))add(f[S[4]],'Antecedentes contrastados con la historia clínica del Servicio Público de Salud.');
+
+ // FAMILIARES: solo paciente
+ if(/madre.*depres/.test(patient))add(f[S[5]],'Madre: antecedentes de depresión.');
+ if(/abuela.*depres/.test(patient))add(f[S[5]],'Abuela materna: antecedentes de depresión.');
+ if(/tio.*esquiz
