@@ -1,6 +1,18 @@
 export async function resolveModelAuth(options = {}) {
   const env = options.env || process.env;
 
+  // Preferencia de producción: OpenAI directo cuando existe OPENAI_API_KEY.
+  // Esto evita depender de la facturación de Vercel AI Gateway y mantiene
+  // la clave exclusivamente en el entorno server-side de Vercel.
+  if (env.OPENAI_API_KEY) {
+    return {
+      apiKey: env.OPENAI_API_KEY,
+      baseURL: undefined,
+      transport: "openai-direct",
+      defaultModel: "gpt-5.6",
+    };
+  }
+
   if (env.AI_GATEWAY_API_KEY) {
     return {
       apiKey: env.AI_GATEWAY_API_KEY,
@@ -10,8 +22,8 @@ export async function resolveModelAuth(options = {}) {
     };
   }
 
-  // En Vercel, obtener el token OIDC en tiempo de ejecución es más robusto
-  // que asumir que VERCEL_OIDC_TOKEN existe como variable de entorno.
+  // Fallback de pruebas/despliegue: Vercel AI Gateway mediante OIDC.
+  // Puede requerir método de pago en el workspace de Vercel.
   try {
     const { getVercelOidcToken } = await import("@vercel/oidc");
     const oidcToken = await getVercelOidcToken({
@@ -38,15 +50,6 @@ export async function resolveModelAuth(options = {}) {
       baseURL: "https://ai-gateway.vercel.sh/v1",
       transport: "vercel-ai-gateway-oidc-env",
       defaultModel: "openai/gpt-5.6-sol",
-    };
-  }
-
-  if (env.OPENAI_API_KEY) {
-    return {
-      apiKey: env.OPENAI_API_KEY,
-      baseURL: undefined,
-      transport: "openai-direct",
-      defaultModel: "gpt-5.6",
     };
   }
 
