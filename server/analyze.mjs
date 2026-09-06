@@ -1,25 +1,8 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { zodTextFormat } from "openai/helpers/zod";
 import { SYSTEM_PROMPT } from "./prompt.mjs";
+import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const schemaPath = path.join(__dirname, "..", "schemas", "clinical-assessment-v04.schema.json");
-
-let schemaPromise;
-async function loadSchema() {
-  if (!schemaPromise) {
-    schemaPromise = fs.readFile(schemaPath, "utf8").then((raw) => {
-      const schema = JSON.parse(raw);
-      // $schema es útil en el repositorio, pero no es necesario en el formato enviado al modelo.
-      delete schema.$schema;
-      return schema;
-    });
-  }
-  return schemaPromise;
-}
 
 function extractRefusal(response) {
   for (const item of response.output || []) {
@@ -31,12 +14,80 @@ function extractRefusal(response) {
   return "";
 }
 
+function extractParsed(response) {
+  if (response?.output_parsed) return response.output_parsed;
+
+  for (const item of response?.output || []) {
+    if (item.type !== "message") continue;
+    for (const content of item.content || []) {
+      if (content.type === "output_text" && content.parsed) return content.parsed;
+    }
+  }
+  return null;
+}
+
+function structuredOutputError(message, cause) {
+  const error = new Error(message);
+  error.name = "StructuredOutputParseError";
+  if (cause) error.cause = cause;
+  return error;
+}
+
+function isRetryableStructuredError(error) {
+  if (!error) return false;
+  if (error.name === "StructuredOutputParseError" || error.name === "SyntaxError" || error.name === "ZodError") {
+    return true;
+  }
+  return /json|parse|parsed|structured output|schema/i.test(String(error.message || ""));
+}
+
+async function requestParsedAssessment(client, baseParams) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await client.responses.parse({
+        ...baseParams,
+        instructions:
+          attempt === 1
+            ? SYSTEM_PROMPT
+            : `${SYSTEM_PROMPT}\n\nREINTENTO TÉCNICO: devuelve únicamente una salida que cumpla exactamente el esquema estructurado. No añadas texto fuera de los campos del esquema.`,
+      });
+
+      const refusal = extractRefusal(response);
+      if (refusal) {
+        const error = new Error(refusal);
+        error.name = "ModelRefusalError";
+        throw error;
+      }
+
+      if (response.status !== "completed") {
+        const error = new Error(`Respuesta incompleta del modelo: ${response.status}`);
+        error.name = "IncompleteModelResponseError";
+        throw error;
+      }
+
+      const parsed = extractParsed(response);
+      if (!parsed) {
+        throw structuredOutputError("El modelo no devolvió una salida estructurada validable.");
+      }
+
+      return { parsed, response, attempts: attempt };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2 && isRetryableStructuredError(error)) continue;
+      throw error;
+    }
+  }
+
+  throw lastError || structuredOutputError("No se pudo obtener una salida estructurada válida.");
+}
+
 export async function analyzeTranscript(transcript, options = {}) {
   if (typeof transcript !== "string" || transcript.trim().length < 20) {
     throw new TypeError("La transcripción debe contener texto suficiente para analizar.");
   }
 
-  const schema = await loadSchema();
   let client = options.client;
   let transport = client ? "injected-test-client" : "";
   let defaultModel = "gpt-5.6";
@@ -66,14 +117,14 @@ export async function analyzeTranscript(transcript, options = {}) {
   }
 
   const model = options.model || process.env.OPENAI_MODEL || defaultModel;
+  const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
 
-  const response = await client.responses.create({
+  const { parsed, response, attempts } = await requestParsedAssessment(client, {
     model,
     store: false,
     background: false,
     reasoning: { effort: "medium" },
     max_output_tokens: 16000,
-    instructions: SYSTEM_PROMPT,
     input: [
       {
         role: "user",
@@ -81,46 +132,15 @@ export async function analyzeTranscript(transcript, options = {}) {
           {
             type: "input_text",
             text:
-              "Genera el borrador clínico estructurado en JSON según el esquema. " +
+              "Genera el borrador clínico estructurado según el esquema. " +
               "Trabaja únicamente con la siguiente entrevista ficticia o previamente anonimizada:\n\n" +
               transcript.trim(),
           },
         ],
       },
     ],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "psychiatric_assessment_v04",
-        strict: true,
-        schema,
-      },
-    },
+    text: { format: textFormat },
   });
-
-  const refusal = extractRefusal(response);
-  if (refusal) {
-    const error = new Error(refusal);
-    error.name = "ModelRefusalError";
-    throw error;
-  }
-  if (response.status !== "completed") {
-    const error = new Error(`Respuesta incompleta del modelo: ${response.status}`);
-    error.name = "IncompleteModelResponseError";
-    throw error;
-  }
-  if (!response.output_text) {
-    throw new Error("El modelo no devolvió contenido estructurado.");
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(response.output_text);
-  } catch (cause) {
-    const error = new Error("No se pudo interpretar el JSON estructurado devuelto por el modelo.");
-    error.cause = cause;
-    throw error;
-  }
 
   const { assessment, warnings } = applyClinicalInvariants(parsed);
   const violations = collectClinicalInvariantViolations(assessment);
@@ -132,6 +152,9 @@ export async function analyzeTranscript(transcript, options = {}) {
       model,
       transport,
       store: false,
+      structured_output_parser: "responses.parse+zod",
+      structured_output_attempts: attempts,
+      request_id: response?._request_id || "",
       warnings,
       invariant_violations: violations,
     },
