@@ -1,0 +1,34 @@
+ación para mejorar adherencia.');if(/psicoterapia/.test(z))add(f[S[13]],'Retomar/intensificar psicoterapia.');if(/revision.*una semana|revisión.*una semana/.test(z))add(f[S[13]],'Revisión psiquiátrica en una semana, antes si empeoramiento.');if(/orientadora|tutor/.test(z))add(f[S[13]],'Coordinación con el centro educativo.');}
+
+ // TRATAMIENTO ACTUAL
+ if(kind==='psychosis'&&/olanzapina 10/.test(z)){if(/intramuscular/.test(z))add(f[S[14]],'Olanzapina 10 mg intramuscular: dosis única administrada durante la agitación.');add(f[S[14]],'Olanzapina 10 mg: 0 - 0 - 1.');if(/salbutamol/.test(z))add(f[S[14]],'Salbutamol 100 microgramos/inhalación: 2 inhalaciones a demanda.');}
+ else f[S[14]]=[...f[S[8]]];
+
+ return {f,kind};
+}
+function illness(text,kind){
+ let z=n(text),p=[];
+ if(kind==='psychosis'){
+   p.push('Paciente trasladado a Urgencias bajo custodia policial tras alteración conductual grave en vía pública. Explica varios días de incremento progresivo de suspicacia e ideas de persecución y autorreferencia, interpretando vehículos, mensajes y actuaciones de Policía/personal sanitario como parte de una trama dirigida contra él.');
+   if(/voces|alucin|murmullo/.test(z))p.push('Refiere fenómenos auditivos de contenido persecutorio y parcialmente imperativo.');
+   if(/dos horas|tres horas|sin dormir|cuatro noches/.test(z))p.push('Asocia privación marcada de sueño durante los días previos.');
+   if(/speed|anfetamina|cannabis/.test(z))p.push('Inicialmente minimiza o niega el consumo de sustancias y posteriormente reconoce consumo reciente de anfetaminas/speed y cannabis, en relación temporal con el empeoramiento.');
+   if(/lanza una silla|intenta abandonar|golpea la pared/.test(z))p.push('Durante la entrevista aumenta progresivamente la hipervigilancia y la desconfianza, con escalada brusca de agitación, intento de abandonar la sala, golpe a pared y lanzamiento de una silla sin alcanzar a terceros.');
+   if(/contencion mecanica|contención mecánica/.test(text.toLowerCase()))p.push('Tras fracaso de desescalada verbal, reducción de estímulos y propuesta de medicación oral, se activa protocolo de contención mecánica por riesgo inmediato, con intervención de psiquiatra, enfermería, auxiliares y seguridad; los agentes permanecen en funciones de custodia.');
+   if(/olanzapina 10/.test(z))p.push('Se administra olanzapina 10 mg intramuscular y se mantiene monitorización clínica continuada.');
+   if(/se retira|retirada.*contencion/.test(z))p.push('Posteriormente disminuye la agitación, mejora el contacto y se retira la contención tras reevaluación médica.');
+ }else if(kind==='depression'){
+   p.push('La paciente explica un empeoramiento afectivo-ansioso de varias semanas de evolución, con ánimo bajo o vacío, menor capacidad de disfrute, aislamiento y reducción del funcionamiento habitual.');
+   if(/duermo|insomnio|sueño/.test(z))p.push('Refiere alteración importante del sueño con dificultad de conciliación y cansancio diurno.');
+   if(/apetito|kilos|peso/.test(z))p.push('La familia aporta disminución del apetito y pérdida ponderal reciente.');
+   if(/culpa|carga|decepciono/.test(z))p.push('La paciente verbaliza sentimientos de culpa y percepción de ser una carga para la familia.');
+   if(/panico|pánico|ansiedad/.test(text.toLowerCase()))p.push('Describe crisis de ansiedad/pánico y repercusión escolar/social.');
+   if(/cortes|autoles/.test(z))p.push('En relación con el motivo de consulta, realiza autolesiones mediante cortes superficiales tras un episodio de elevada angustia, refiriendo finalidad de alivio emocional.');
+   if(/morir|pastillas|no despertaba|suicid/.test(z))p.push('Durante los días previos presenta ideación pasiva de muerte y consideración de un posible método medicamentoso.');
+   if(/abri el cajon|abrí el cajón/.test(text.toLowerCase()))p.push('En entrevista individual reconoce aproximación conductual al método al abrir el cajón de medicación, sin llegar a ingerir comprimidos.');
+   if(/no tengo intencion ni plan|ahora mismo no tengo intención/.test(text.toLowerCase()))p.push('En el momento de la valoración niega intención autolítica actual y plan activo.');
+ }
+ return p.join(' ')||'Clínica actual recogida durante la entrevista, pendiente de mayor precisión.';
+}
+function report(data,text){return S.map((s,i)=>{let v=i===9?illness(text,data.kind):(data.f[s].length?(i===8||i===14?data.f[s].join('\n'):data.f[s].join(' ')):(i===8||i===14?'No consta tratamiento.':'No consta información suficiente en la entrevista.'));return s+'\n'+v}).join('\n\n')}
+function discrepancies(text){let z=n(text),a=[];if(/apendic/.test(z)&&/once
