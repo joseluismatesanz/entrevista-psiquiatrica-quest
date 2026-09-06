@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClinicalPsychiatricAssessmentDraftV04",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sources",
+    "sections",
+    "medications",
+    "diagnostic_judgment",
+    "missing_or_not_explored",
+    "conflicts",
+    "safety_review",
+    "validation"
+  ],
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "kind"],
+        "properties": {
+          "id": {"type": "string"},
+          "label": {"type": "string"},
+          "kind": {
+            "type": "string",
+            "enum": [
+              "patient",
+              "psychiatrist",
+              "mother",
+              "father",
+              "sibling",
+              "caregiver",
+              "family",
+              "clinician_observation",
+              "nurse",
+              "ehr",
+              "police",
+              "security",
+              "other"
+            ]
+          }
+        }
+      }
+    },
+    "sections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motivo_consulta",
+        "psq_guardia",
+        "alergias_ram",
+        "antecedentes_somaticos",
+        "antecedentes_salud_mental",
+        "antecedentes_familiares_psiquiatricos",
+        "situacion_sociofamiliar",
+        "habitos_toxicos",
+        "tratamiento_habitual",
+        "enfermedad_actual",
+        "intervencion",
+        "exploracion_psicopatologica",
+        "orientacion_diagnostica",
+        "plan_terapeutico",
+        "tratamiento_actual"
+      ],
+      "properties": {
+        "motivo_consulta": {"$ref": "#/$defs/section"},
+        "psq_guardia": {"$ref": "#/$defs/section"},
+        "alergias_ram": {"$ref": "#/$defs/section"},
+        "antecedentes_somaticos": {"$ref": "#/$defs/section"},
+        "antecedentes_salud_mental": {"$ref": "#/$defs/section"},
+        "antecedentes_familiares_psiquiatricos": {"$ref": "#/$defs/section"},
+        "situacion_sociofamiliar": {"$ref": "#/$defs/section"},
+        "habitos_toxicos": {"$ref": "#/$defs/section"},
+        "tratamiento_habitual": {"$ref": "#/$defs/section"},
+        "enfermedad_actual": {"$ref": "#/$defs/section"},
+        "intervencion": {"$ref": "#/$defs/section"},
+        "exploracion_psicopatologica": {"$ref": "#/$defs/section"},
+        "orientacion_diagnostica": {"$ref": "#/$defs/section"},
+        "plan_terapeutico": {"$ref": "#/$defs/section"},
+        "tratamiento_actual": {"$ref": "#/$defs/section"}
+      }
+    },
+    "medications": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["habitual", "current"],
+      "properties": {
+        "habitual": {"type": "array", "items": {"$ref": "#/$defs/medication"}},
+        "current": {"type": "array", "items": {"$ref": "#/$defs/medication"}}
+      }
+    },
+    "diagnostic_judgment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_diagnosis",
+        "cie10_code",
+        "dsm5_code",
+        "provisional",
+        "differential",
+        "basis_summary",
+        "requires_clinician_validation"
+      ],
+      "properties": {
+        "primary_diagnosis": {"type": "string"},
+        "cie10_code": {"type": "string"},
+        "dsm5_code": {"type": "string"},
+        "provisional": {"type": "boolean"},
+        "differential": {"type": "array", "items": {"type": "string"}},
+        "basis_summary": {"type": "string"},
+        "requires_clinician_validation": {"const": true}
+      }
+    },
+    "missing_or_not_explored": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "status", "note"],
+        "properties": {
+          "topic": {"type": "string"},
+          "status": {"type": "string", "enum": ["not_explored", "not_provided", "insufficient"]},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "accounts"],
+        "properties": {
+          "topic": {"type": "string"},
+          "accounts": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source_id", "statement"],
+              "properties": {
+                "source_id": {"type": "string"},
+                "statement": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "safety_review": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "evidence", "source_ids", "needs_clinician_review"],
+        "properties": {
+          "topic": {"type": "string"},
+          "evidence": {"type": "string"},
+          "source_ids": {"type": "array", "items": {"type": "string"}},
+          "needs_clinician_review": {"const": true}
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_draft", "clinician_validation_required"],
+      "properties": {
+        "is_draft": {"const": true},
+        "clinician_validation_required": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "evidence_status", "source_ids"],
+      "properties": {
+        "text": {"type": "string"},
+        "evidence_status": {
+          "type": "string",
+          "enum": ["supported", "not_explored", "not_provided", "insufficient"]
+        },
+        "source_ids": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "medication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_name",
+        "display_name",
+        "active_ingredient_known",
+        "role",
+        "dose",
+        "schedule",
+        "route",
+        "prn",
+        "adherence_status",
+        "adherence_text",
+        "status",
+        "source_ids"
+      ],
+      "properties": {
+        "raw_name": {"type": "string"},
+        "display_name": {"type": "string"},
+        "active_ingredient_known": {"type": "boolean"},
+        "role": {"type": "string", "enum": ["psychiatric", "organic", "unknown"]},
+        "dose": {"type": "string"},
+        "schedule": {"type": "string"},
+        "route": {"type": "string"},
+        "prn": {"type": "boolean"},
+        "adherence_status": {"type": "string", "enum": ["good", "irregular", "poor", "unknown", "not_applicable"]},
+        "adherence_text": {"type": "string"},
+        "status": {"type": "string", "enum": ["active", "historical", "administered_once"]},
+        "source_ids": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
