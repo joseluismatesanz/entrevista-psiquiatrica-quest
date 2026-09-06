@@ -2,7 +2,7 @@
   const baseUrl = String(window.CLINICAL_API_URL || "").replace(/\/+$/, "");
   if (!baseUrl) return;
 
-  const backendState = { result: null };
+  const backendState = { result: null, health: null };
   const $ = (id) => document.getElementById(id);
 
   const SECTION_TITLES = {
@@ -40,6 +40,37 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function metaAlertItems(result) {
+    const items = [];
+    for (const warning of result.meta?.warnings || []) {
+      items.push(`<li><b>Guarda clínica aplicada</b>: ${escapeHtml(warning)}</li>`);
+    }
+    for (const violation of result.meta?.invariant_violations || []) {
+      items.push(`<li><b>Revisión obligatoria</b>: ${escapeHtml(violation)}</li>`);
+    }
+    return items;
+  }
+
+  function updateEngineBanner(result = null) {
+    if (!engineBanner) return;
+    const health = backendState.health;
+    let status = "Comprobando backend…";
+
+    if (health?.ok && health.model_transport_available !== "missing") {
+      status = `Backend disponible · ${health.model_transport_available}`;
+    } else if (health?.ok) {
+      status = "Backend activo, pero falta transporte de modelo";
+    } else if (health?.error) {
+      status = "No se pudo verificar el backend";
+    }
+
+    if (result?.meta) {
+      status = `Structured Outputs activo · ${result.meta.model || "modelo no informado"} · ${result.meta.transport || "transporte no informado"} · store:false`;
+    }
+
+    engineBanner.innerHTML = `<strong>Motor V0.4</strong><span>${escapeHtml(status)} · borrador sujeto a validación clínica.</span>`;
+  }
+
   function renderReview(result) {
     const assessment = result.assessment;
 
@@ -71,11 +102,29 @@
         return `<li><b>${escapeHtml(conflict.topic)}</b>: ${accounts}</li>`;
       }).join("") || "<li>Sin discrepancias detectadas.</li>";
 
-    $("alertList").innerHTML = (assessment.safety_review || [])
-      .map((item) => `<li><b>${escapeHtml(item.topic)}</b>: ${escapeHtml(item.evidence)}</li>`)
-      .join("") || "<li>Sin alertas estructuradas.</li>";
+    const clinicalAlerts = (assessment.safety_review || [])
+      .map((item) => `<li><b>${escapeHtml(item.topic)}</b>: ${escapeHtml(item.evidence)}</li>`);
+    const technicalAlerts = metaAlertItems(result);
+    $("alertList").innerHTML = [...clinicalAlerts, ...technicalAlerts].join("") ||
+      "<li>Sin alertas estructuradas.</li>";
 
     $("reportEditor").textContent = result.report;
+    updateEngineBanner(result);
+  }
+
+  async function checkBackendHealth() {
+    try {
+      const response = await fetch(`${baseUrl}/api/health`, {
+        method: "GET",
+        cache: "no-store",
+        headers: { "Accept": "application/json" },
+      });
+      const payload = await response.json().catch(() => ({}));
+      backendState.health = response.ok ? payload : { error: true };
+    } catch {
+      backendState.health = { error: true };
+    }
+    updateEngineBanner();
   }
 
   async function analyzeWithBackend(event) {
@@ -121,7 +170,7 @@
   const engineBanner = document.createElement("section");
   engineBanner.className = "privacy-banner";
   engineBanner.innerHTML =
-    "<strong>Motor V0.4</strong><span>Structured Outputs activado · API key protegida en servidor · borrador sujeto a validación clínica.</span>";
+    "<strong>Motor V0.4</strong><span>Comprobando backend… · borrador sujeto a validación clínica.</span>";
   const privacyBanner = document.querySelector(".privacy-banner");
   privacyBanner?.insertAdjacentElement("afterend", engineBanner);
 
@@ -144,4 +193,6 @@
   $("destroyInput")?.addEventListener("click", () => {
     backendState.result = null;
   }, true);
+
+  checkBackendHealth();
 })();
