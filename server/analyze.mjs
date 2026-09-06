@@ -38,11 +38,34 @@ export async function analyzeTranscript(transcript, options = {}) {
 
   const schema = await loadSchema();
   let client = options.client;
+  let transport = client ? "injected-test-client" : "";
+  let defaultModel = "gpt-5.6";
+
   if (!client) {
     const { default: OpenAI } = await import("openai");
-    client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const gatewayToken = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
+
+    if (gatewayToken) {
+      client = new OpenAI({
+        apiKey: gatewayToken,
+        baseURL: "https://ai-gateway.vercel.sh/v1",
+      });
+      transport = process.env.AI_GATEWAY_API_KEY
+        ? "vercel-ai-gateway-key"
+        : "vercel-ai-gateway-oidc";
+      defaultModel = "openai/gpt-5.6-sol";
+    } else if (process.env.OPENAI_API_KEY) {
+      client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      transport = "openai-direct";
+      defaultModel = "gpt-5.6";
+    } else {
+      throw new Error(
+        "No hay credenciales de modelo configuradas. En Vercel se espera OIDC/AI Gateway; en local, OPENAI_API_KEY."
+      );
+    }
   }
-  const model = options.model || process.env.OPENAI_MODEL || "gpt-5.6";
+
+  const model = options.model || process.env.OPENAI_MODEL || defaultModel;
 
   const response = await client.responses.create({
     model,
@@ -107,6 +130,7 @@ export async function analyzeTranscript(transcript, options = {}) {
     report: renderClinicalReport(assessment),
     meta: {
       model,
+      transport,
       store: false,
       warnings,
       invariant_violations: violations,
