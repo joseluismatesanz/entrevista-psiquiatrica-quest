@@ -32,6 +32,25 @@ La respuesta contiene:
 - sin `background`.
 - sin conversaciones persistentes, Threads, Assistants ni vector stores.
 
+## Adaptador de interfaz
+
+La UI V0.4 ya carga, en este orden:
+
+1. `config.js`
+2. `app.js`
+3. `backend-client.js`
+
+`config.js` contiene:
+
+```js
+window.CLINICAL_API_URL = "";
+```
+
+- URL vacía: mantiene el motor local de pruebas y no realiza solicitudes clínicas externas.
+- URL HTTPS del backend: `backend-client.js` intercepta el análisis, envía exclusivamente la transcripción al `POST /api/analyze` y renderiza `assessment` + `report`.
+
+Este diseño permite probar y desplegar el backend sin volver a reescribir la UI ni romper el modo local. El backend no está publicado todavía y no existe ninguna API key en el navegador o repositorio.
+
 ## Privacidad de esta fase
 
 Este repositorio es público: nunca introducir pacientes, credenciales ni API keys.
@@ -49,6 +68,13 @@ npm run start:api
 
 La clave se mantiene exclusivamente en el servidor.
 
+Para probar la UI contra el backend local, sirve el frontend desde el origen configurado en `ALLOWED_ORIGIN` y establece temporalmente en `config.js` la URL del servidor. No subir claves al repositorio.
+
 ## Próximo paso
 
-Conectar la interfaz móvil al endpoint mediante un modo `backend` explícito, conservando un modo local/ficticio para regresión. No activar grabación todavía.
+1. desplegar el servidor en un entorno HTTPS con secreto `OPENAI_API_KEY` exclusivamente server-side;
+2. activar `CLINICAL_API_URL` en un entorno de prueba;
+3. ejecutar ambos fixtures ficticios contra la API real;
+4. comparar Structured Outputs con las regresiones clínicas antes de cualquier merge.
+
+No activar grabación todavía.
