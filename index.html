@@ -40,7 +40,7 @@
         <div>
           <p class="section-label">ENTRADA DESDE MÓVIL</p>
           <h2>Entrevista clínica</h2>
-          <p class="muted">El botón de grabación real sigue bloqueado hasta validar captura efímera y anonimización. Para esta fase pegamos la transcripción de prueba.</p>
+          <p class="muted">La grabación real sigue bloqueada. En esta fase validamos exclusivamente el análisis del texto.</p>
         </div>
         <button id="recordButton" class="record-button" type="button">
           <span class="record-dot"></span>
@@ -65,6 +65,7 @@
           <button id="destroyInput" class="danger secondary-danger" type="button">Borrar sesión</button>
           <button id="analyzeCase" class="primary" type="button">Organizar información clínica</button>
         </div>
+        <p id="sessionMessage" class="muted small"></p>
       </div>
     </section>
 
@@ -126,12 +127,11 @@
           <button id="copyReport" class="primary" disabled>Copiar informe validado</button>
           <button id="destroySession" class="danger">Cancelar y destruir sesión</button>
         </div>
-        <p id="sessionMessage" class="muted small"></p>
+        <p class="muted small">El borrador no debe exportarse sin revisión profesional.</p>
       </div>
     </section>
   </main>
   <script src="config.js"></script>
-  <script src="app.js"></script>
-  <script src="backend-client.js"></script>
+  <script src="loader.js"></script>
 </body>
 </html>
