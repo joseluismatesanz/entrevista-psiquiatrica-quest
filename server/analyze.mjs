@@ -41,12 +41,35 @@ function isRetryableStructuredError(error) {
   return /json|parse|parsed|structured output|schema/i.test(String(error.message || ""));
 }
 
+async function invokeStructured(client, params) {
+  // Producción: usa el parser oficial del SDK y devuelve output_parsed ya validado por Zod.
+  if (typeof client.responses?.parse === "function") {
+    const response = await client.responses.parse(params);
+    return { response, parsed: extractParsed(response), parser: "responses.parse+zod" };
+  }
+
+  // Compatibilidad exclusiva con clientes simulados de regresión antiguos.
+  if (typeof client.responses?.create === "function") {
+    const response = await client.responses.create(params);
+    if (!response.output_text) return { response, parsed: null, parser: "test-create-fallback" };
+
+    try {
+      const parsed = ClinicalAssessmentSchema.parse(JSON.parse(response.output_text));
+      return { response, parsed, parser: "test-create-fallback" };
+    } catch (cause) {
+      throw structuredOutputError("El cliente de prueba devolvió una salida estructurada inválida.", cause);
+    }
+  }
+
+  throw new TypeError("El cliente de modelo no expone Responses API.");
+}
+
 async function requestParsedAssessment(client, baseParams) {
   let lastError;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const response = await client.responses.parse({
+      const { response, parsed, parser } = await invokeStructured(client, {
         ...baseParams,
         instructions:
           attempt === 1
@@ -67,12 +90,11 @@ async function requestParsedAssessment(client, baseParams) {
         throw error;
       }
 
-      const parsed = extractParsed(response);
       if (!parsed) {
         throw structuredOutputError("El modelo no devolvió una salida estructurada validable.");
       }
 
-      return { parsed, response, attempts: attempt };
+      return { parsed, response, attempts: attempt, parser };
     } catch (error) {
       lastError = error;
       if (attempt < 2 && isRetryableStructuredError(error)) continue;
@@ -119,7 +141,7 @@ export async function analyzeTranscript(transcript, options = {}) {
   const model = options.model || process.env.OPENAI_MODEL || defaultModel;
   const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
 
-  const { parsed, response, attempts } = await requestParsedAssessment(client, {
+  const { parsed, response, attempts, parser } = await requestParsedAssessment(client, {
     model,
     store: false,
     background: false,
@@ -152,7 +174,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       model,
       transport,
       store: false,
-      structured_output_parser: "responses.parse+zod",
+      structured_output_parser: parser,
       structured_output_attempts: attempts,
       request_id: response?._request_id || "",
       warnings,
