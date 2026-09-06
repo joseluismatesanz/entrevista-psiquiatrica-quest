@@ -1,0 +1,55 @@
+idth="6"/><path d="M48 38c-9 4-13 12-10 20m23-29c-8 4-11 11-8 18m16-12c8 3 12 10 10 18M45 63c5-5 10-5 15 0m0 0c5-5 10-5 15 0M60 44v41" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></div>
+  <div><h1>Salud Mental</h1><p>Asistente clínico · V0.3.9 iPhone directa</p></div>
+</div>
+<div class="chip">● iPhone/Safari · sin grabación · HTML directo</div>
+<div class="card" id="installCard" style="display:none">
+  <p class="lab">APP MÓVIL</p>
+  <h2>Instalar en este dispositivo</h2>
+  <p class="mut" id="installHelp">Instala esta versión para abrirla como una app independiente y usarla sin conexión.</p>
+  <div class="actions">
+    <button id="installApp" class="btn pri">Instalar app</button>
+  </div>
+</div>
+
+<div class="banner"><b>Regla de redacción:</b> todos los apartados se redactan como hechos clínicos breves y directos. Solo <b>ENFERMEDAD ACTUAL</b> es narrativa e integra lo que explica el paciente y la familia, además de los acontecimientos clínicos ocurridos durante la valoración.</div>
+
+<section id="input" class="screen active">
+<div class="card">
+<p class="lab">ENTREVISTA</p><h2>Pega la entrevista completa</h2>
+<p class="mut">Cada análisis empieza desde cero. Cambiar el texto debe cambiar el informe.</p>
+<textarea id="txt" spellcheck="false" placeholder="PSIQUIATRA: ...&#10;PACIENTE: ...&#10;MADRE / ENFERMERA: ..."></textarea>
+<div class="status"><span id="status">0 caracteres</span><span>Solo casos ficticios/anonimizados</span></div>
+<div class="actions"><button id="clear" class="btn danger">Borrar texto</button><button id="analyze" class="btn pri">Organizar información clínica</button></div>
+</div>
+</section>
+
+<section id="review" class="screen">
+<div class="card"><p class="lab">CONTROL</p><h2>Huella del caso</h2><div id="fingerprint" class="fingerprint"></div></div>
+<div class="card"><p class="lab">MAPA</p><h2>Información por apartados</h2><div id="routes"></div></div>
+<div class="card warn"><p class="lab">DISCREPANCIAS</p><h2>Conservar sin resolver artificialmente</h2><ul id="conflicts" class="list"></ul></div>
+<div class="card alert"><p class="lab">SEGURIDAD</p><h2>Elementos para revisión clínica</h2><ul id="alerts" class="list"></ul></div>
+<div class="actions"><button class="btn sec" data-go="input">Volver</button><button class="btn pri" data-go="report">Ver informe</button></div>
+</section>
+
+<section id="report" class="screen">
+<div class="card"><p class="lab">INFORME</p><h2>Borrador clínico estructurado</h2><div id="out" class="report" contenteditable="true"></div></div>
+<div class="card"><label class="check"><input id="valid" type="checkbox">He revisado y valido clínicamente el informe.</label>
+<div class="actions"><button id="copy" class="btn pri" disabled>Copiar informe</button><button class="btn sec" data-go="review">Revisar organización</button><button id="destroy" class="btn danger">Destruir sesión</button></div></div>
+</section>
+</div>
+
+<nav class="bottom"><button data-step="input" class="active">Entrevista</button><button data-step="review">Organización</button><button data-step="report">Informe</button></nav>
+
+<script>
+const $=id=>document.getElementById(id);
+const S=['MOTIVO DE LA CONSULTA','PSQ GUARDIA','ALERGIAS / RAM','ANTECEDENTES PERSONALES SOMÁTICOS','ANTECEDENTES PERSONALES EN SALUD MENTAL','ANTECEDENTES FAMILIARES PSIQUIÁTRICOS','SITUACIÓN SOCIOFAMILIAR','HÁBITOS TÓXICOS','TRATAMIENTO HABITUAL','ENFERMEDAD ACTUAL','INTERVENCIÓN','EXPLORACIÓN PSICOPATOLÓGICA','ORIENTACIÓN DIAGNÓSTICA','PLAN TERAPÉUTICO','TRATAMIENTO ACTUAL'];
+let state={ok:false,report:'',facts:null,kind:''};
+const n=s=>(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const add=(a,x)=>{if(x&&!a.includes(x))a.push(x)};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+function parse(text){let a=[],cur=null;for(const raw of text.split(/\n+/)){let l=raw.trim();if(!l)continue;let m=l.match(/^([A-ZÁÉÍÓÚÜÑ ]{2,25}):\s*(.*)$/i);if(m){cur={sp:n(m[1]),txt:m[2].trim()};a.push(cur)}else if(cur)cur.txt+=' '+l}return a}
+function who(t,sp){return t.filter(x=>x.sp.includes(sp)).map(x=>x.txt).join(' ')}
+function type(text){
+ let z=n(text);
+ if(/cuadro depresivo clinicamente|cuadro depresivo clínicamente|sindrome depresivo|síndrome depresivo|episodio depresivo|depresivo clinicamente significativo|depresivo clínicamente significativo/.test(text.toLowerCase()))return'depression';
+ if(/episodio psicotico agudo|episodio psicótico agudo|psicosis no especificada|cuadro psicotico agudo|cuadro psicótico agudo/.test(text.toLower
