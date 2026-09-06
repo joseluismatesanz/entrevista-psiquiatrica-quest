@@ -13,6 +13,24 @@ function clearSection(section, status = "insufficient") {
   section.source_ids = [];
 }
 
+function canonicalDiagnosticText(judgment) {
+  const diagnosis = (judgment?.primary_diagnosis || "").trim();
+  const cie10 = (judgment?.cie10_code || "").trim();
+  const dsm5 = (judgment?.dsm5_code || "").trim();
+  if (!diagnosis || !cie10 || !dsm5) return "";
+
+  let text = `JUICIO CLÍNICO: ${diagnosis}. CIE-10: ${cie10}. DSM-5: ${dsm5}.`;
+  const differential = Array.isArray(judgment?.differential)
+    ? judgment.differential.map((x) => String(x || "").trim()).filter(Boolean)
+    : [];
+  if (differential.length) text += ` Diagnóstico diferencial: ${differential.join("; ")}.`;
+  return text;
+}
+
+function sectionKinds(section, kinds) {
+  return new Set((section?.source_ids || []).map((id) => kinds.get(id)).filter(Boolean));
+}
+
 export function applyClinicalInvariants(input) {
   const assessment = structuredClone(input);
   const kinds = sourceKindMap(assessment);
@@ -24,8 +42,8 @@ export function applyClinicalInvariants(input) {
 
   // Familiares psiquiátricos: solo contenido aportado por el paciente.
   const family = assessment.sections.antecedentes_familiares_psiquiatricos;
-  const familyKinds = (family.source_ids || []).map((id) => kinds.get(id)).filter(Boolean);
-  if (family.evidence_status === "supported" && familyKinds.some((kind) => kind !== "patient")) {
+  const familyKinds = sectionKinds(family, kinds);
+  if (family.evidence_status === "supported" && [...familyKinds].some((kind) => kind !== "patient")) {
     warnings.push("family_history_non_patient_source_removed");
     clearSection(family);
     addMissing(
@@ -38,7 +56,7 @@ export function applyClinicalInvariants(input) {
   // INTERVENCIÓN necesita al menos fuente psiquiatra y paciente.
   const intervention = assessment.sections.intervencion;
   if (intervention.evidence_status === "supported" && intervention.text.trim()) {
-    const interventionKinds = new Set((intervention.source_ids || []).map((id) => kinds.get(id)).filter(Boolean));
+    const interventionKinds = sectionKinds(intervention, kinds);
     if (!interventionKinds.has("psychiatrist") || !interventionKinds.has("patient")) {
       warnings.push("intervention_without_explicit_proposal_response_removed");
       clearSection(intervention, "not_provided");
@@ -47,11 +65,45 @@ export function applyClinicalInvariants(input) {
     clearSection(intervention, "not_provided");
   }
 
+  // Exploración psicopatológica: debe proceder del paciente y/o valoración clínica directa,
+  // nunca quedar sustentada exclusivamente por familiares/EHR/policía.
+  const mse = assessment.sections.exploracion_psicopatologica;
+  if (mse.evidence_status === "supported" && mse.text.trim()) {
+    const mseKinds = sectionKinds(mse, kinds);
+    const directKinds = ["patient", "psychiatrist", "clinician_observation"];
+    const hasDirectSource = directKinds.some((kind) => mseKinds.has(kind));
+    if (!hasDirectSource) {
+      warnings.push("mse_without_direct_assessment_source_removed");
+      clearSection(mse, "insufficient");
+      addMissing(
+        assessment,
+        "exploracion_psicopatologica",
+        "Se retiró una exploración que no estaba sustentada por entrevista directa u observación clínica actual."
+      );
+    }
+  }
+
   // Nunca inventar principio activo: si no se conoce, display_name = raw_name.
   for (const group of ["habitual", "current"]) {
     for (const med of assessment.medications?.[group] || []) {
       if (!med.active_ingredient_known) med.display_name = med.raw_name;
     }
+  }
+
+  // El juicio diagnóstico estructurado es la fuente canónica para ORIENTACIÓN DIAGNÓSTICA.
+  // Evita discrepancias entre diagnóstico, CIE-10 y DSM-5 en dos campos distintos.
+  const diagnosticText = canonicalDiagnosticText(assessment.diagnostic_judgment);
+  if (diagnosticText) {
+    assessment.sections.orientacion_diagnostica.text = diagnosticText;
+    assessment.sections.orientacion_diagnostica.evidence_status = "supported";
+  } else if (assessment.sections.orientacion_diagnostica.evidence_status === "supported") {
+    warnings.push("diagnostic_codes_incomplete");
+    clearSection(assessment.sections.orientacion_diagnostica, "insufficient");
+    addMissing(
+      assessment,
+      "orientacion_diagnostica",
+      "Juicio clínico incompleto: se requiere diagnóstico principal con CIE-10 y DSM-5 antes de renderizarlo."
+    );
   }
 
   assessment.validation.is_draft = true;
@@ -64,12 +116,17 @@ export function applyClinicalInvariants(input) {
 export function collectClinicalInvariantViolations(assessment) {
   const violations = [];
   const motivo = assessment.sections?.motivo_consulta?.text?.trim() || "";
-  if (/^(la|el)\s+(paciente|madre|padre|hermano|hermana)\s+(refiere|explica|comenta|dice)/i.test(motivo)) {
+  if (/(^|[.!?]\s+)(la|el)\s+(paciente|madre|padre|hermano|hermana)\s+(refiere|explica|comenta|dice)/i.test(motivo)) {
     violations.push("motivo_is_narrative_instead_of_direct_clinical_formulation");
   }
 
   const psq = assessment.sections?.psq_guardia?.text?.trim();
   if (psq !== "MIR MAtesanz") violations.push("psq_guardia_not_exact");
+
+  const judgment = assessment.diagnostic_judgment || {};
+  if (!String(judgment.primary_diagnosis || "").trim()) violations.push("missing_primary_diagnosis");
+  if (!String(judgment.cie10_code || "").trim()) violations.push("missing_cie10_code");
+  if (!String(judgment.dsm5_code || "").trim()) violations.push("missing_dsm5_code");
 
   if (assessment.validation?.is_draft !== true) violations.push("report_not_marked_draft");
   if (assessment.validation?.clinician_validation_required !== true) violations.push("clinician_validation_not_required");
