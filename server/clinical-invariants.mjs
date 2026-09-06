@@ -13,10 +13,16 @@ function clearSection(section, status = "insufficient") {
   section.source_ids = [];
 }
 
+function diagnosticFields(judgment) {
+  return {
+    diagnosis: String(judgment?.primary_diagnosis || "").trim(),
+    cie10: String(judgment?.cie10_code || "").trim(),
+    dsm5: String(judgment?.dsm5_code || "").trim(),
+  };
+}
+
 function canonicalDiagnosticText(judgment) {
-  const diagnosis = (judgment?.primary_diagnosis || "").trim();
-  const cie10 = (judgment?.cie10_code || "").trim();
-  const dsm5 = (judgment?.dsm5_code || "").trim();
+  const { diagnosis, cie10, dsm5 } = diagnosticFields(judgment);
   if (!diagnosis || !cie10 || !dsm5) return "";
 
   let text = `JUICIO CLÍNICO: ${diagnosis}. CIE-10: ${cie10}. DSM-5: ${dsm5}.`;
@@ -90,19 +96,34 @@ export function applyClinicalInvariants(input) {
     }
   }
 
-  // El juicio diagnóstico estructurado es la fuente canónica para ORIENTACIÓN DIAGNÓSTICA.
-  // Evita discrepancias entre diagnóstico, CIE-10 y DSM-5 en dos campos distintos.
+  // ORIENTACIÓN DIAGNÓSTICA tiene dos estados válidos:
+  // 1) juicio sustentado: diagnóstico + CIE-10 + DSM-5 completos;
+  // 2) evidencia insuficiente: los tres campos quedan vacíos y NO se fuerza una etiqueta diagnóstica.
   const diagnosticText = canonicalDiagnosticText(assessment.diagnostic_judgment);
+  const fields = diagnosticFields(assessment.diagnostic_judgment);
+  const presentCount = [fields.diagnosis, fields.cie10, fields.dsm5].filter(Boolean).length;
+
   if (diagnosticText) {
     assessment.sections.orientacion_diagnostica.text = diagnosticText;
     assessment.sections.orientacion_diagnostica.evidence_status = "supported";
-  } else if (assessment.sections.orientacion_diagnostica.evidence_status === "supported") {
+  } else if (presentCount === 0) {
+    warnings.push("diagnostic_judgment_withheld_for_insufficient_evidence");
+    assessment.sections.orientacion_diagnostica.text =
+      "Información insuficiente para establecer un juicio clínico diagnóstico con la entrevista disponible.";
+    assessment.sections.orientacion_diagnostica.evidence_status = "insufficient";
+    assessment.sections.orientacion_diagnostica.source_ids = [];
+    addMissing(
+      assessment,
+      "orientacion_diagnostica",
+      "Faltan datos clínicos suficientes para formular un diagnóstico principal y codificarlo en CIE-10 y DSM-5; no se fuerza una etiqueta diagnóstica."
+    );
+  } else {
     warnings.push("diagnostic_codes_incomplete");
     clearSection(assessment.sections.orientacion_diagnostica, "insufficient");
     addMissing(
       assessment,
       "orientacion_diagnostica",
-      "Juicio clínico incompleto: se requiere diagnóstico principal con CIE-10 y DSM-5 antes de renderizarlo."
+      "Juicio clínico incompleto: no se renderiza un diagnóstico hasta disponer de diagnóstico principal, CIE-10 y DSM-5 coherentes."
     );
   }
 
@@ -124,9 +145,18 @@ export function collectClinicalInvariantViolations(assessment) {
   if (psq !== "MIR MAtesanz") violations.push("psq_guardia_not_exact");
 
   const judgment = assessment.diagnostic_judgment || {};
-  if (!String(judgment.primary_diagnosis || "").trim()) violations.push("missing_primary_diagnosis");
-  if (!String(judgment.cie10_code || "").trim()) violations.push("missing_cie10_code");
-  if (!String(judgment.dsm5_code || "").trim()) violations.push("missing_dsm5_code");
+  const fields = diagnosticFields(judgment);
+  const presentCount = [fields.diagnosis, fields.cie10, fields.dsm5].filter(Boolean).length;
+
+  // Los tres vacíos son válidos cuando la orientación queda explícitamente como insuficiente.
+  if (presentCount > 0 && presentCount < 3) {
+    if (!fields.diagnosis) violations.push("missing_primary_diagnosis");
+    if (!fields.cie10) violations.push("missing_cie10_code");
+    if (!fields.dsm5) violations.push("missing_dsm5_code");
+  }
+  if (presentCount === 3 && assessment.sections?.orientacion_diagnostica?.evidence_status !== "supported") {
+    violations.push("diagnostic_judgment_not_rendered_as_supported");
+  }
 
   if (assessment.validation?.is_draft !== true) violations.push("report_not_marked_draft");
   if (assessment.validation?.clinician_validation_required !== true) violations.push("clinician_validation_not_required");
