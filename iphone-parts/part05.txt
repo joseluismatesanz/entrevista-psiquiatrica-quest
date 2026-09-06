@@ -1,0 +1,42 @@
+aciente acepta el ingreso.');}
+
+ // EXPLORACIÓN PSICOPATOLÓGICA
+ let m=f[S[11]];
+ if(/orientad|sabes donde estamos|sabes dónde estamos/.test(z))add(m,kind==='psychosis'?'Consciente. Orientado en espacio y situación; orientación temporal parcial al inicio de la entrevista.':'Consciente y orientada en tiempo, espacio y situación.');
+ if(/cansad|he dormido tres horas/.test(z))add(m,'Aspecto cansado en contexto de reducción/privación de sueño.');
+ if(kind==='psychosis'){
+   add(m,'Actitud hipervigilante, suspicaz y defensiva, con colaboración parcial; empeoramiento durante la escalada de agitación y mejoría posterior.');
+   add(m,'Contacto inicialmente difícil por marcada suspicacia; más adecuado tras estabilización.');
+   add(m,'Atención y concentración interferidas por hipervigilancia y estímulos ambientales.');
+   add(m,'Lenguaje espontáneo, comprensible y globalmente organizado, con elevación del tono durante la agitación.');
+   add(m,'Psicomotricidad aumentada, con episodio de agitación psicomotriz grave.');
+   add(m,'Afectividad ansiosa, tensa e irritable, congruente con el contenido del pensamiento.');
+   add(m,'Curso del pensamiento globalmente comprensible. Contenido con ideación delirante persecutoria y autorreferencial.');
+   add(m,'Sensopercepción: fenómenos/alucinaciones auditivas de contenido persecutorio y parcialmente imperativo.');
+   if(/no quiero morir|no.*hacerte daño/.test(text.toLowerCase()))add(m,'Niega ideación autolítica actual.');
+   add(m,'Riesgo heteroagresivo conductual elevado durante la fase de agitación; tras estabilización niega intención activa de agredir.');
+   add(m,'Sueño gravemente reducido durante los días previos; apetito disminuido.');
+   add(m,'Juicio de realidad gravemente alterado durante la descompensación psicótica.');
+   add(m,'Conciencia de enfermedad inicialmente ausente, con insight parcial posterior.');
+   add(m,'Capacidad de autocontención insuficiente durante la escalada de agitación; parcialmente recuperada tras intervención.');
+ }else{
+   if(/vacia|vacía|triste/.test(text.toLowerCase()))add(m,'Ánimo subjetivamente bajo/vacío.');
+   if(/ansiedad|panico|pánico/.test(text.toLowerCase()))add(m,'Afectividad ansiosa, con crisis de ansiedad/pánico referidas.');
+   if(/no.*voces|oye voces.*no|ves cosas.*no/.test(z))add(m,'Sin alteraciones sensoperceptivas referidas en la exploración dirigida.');
+   if(/no.*eufor|no.*mucha energia/.test(z))add(m,'Sin datos de síndrome maniforme en la exploración dirigida.');
+   if(/ahora.*no.*intencion|no tengo intencion ni plan/.test(z))add(m,'Ideación autolítica reciente, sin intención ni plan activo en el momento de la entrevista.');
+   if(/duermo|insomnio|sueño/.test(z))add(m,'Alteración significativa del sueño.');
+   if(/apetito/.test(z))add(m,'Disminución del apetito referida.');
+ }
+
+ // ORIENTACIÓN DIAGNÓSTICA
+ if(kind==='psychosis'){add(f[S[12]],'JUICIO CLÍNICO: Psicosis no especificada. CIE-10: F29. DSM-5: 298.9.');add(f[S[12]],'A descartar trastorno psicótico inducido por sustancias frente a recaída de trastorno psicótico primario.');}
+ else if(kind==='depression'){add(f[S[12]],'JUICIO CLÍNICO: Episodio depresivo moderado. CIE-10: F32.1. DSM-5: 296.22.');if(/ansiedad/.test(z))add(f[S[12]],'Sintomatología ansiosa asociada.');if(/autoles|cortes/.test(z))add(f[S[12]],'Autolesiones no suicidas recurrentes, con ideación autolítica reciente a monitorizar.');}
+ else add(f[S[12]],'JUICIO CLÍNICO: diagnóstico pendiente de validación clínica; información insuficiente para codificación CIE-10/DSM-5 sin inventar datos.');
+
+ // PLAN
+ if(/ingreso.*unidad de agudos|unidad de agudos.*ingreso/.test(z))add(f[S[13]],'Ingreso en Unidad de Agudos para observación, tratamiento y filiación diagnóstica.');
+ else if(/ingreso.*observacion|ingreso.*observación/.test(z))add(f[S[13]],'Ingreso en Observación.');
+
+ if(kind==='psychosis'){if(/abstinencia|toxicos|tóxicos/.test(z))add(f[S[13]],'Abstinencia de tóxicos e higiene del sueño.');if(/hemograma|ionograma|funcion renal|ck|ecg/.test(z))add(f[S[13]],'Estudio orgánico: hemograma, ionograma, función renal/hepática, CK, tóxicos confirmatorios y ECG.');if(/olanzapina 10/.test(z))add(f[S[13]],'Olanzapina 10 mg nocturna y reevaluación de respuesta/tolerabilidad.');if(/salbutamol/.test(z))add(f[S[13]],'Mantener salbutamol a demanda.');}
+ else{if(/mantener sertralina|mantendremos sertralina|no vamos a subir/.test(z))add(f[S[13]],'Mantener sertralina 50 mg/día, sin incremento en esta valoración.');if(/administracion supervisada|supervisión.*medicación/.test(z))add(f[S[13]],'Administración supervisada de la medic
