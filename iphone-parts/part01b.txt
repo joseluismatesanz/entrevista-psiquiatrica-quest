@@ -1,0 +1,24 @@
+font-weight:850;border:1px solid transparent;padding:11px;cursor:pointer}
+.pri{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff}.sec{background:#fff;border-color:#c6dadd;color:#2d5262}.danger{background:#fff3f3;border-color:#edc9c9;color:#963737}
+.status{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);margin-top:7px}
+.fingerprint{background:#f2f8f8;border:1px solid #d7e7e8;border-radius:12px;padding:10px;font-size:.78rem;color:#42636e}
+.route{border:1px solid #d5e4e7;background:#f8fbfc;border-radius:12px;padding:10px;margin-top:8px}.route.active{background:#edf9f7;border-color:#add8d2}.route b{font-size:.77rem;color:#24536a}.route p{font-size:.75rem;color:#647880;margin:6px 0 0}
+.list{padding-left:19px;margin-bottom:0}.list li{font-size:.82rem;margin-bottom:6px}.warn{border-left:5px solid #d2a14c}.alert{border-left:5px solid #c65e5e}
+.report{white-space:pre-wrap;min-height:64vh;border:1px solid #c7dbdf;border-radius:14px;background:#fdfefe;padding:13px;font-size:15px;line-height:1.5;outline:none;margin-top:10px}
+.check{display:flex;gap:9px;font-size:.85rem;font-weight:750;align-items:flex-start}.check input{width:20px;height:20px}
+.bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(249,252,252,.98);border-top:1px solid #d4e3e5;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:7px 9px calc(7px + env(safe-area-inset-bottom));z-index:50}
+.bottom button{min-height:50px;border:0;border-radius:12px;background:transparent;color:#6d7f87;font-weight:850;font-size:.76rem}.bottom button.active{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff}
+</style>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Salud Mental">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+
+</head>
+<body>
+<div class="app">
+<div class="head">
+  <div class="logo"><svg viewBox="0 0 120 120"><path d="M60 104C37 88 22 71 22 49c0-15 10-27 25-27 7 0 12 3 17 9 5-6 11-9 18-9 14 0 25 12 25 27 0 22-17 40-47 55Z" fill="none" stroke="currentColor" stroke-w
