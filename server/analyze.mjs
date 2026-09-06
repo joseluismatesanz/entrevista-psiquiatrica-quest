@@ -154,7 +154,7 @@ export async function analyzeTranscript(transcript, options = {}) {
           {
             type: "input_text",
             text:
-              "Genera el borrador clínico estructurado según el esquema. " +
+              "Genera el borrador clínico estructurado en JSON según el esquema. " +
               "Trabaja únicamente con la siguiente entrevista ficticia o previamente anonimizada:\n\n" +
               transcript.trim(),
           },
