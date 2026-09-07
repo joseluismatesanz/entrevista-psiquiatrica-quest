@@ -1,6 +1,6 @@
 {
   "name": "entrevista-psiquiatrica-quest",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "Prototipo móvil con transcripción diarizada efímera y documentación psiquiátrica estructurada con revisión clínica obligatoria.",
