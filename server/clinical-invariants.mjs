@@ -70,6 +70,43 @@ function retainExplicitProposalResponse(text) {
   return retained.join(" ").trim();
 }
 
+function isUnverifiedFamilyIdentityBeliefSentence(sentence) {
+  const text = String(sentence || "").trim();
+  if (!text) return false;
+
+  const attributionPattern = /\b(?:refiere|afirma|dice|cree|piensa|sospecha|asegura|mantiene|considera|está\s+convencid[oa])\b/i;
+  const disputedIdentityPattern = /\b(?:
+    no\s+(?:es|son|sería|serían|eran)\s+(?:realmente|de\s+verdad)\b|
+    no\s+(?:es|son|sería|serían|eran)\s+(?:mi|mis|su|sus)\s+(?:madre|padre|padres|progenitor(?:a|es)?|familia(?:res)?)\b|
+    impostor(?:a|es)?\b|
+    fals[oa]s?\s+(?:madre|padre|padres|familiares?)\b|
+    suplantad[oa]s?\b|
+    sustituid[oa]s?\b
+  )/ix;
+  const familyIdentityPattern = /\b(?:madre|padre|padres|progenitor(?:a|es)?|familia(?:res)?)\b/i;
+  const strongPsychoticIdentityMarker = /\b(?:impostor(?:a|es)?|suplantad[oa]s?|sustituid[oa]s?)\b/i;
+
+  return familyIdentityPattern.test(text)
+    && disputedIdentityPattern.test(text)
+    && (attributionPattern.test(text) || strongPsychoticIdentityMarker.test(text));
+}
+
+function pruneUnverifiedFamilyIdentityBeliefs(text) {
+  const sentences = splitClinicalSentences(text);
+  const retained = [];
+  let pruned = false;
+
+  for (const sentence of sentences) {
+    if (isUnverifiedFamilyIdentityBeliefSentence(sentence)) {
+      pruned = true;
+      continue;
+    }
+    retained.push(sentence);
+  }
+
+  return { text: retained.join(" ").trim(), pruned };
+}
+
 export function applyClinicalInvariants(input) {
   const assessment = structuredClone(input);
   const kinds = sourceKindMap(assessment);
@@ -90,6 +127,22 @@ export function applyClinicalInvariants(input) {
       "antecedentes_familiares_psiquiatricos",
       "Se retiró contenido porque no estaba sustentado exclusivamente por el paciente en la entrevista actual."
     );
+  }
+
+  // SITUACIÓN SOCIOFAMILIAR solo debe contener hechos de convivencia/relación/apoyo.
+  // Una creencia de identidad/filiación no verificada se mantiene fuera de este apartado.
+  const socio = assessment.sections.situacion_sociofamiliar;
+  if (socio.evidence_status === "supported" && socio.text.trim()) {
+    const originalSocio = socio.text.trim();
+    const { text: retainedSocio, pruned } = pruneUnverifiedFamilyIdentityBeliefs(originalSocio);
+    if (pruned) {
+      warnings.push("sociofamily_unverified_identity_belief_pruned");
+      if (retainedSocio) {
+        socio.text = retainedSocio;
+      } else {
+        clearSection(socio, "insufficient");
+      }
+    }
   }
 
   // INTERVENCIÓN necesita al menos fuente psiquiatra y paciente y, además,
@@ -190,6 +243,11 @@ export function collectClinicalInvariantViolations(assessment) {
 
   const psq = assessment.sections?.psq_guardia?.text?.trim();
   if (psq !== "MIR MAtesanz") violations.push("psq_guardia_not_exact");
+
+  const socio = assessment.sections?.situacion_sociofamiliar?.text?.trim() || "";
+  if (splitClinicalSentences(socio).some(isUnverifiedFamilyIdentityBeliefSentence)) {
+    violations.push("sociofamily_contains_unverified_identity_belief");
+  }
 
   const judgment = assessment.diagnostic_judgment || {};
   const fields = diagnosticFields(judgment);
