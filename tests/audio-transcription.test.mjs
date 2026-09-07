@@ -1,0 +1,61 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  AUDIO_PILOT_MAX_BYTES,
+  AUDIO_TRANSCRIPTION_MODEL,
+  transcribeAudioPayload,
+} from "../server/transcribe.mjs";
+
+test("V0.5 audio: usa diarización, no devuelve audio y exige confirmación humana de interlocutores", async () => {
+  let captured;
+  const client = {
+    audio: {
+      transcriptions: {
+        async create(params) {
+          captured = params;
+          return {
+            task: "transcribe",
+            duration: 8.4,
+            text: "Buenos días. Hola.",
+            segments: [
+              { id: "seg-1", speaker: "A", start: 0, end: 2.2, text: "Buenos días." },
+              { id: "seg-2", speaker: "B", start: 2.3, end: 3.1, text: "Hola." },
+            ],
+          };
+        },
+      },
+    },
+  };
+
+  const result = await transcribeAudioPayload(
+    {
+      audio_base64: Buffer.from("fake-audio").toString("base64"),
+      mime_type: "audio/webm;codecs=opus",
+    },
+    {
+      client,
+      fileFactory: async (buffer, filename, mime) => ({ buffer, filename, mime }),
+    }
+  );
+
+  assert.equal(captured.model, AUDIO_TRANSCRIPTION_MODEL);
+  assert.equal(captured.response_format, "diarized_json");
+  assert.equal(captured.chunking_strategy, "auto");
+  assert.deepEqual(result.speakers, ["A", "B"]);
+  assert.match(result.transcript, /^HABLANTE A: Buenos días\./m);
+  assert.match(result.transcript, /^HABLANTE B: Hola\./m);
+  assert.equal(result.meta.persistent_audio_storage, false);
+  assert.equal(result.meta.speaker_role_confirmation_required, true);
+  assert.equal("audio_base64" in result, false);
+});
+
+test("V0.5 audio: rechaza audio que excede el límite preventivo del piloto", async () => {
+  const oversized = Buffer.alloc(AUDIO_PILOT_MAX_BYTES + 1, 1).toString("base64");
+  await assert.rejects(
+    () => transcribeAudioPayload({ audio_base64: oversized, mime_type: "audio/webm" }, {
+      client: { audio: { transcriptions: { create: async () => ({}) } } },
+      fileFactory: async () => ({}),
+    }),
+    /supera el tamaño máximo/
+  );
+});
