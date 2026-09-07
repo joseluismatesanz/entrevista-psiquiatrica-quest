@@ -36,13 +36,14 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
-    version: "0.5.2",
+    version: "0.5.3",
     mode: "audio_pilot",
     recording_enabled: true,
     transcription_enabled: true,
     transcription_model: AUDIO_TRANSCRIPTION_MODEL,
     max_audio_seconds: 120,
     speaker_role_confirmation_required: true,
+    segment_role_correction_enabled: true,
     persistent_audio_storage: false,
     persistent_clinical_storage: false,
     response_cache: "no-store",
