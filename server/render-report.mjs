@@ -36,9 +36,14 @@ function medicationLine(med) {
   return line.replace(/\.\./g, ".").trim();
 }
 
-function medicationBlock(list) {
+function medicationBlock(list, allowedStatuses) {
   if (!Array.isArray(list) || list.length === 0) return "";
-  return list.map(medicationLine).filter(Boolean).join("\n");
+  const allowed = new Set(allowedStatuses);
+  return list
+    .filter((med) => allowed.has(med?.status))
+    .map(medicationLine)
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function renderClinicalReport(assessment) {
@@ -53,8 +58,16 @@ export function renderClinicalReport(assessment) {
 
     let body = clean(section.text);
     if (key === "psq_guardia") body = "MIR MAtesanz";
-    if (key === "tratamiento_habitual") body = medicationBlock(assessment.medications?.habitual) || body;
-    if (key === "tratamiento_actual") body = medicationBlock(assessment.medications?.current) || body;
+
+    // Habitual = exclusivamente medicación vigente antes de la valoración.
+    // Current = régimen final + dosis administradas una sola vez durante el episodio actual.
+    // La medicación histórica nunca debe reaparecer como tratamiento activo por el renderer.
+    if (key === "tratamiento_habitual") {
+      body = medicationBlock(assessment.medications?.habitual, ["active"]) || body;
+    }
+    if (key === "tratamiento_actual") {
+      body = medicationBlock(assessment.medications?.current, ["active", "administered_once"]) || body;
+    }
 
     if (!body) {
       if (section.evidence_status === "not_explored") body = "No explorado.";
