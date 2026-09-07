@@ -37,6 +37,39 @@ function sectionKinds(section, kinds) {
   return new Set((section?.source_ids || []).map((id) => kinds.get(id)).filter(Boolean));
 }
 
+function splitClinicalSentences(text) {
+  return String(text || "")
+    .match(/[^.!?]+[.!?]?/g)?.map((sentence) => sentence.trim()).filter(Boolean) || [];
+}
+
+function retainExplicitProposalResponse(text) {
+  const sentences = splitClinicalSentences(text);
+  const proposalPattern = /\b(?:se\s+)?(?:prop(?:uso|one|uso|one)|propuest\w*|plante(?:ó|a)|ofreci(?:ó|a)|ofert(?:ó|a)|recomend(?:ó|a)|sugiri(?:ó|o))\b/i;
+  const responsePattern = /\b(?:rechaz\w*|acept\w*|rehus\w*|se\s+niega\w*|neg(?:ó|o)\b|no\s+(?:quiso|quiere|voy|va|acepta)|consinti\w*)/i;
+  const retained = [];
+
+  for (let index = 0; index < sentences.length; index += 1) {
+    const sentence = sentences[index];
+    if (!proposalPattern.test(sentence)) continue;
+
+    let chunk = sentence;
+    let hasResponse = responsePattern.test(sentence);
+
+    if (!hasResponse && index + 1 < sentences.length) {
+      const next = sentences[index + 1];
+      if (!proposalPattern.test(next) && responsePattern.test(next)) {
+        chunk += ` ${next}`;
+        hasResponse = true;
+        index += 1;
+      }
+    }
+
+    if (hasResponse) retained.push(chunk.trim());
+  }
+
+  return retained.join(" ").trim();
+}
+
 export function applyClinicalInvariants(input) {
   const assessment = structuredClone(input);
   const kinds = sourceKindMap(assessment);
@@ -59,13 +92,27 @@ export function applyClinicalInvariants(input) {
     );
   }
 
-  // INTERVENCIÓN necesita al menos fuente psiquiatra y paciente.
+  // INTERVENCIÓN necesita al menos fuente psiquiatra y paciente y, además,
+  // solo puede conservar propuesta clínica explícita + aceptación/rechazo.
+  // Consentimientos, evolución, contención y procedimientos pertenecen a otros apartados.
   const intervention = assessment.sections.intervencion;
   if (intervention.evidence_status === "supported" && intervention.text.trim()) {
     const interventionKinds = sectionKinds(intervention, kinds);
     if (!interventionKinds.has("psychiatrist") || !interventionKinds.has("patient")) {
       warnings.push("intervention_without_explicit_proposal_response_removed");
       clearSection(intervention, "not_provided");
+    } else {
+      const originalIntervention = intervention.text.trim();
+      const retainedIntervention = retainExplicitProposalResponse(originalIntervention);
+      if (!retainedIntervention) {
+        warnings.push("intervention_without_explicit_proposal_response_removed");
+        clearSection(intervention, "not_provided");
+      } else {
+        intervention.text = retainedIntervention;
+        if (retainedIntervention !== originalIntervention) {
+          warnings.push("intervention_nonproposal_content_pruned");
+        }
+      }
     }
   } else {
     clearSection(intervention, "not_provided");
