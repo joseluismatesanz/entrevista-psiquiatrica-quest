@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#eaf4f5" />
-  <title>Salud Mental · Asistente clínico V0.4.7</title>
+  <title>Salud Mental · Asistente clínico V0.5.0</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -17,7 +17,7 @@
         </svg>
       </div>
       <div class="brand-copy">
-        <p class="eyebrow">PROTOTIPO CLÍNICO · V0.4.7</p>
+        <p class="eyebrow">PROTOTIPO CLÍNICO · V0.5.0</p>
         <h1>Salud Mental</h1>
         <p>Asistente de organización de entrevista psiquiátrica</p>
       </div>
@@ -26,7 +26,7 @@
 
     <section class="privacy-banner">
       <strong>Privacidad por diseño</strong>
-      <span>Sin historial clínico · sin persistencia local deliberada · esta versión trabaja únicamente con texto ficticio o previamente anonimizado.</span>
+      <span>Sin historial clínico · sin persistencia local deliberada · fase de desarrollo: usar únicamente texto o audio ficticio/previamente anonimizado. No usar pacientes reales todavía.</span>
     </section>
 
     <nav class="steps" aria-label="Flujo de trabajo">
@@ -38,22 +38,34 @@
     <section id="screen-input" class="screen active">
       <div class="card recorder-card">
         <div>
-          <p class="section-label">ENTRADA DESDE MÓVIL</p>
-          <h2>Entrevista clínica</h2>
-          <p class="muted">La grabación real sigue bloqueada. En esta fase validamos exclusivamente el análisis del texto.</p>
+          <p class="section-label">ENTRADA DESDE MÓVIL · PILOTO V0.5</p>
+          <h2>Entrevista clínica por audio</h2>
+          <p class="muted">Prueba de micrófono de hasta 2 minutos. El audio permanece en memoria solo hasta obtener la transcripción y no se almacena deliberadamente en la aplicación.</p>
         </div>
-        <button id="recordButton" class="record-button" type="button">
+        <button id="recordButton" class="record-button" type="button" aria-pressed="false">
           <span class="record-dot"></span>
-          <span>Iniciar entrevista</span>
-          <small>Micrófono bloqueado en V0.4</small>
+          <span id="recordButtonLabel">Iniciar entrevista</span>
+          <small id="recordButtonStatus">Máx. 2 min · audio ficticio</small>
         </button>
+        <p id="recordingStatus" class="muted small recorder-status">Micrófono preparado para una prueba ficticia.</p>
+      </div>
+
+      <div id="speakerMappingCard" class="card speaker-card hidden">
+        <p class="section-label">CONFIRMACIÓN DE INTERLOCUTORES</p>
+        <h2>¿Quién es cada voz?</h2>
+        <p class="muted">La diarización identifica voces como A/B/C, pero el sistema no debe adivinar el rol clínico. Asigna cada voz antes de organizar la entrevista.</p>
+        <div id="speakerMappingFields" class="speaker-mapping-grid"></div>
+        <div class="actions">
+          <button id="applySpeakerMapping" class="primary" type="button">Aplicar etiquetas a la transcripción</button>
+        </div>
+        <p id="speakerMappingMessage" class="muted small"></p>
       </div>
 
       <div class="card">
         <div class="row-between">
           <div>
             <p class="section-label">TRANSCRIPCIÓN DE PRUEBA</p>
-            <h2>Pegar entrevista completa</h2>
+            <h2>Revisar o pegar entrevista completa</h2>
           </div>
           <div class="fixture-buttons" aria-label="Casos ficticios de regresión">
             <button id="loadDemo" class="secondary" type="button">Ejemplo breve</button>
@@ -65,7 +77,7 @@
         <div class="analysis-principle">
           <b>Prioridad del motor:</b> clasificar → discriminar relevancia → atribuir fuente → sintetizar → redactar. Nunca volcar la transcripción completa en «Enfermedad actual».
         </div>
-        <p class="muted small">Los casos completos pueden tardar varios minutos: la función espera la salida estructurada y la valida antes de mostrar el borrador.</p>
+        <p class="muted small">La transcripción por audio debe revisarse y tener los interlocutores confirmados antes del análisis clínico. Los casos completos de texto pueden tardar varios minutos.</p>
         <div class="actions">
           <button id="destroyInput" class="danger secondary-danger" type="button">Borrar sesión</button>
           <button id="analyzeCase" class="primary" type="button">Organizar información clínica</button>
