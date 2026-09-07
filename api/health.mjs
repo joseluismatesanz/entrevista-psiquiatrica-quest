@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
-    version: "0.4.6",
+    version: "0.4.7",
     mode: "text_only",
     recording_enabled: false,
     persistent_clinical_storage: false,
