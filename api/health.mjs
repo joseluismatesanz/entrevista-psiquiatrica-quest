@@ -23,6 +23,17 @@ export default async function handler(req, res) {
     auth = null;
   }
 
+  let clinicalEngineLoadable = false;
+  let clinicalEngineProbe = "not_checked";
+  try {
+    const module = await import("../server/analyze.mjs");
+    clinicalEngineLoadable = typeof module.analyzeTranscript === "function";
+    clinicalEngineProbe = clinicalEngineLoadable ? "ok" : "missing_export";
+  } catch {
+    clinicalEngineLoadable = false;
+    clinicalEngineProbe = "import_failed";
+  }
+
   return res.status(200).json({
     ok: true,
     version: "0.5.1",
@@ -36,5 +47,7 @@ export default async function handler(req, res) {
     persistent_clinical_storage: false,
     response_cache: "no-store",
     model_transport_available: auth?.transport || "missing",
+    clinical_engine_loadable: clinicalEngineLoadable,
+    clinical_engine_probe: clinicalEngineProbe,
   });
 }
