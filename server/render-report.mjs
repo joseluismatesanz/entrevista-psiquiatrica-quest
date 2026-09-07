@@ -61,12 +61,21 @@ export function renderClinicalReport(assessment) {
 
     // Habitual = exclusivamente medicación vigente antes de la valoración.
     // Current = régimen final + dosis administradas una sola vez durante el episodio actual.
-    // La medicación histórica nunca debe reaparecer como tratamiento activo por el renderer.
+    // Si existe estructura de medicación, es la fuente canónica: nunca volver al texto libre
+    // cuando el único contenido estructurado era histórico.
     if (key === "tratamiento_habitual") {
-      body = medicationBlock(assessment.medications?.habitual, ["active"]) || body;
+      const list = assessment.medications?.habitual;
+      if (Array.isArray(list) && list.length > 0) {
+        body = medicationBlock(list, ["active"]);
+        if (!body) body = "No consta tratamiento habitual activo.";
+      }
     }
     if (key === "tratamiento_actual") {
-      body = medicationBlock(assessment.medications?.current, ["active", "administered_once"]) || body;
+      const list = assessment.medications?.current;
+      if (Array.isArray(list) && list.length > 0) {
+        body = medicationBlock(list, ["active", "administered_once"]);
+        if (!body) body = "No consta tratamiento actual activo.";
+      }
     }
 
     if (!body) {
