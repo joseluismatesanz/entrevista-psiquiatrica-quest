@@ -55,7 +55,11 @@
             <p class="section-label">TRANSCRIPCIÓN DE PRUEBA</p>
             <h2>Pegar entrevista completa</h2>
           </div>
-          <button id="loadDemo" class="secondary" type="button">Cargar ejemplo breve</button>
+          <div class="fixture-buttons" aria-label="Casos ficticios de regresión">
+            <button id="loadDemo" class="secondary" type="button">Ejemplo breve</button>
+            <button id="loadCase1" class="secondary" type="button">Caso 1 completo</button>
+            <button id="loadCase2" class="secondary" type="button">Caso 2 completo</button>
+          </div>
         </div>
         <textarea id="caseText" rows="18" spellcheck="false" placeholder="PSIQUIATRA: ...\nPACIENTE: ...\nMADRE: ...\nHERMANO: ..."></textarea>
         <div class="analysis-principle">
@@ -132,6 +136,7 @@
     </section>
   </main>
   <script src="config.js"></script>
+  <script src="fixture-loader.js"></script>
   <script src="loader.js"></script>
 </body>
 </html>
