@@ -36,7 +36,7 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
-    version: "0.5.1",
+    version: "0.5.2",
     mode: "audio_pilot",
     recording_enabled: true,
     transcription_enabled: true,
