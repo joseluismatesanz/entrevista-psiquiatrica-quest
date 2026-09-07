@@ -75,14 +75,7 @@ function isUnverifiedFamilyIdentityBeliefSentence(sentence) {
   if (!text) return false;
 
   const attributionPattern = /\b(?:refiere|afirma|dice|cree|piensa|sospecha|asegura|mantiene|considera|está\s+convencid[oa])\b/i;
-  const disputedIdentityPattern = /\b(?:
-    no\s+(?:es|son|sería|serían|eran)\s+(?:realmente|de\s+verdad)\b|
-    no\s+(?:es|son|sería|serían|eran)\s+(?:mi|mis|su|sus)\s+(?:madre|padre|padres|progenitor(?:a|es)?|familia(?:res)?)\b|
-    impostor(?:a|es)?\b|
-    fals[oa]s?\s+(?:madre|padre|padres|familiares?)\b|
-    suplantad[oa]s?\b|
-    sustituid[oa]s?\b
-  )/ix;
+  const disputedIdentityPattern = /\b(?:no\s+(?:es|son|sería|serían|eran)\s+(?:realmente|de\s+verdad)|no\s+(?:es|son|sería|serían|eran)\s+(?:mi|mis|su|sus)\s+(?:madre|padre|padres|progenitor(?:a|es)?|familia(?:res)?)|impostor(?:a|es)?|fals[oa]s?\s+(?:madre|padre|padres|familiares?)|suplantad[oa]s?|sustituid[oa]s?)\b/i;
   const familyIdentityPattern = /\b(?:madre|padre|padres|progenitor(?:a|es)?|familia(?:res)?)\b/i;
   const strongPsychoticIdentityMarker = /\b(?:impostor(?:a|es)?|suplantad[oa]s?|sustituid[oa]s?)\b/i;
 
