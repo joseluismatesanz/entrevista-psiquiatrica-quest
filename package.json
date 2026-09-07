@@ -1,6 +1,6 @@
 {
   "name": "entrevista-psiquiatrica-quest",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "private": true,
   "type": "module",
   "description": "Prototipo text-only de documentación psiquiátrica estructurada con revisión clínica obligatoria.",
