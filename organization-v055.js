@@ -41,8 +41,9 @@
       const rawStatus = normalizeStatus(badge.dataset.rawStatus || badge.textContent);
       if (!rawStatus) return;
 
-      badge.dataset.rawStatus = rawStatus;
-      badge.textContent = STATUS_LABELS[rawStatus] || badge.textContent;
+      if (badge.dataset.rawStatus !== rawStatus) badge.dataset.rawStatus = rawStatus;
+      const label = STATUS_LABELS[rawStatus];
+      if (label && badge.textContent !== label) badge.textContent = label;
 
       card.classList.remove(...STATUS_CLASSES);
       card.classList.add(statusClass(rawStatus));
@@ -101,7 +102,7 @@
     const total = missing.length + conflicts.length + alerts.length;
     if (!total) {
       banner.classList.add('hidden');
-      banner.innerHTML = '';
+      if (banner.innerHTML) banner.innerHTML = '';
       return;
     }
 
@@ -116,7 +117,7 @@
     if (conflicts.length) parts.push(`${conflicts.length} discrepancia${conflicts.length === 1 ? '' : 's'}`);
     if (alerts.length) parts.push(`${alerts.length} elemento${alerts.length === 1 ? '' : 's'} de revisión`);
 
-    banner.innerHTML = `
+    const html = `
       <div class="organization-attention-copy">
         <p class="section-label">REVISIÓN ANTES DEL INFORME</p>
         <h2>${total} elemento${total === 1 ? '' : 's'} requieren atención</h2>
@@ -127,6 +128,8 @@
         ${chips.map((chip) => `<span class="attention-chip ${chip.kind}">${escapeHtml(chip.label)}</span>`).join('')}
       </div>
     `;
+
+    if (banner.innerHTML !== html) banner.innerHTML = html;
     banner.classList.remove('hidden');
   }
 
@@ -142,7 +145,9 @@
 
   function updateGenerateButton() {
     const button = document.querySelector('#screen-review button[data-go="report"]');
-    if (button) button.textContent = 'Generar borrador de informe';
+    if (button && button.textContent !== 'Generar borrador de informe') {
+      button.textContent = 'Generar borrador de informe';
+    }
   }
 
   function refreshOrganizationUi() {
@@ -158,7 +163,16 @@
 
     if (!targets.length) return;
 
-    const observer = new MutationObserver(() => refreshOrganizationUi());
+    let scheduled = false;
+    const observer = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        refreshOrganizationUi();
+      });
+    });
+
     targets.forEach((target) => observer.observe(target, { childList: true, subtree: true }));
   }
 
