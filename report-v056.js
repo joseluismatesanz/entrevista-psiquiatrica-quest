@@ -90,7 +90,15 @@
     if (badge) badge.textContent = 'Pendiente de validación profesional';
   }
 
+  function resetReportValidation() {
+    const checkbox = document.getElementById('validateCheck');
+    const copyButton = document.getElementById('copyReport');
+    if (checkbox) checkbox.checked = false;
+    if (copyButton) copyButton.disabled = true;
+  }
+
   function refreshReportScreen() {
+    resetReportValidation();
     normalizeReportHeading();
     buildReportPendingBanner();
   }
@@ -100,5 +108,6 @@
     if (navigation) setTimeout(refreshReportScreen, 0);
   });
 
+  window.addEventListener('pageshow', resetReportValidation);
   refreshReportScreen();
 })();
