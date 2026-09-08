@@ -62,6 +62,13 @@
     });
   }
 
+  function mandatoryReviewItems() {
+    return meaningfulItems('alertList', ['sin alertas estructuradas']).filter((item) => {
+      const topic = item.querySelector('b')?.textContent?.trim().toLowerCase() || '';
+      return topic === 'revisión obligatoria';
+    });
+  }
+
   function topicFromItem(item) {
     return item.querySelector('b')?.textContent?.trim() || item.textContent.trim().split(':')[0];
   }
@@ -84,6 +91,18 @@
     return banner;
   }
 
+  function updateSafetySummaryHeading() {
+    const list = document.getElementById('alertList');
+    const card = list?.closest('.card');
+    if (!card) return;
+
+    card.classList.add('safety-summary-card');
+    const heading = card.querySelector('h2');
+    if (heading && heading.textContent !== 'Resumen de seguridad clínica') {
+      heading.textContent = 'Resumen de seguridad clínica';
+    }
+  }
+
   function updateAttentionBanner() {
     const banner = ensureAttentionBanner();
     if (!banner) return;
@@ -95,11 +114,9 @@
     const conflicts = meaningfulItems('conflictList', [
       'sin discrepancias detectadas',
     ]);
-    const alerts = meaningfulItems('alertList', [
-      'sin alertas estructuradas',
-    ]);
+    const mandatory = mandatoryReviewItems();
 
-    const total = missing.length + conflicts.length + alerts.length;
+    const total = missing.length + conflicts.length + mandatory.length;
     if (!total) {
       banner.classList.add('hidden');
       if (banner.innerHTML) banner.innerHTML = '';
@@ -109,13 +126,13 @@
     const chips = [
       ...missing.slice(0, 3).map((item) => ({ label: topicFromItem(item), kind: 'pending' })),
       ...conflicts.slice(0, 2).map((item) => ({ label: topicFromItem(item), kind: 'conflict' })),
-      ...alerts.slice(0, 2).map((item) => ({ label: topicFromItem(item), kind: 'alert' })),
+      ...mandatory.slice(0, 2).map((item) => ({ label: topicFromItem(item), kind: 'alert' })),
     ].slice(0, 5);
 
     const parts = [];
-    if (missing.length) parts.push(`${missing.length} no explorado${missing.length === 1 ? '' : 's'}`);
+    if (missing.length) parts.push(`${missing.length} dato${missing.length === 1 ? '' : 's'} pendiente${missing.length === 1 ? '' : 's'}`);
     if (conflicts.length) parts.push(`${conflicts.length} discrepancia${conflicts.length === 1 ? '' : 's'}`);
-    if (alerts.length) parts.push(`${alerts.length} elemento${alerts.length === 1 ? '' : 's'} de revisión`);
+    if (mandatory.length) parts.push(`${mandatory.length} revisión${mandatory.length === 1 ? '' : 'es'} obligatoria${mandatory.length === 1 ? '' : 's'}`);
 
     const html = `
       <div class="organization-attention-copy">
@@ -152,6 +169,7 @@
 
   function refreshOrganizationUi() {
     decorateRouteStatuses();
+    updateSafetySummaryHeading();
     updateAttentionBanner();
     updateGenerateButton();
   }
