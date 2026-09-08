@@ -236,18 +236,19 @@ test("Caso 2: familia solo paciente, intervención explícita, contención en en
   assert.deepEqual(collectClinicalInvariantViolations(assessment), []);
 });
 
-test("Guarda clínica: elimina antecedentes familiares no sustentados exclusivamente por paciente", () => {
+test("Guarda clínica: conserva antecedentes familiares aportados por un informante colateral", () => {
   const a = baseAssessment();
   setDiagnosis(a, "Diagnóstico de prueba", "F99", "300.9");
   a.sections.antecedentes_familiares_psiquiatricos = section(
-    "Tío paterno: trastorno bipolar.",
+    "Tía paterna: trastorno bipolar.",
     "supported",
     ["mom"]
   );
   const { assessment, warnings } = applyClinicalInvariants(a);
-  assert.equal(assessment.sections.antecedentes_familiares_psiquiatricos.text, "");
-  assert.equal(assessment.sections.antecedentes_familiares_psiquiatricos.evidence_status, "insufficient");
-  assert.ok(warnings.includes("family_history_non_patient_source_removed"));
+  assert.equal(assessment.sections.antecedentes_familiares_psiquiatricos.text, "Tía paterna: trastorno bipolar.");
+  assert.equal(assessment.sections.antecedentes_familiares_psiquiatricos.evidence_status, "supported");
+  assert.deepEqual(assessment.sections.antecedentes_familiares_psiquiatricos.source_ids, ["mom"]);
+  assert.ok(!warnings.includes("family_history_non_patient_source_removed"));
 });
 
 test("Guarda clínica: elimina MSE sustentada solo por familiar/EHR", () => {
