@@ -27,7 +27,7 @@ function baseAssessment(rawName) {
   };
 }
 
-test("V0.5.4 medicamentos: sertralina se confirma contra CIMA y conserva nombre genérico, dosis y pauta", async () => {
+test("V0.5.4 medicamentos: sertralina se verifica primero como principio activo aunque el listado CIMA no incluya pactivos", async () => {
   const fetchFn = async (url) => {
     if (url.includes("/medicamento?nregistro=65997")) {
       return response({
@@ -36,17 +36,16 @@ test("V0.5.4 medicamentos: sertralina se confirma contra CIMA y conserva nombre 
         principiosActivos: [{ nombre: "SERTRALINA HIDROCLORURO" }],
       });
     }
-    if (url.includes("nombre=Sertralina")) {
-      return response({ resultados: [{ nregistro: "65997", nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
-    }
     if (url.includes("practiv1=Sertralina")) {
       return response({
         resultados: [{
           nregistro: "65997",
           nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG",
-          pactivos: "SERTRALINA HIDROCLORURO",
         }],
       });
+    }
+    if (url.includes("nombre=Sertralina")) {
+      return response({ resultados: [{ nregistro: "65997", nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
     }
     return response({ resultados: [] });
   };
@@ -58,8 +57,10 @@ test("V0.5.4 medicamentos: sertralina se confirma contra CIMA y conserva nombre 
   assert.equal(med.dose, "50 mg");
   assert.equal(med.schedule, "1-0-0");
   assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.matchType, "active_ingredient_exact_token");
   assert.equal(med.medication_verification.formulation_inferred, false);
   assert.equal(result.assessment.safety_review.length, 0);
+  assert.equal(result.meta.medication_active_ingredient_lookup_precedes_product_lookup, true);
 });
 
 test("V0.5.4 medicamentos: nombre comercial real se asocia al principio activo sin ocultar la marca", async () => {
@@ -71,6 +72,9 @@ test("V0.5.4 medicamentos: nombre comercial real se asocia al principio activo s
         principiosActivos: [{ nombre: "RISPERIDONA" }],
       });
     }
+    if (url.includes("practiv1=Risperdal")) {
+      return response({ resultados: [] });
+    }
     if (url.includes("nombre=Risperdal")) {
       return response({ resultados: [{ nregistro: "60000", nombre: "RISPERDAL 1 MG COMPRIMIDOS" }] });
     }
@@ -81,6 +85,7 @@ test("V0.5.4 medicamentos: nombre comercial real se asocia al principio activo s
   const med = result.assessment.medications.habitual[0];
   assert.equal(med.display_name, "Risperidona (Risperdal)");
   assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.matchType, "product_name_exact_or_prefix");
   assert.equal(med.medication_verification.formulation_inferred, false);
   assert.equal(med.dose, "50 mg");
   assert.equal(med.route, "oral");
