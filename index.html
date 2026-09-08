@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#eaf4f5" />
-  <title>Salud Mental · Asistente clínico V0.5.3</title>
+  <title>Salud Mental · Asistente clínico V0.5.4</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -17,7 +17,7 @@
         </svg>
       </div>
       <div class="brand-copy">
-        <p class="eyebrow">PROTOTIPO CLÍNICO · V0.5.3</p>
+        <p class="eyebrow">PROTOTIPO CLÍNICO · V0.5.4</p>
         <h1>Salud Mental</h1>
         <p>Asistente de organización de entrevista psiquiátrica</p>
       </div>
@@ -51,12 +51,12 @@
       </div>
 
       <div id="speakerMappingCard" class="card speaker-card hidden">
-        <p class="section-label">CONFIRMACIÓN DE INTERLOCUTORES</p>
-        <h2>¿Quién es cada voz?</h2>
-        <p class="muted">La diarización identifica voces como A/B/C, pero el sistema no debe adivinar el rol clínico. Asigna cada voz y, si dos personas quedaron agrupadas bajo la misma etiqueta acústica, corrige los fragmentos concretos antes de organizar la entrevista.</p>
+        <p class="section-label">ATRIBUCIÓN AUTOMÁTICA DE INTERLOCUTORES</p>
+        <h2>¿Quién aporta cada información?</h2>
+        <p class="muted">La diarización acústica es solo una pista. El sistema atribuye automáticamente los roles clínicos por el contenido y el contexto, y solo pide revisión si una fuente dudosa puede cambiar una decisión clínica.</p>
         <div id="speakerMappingFields" class="speaker-mapping-grid"></div>
         <div class="actions">
-          <button id="applySpeakerMapping" class="primary" type="button">Aplicar etiquetas a la transcripción</button>
+          <button id="applySpeakerMapping" class="primary" type="button">Confirmar fuentes pendientes</button>
         </div>
         <p id="speakerMappingMessage" class="muted small"></p>
       </div>
@@ -78,7 +78,7 @@
         <div class="analysis-principle">
           <b>Prioridad del motor:</b> clasificar → discriminar relevancia → atribuir fuente → sintetizar → redactar. Nunca volcar la transcripción completa en «Enfermedad actual».
         </div>
-        <p class="muted small">La transcripción por audio debe revisarse y tener los interlocutores confirmados antes del análisis clínico. Los casos completos de texto pueden tardar varios minutos.</p>
+        <p class="muted small">La atribución automática puede abstenerse si la fuente no está clara. Solo las ambigüedades clínicamente relevantes bloquean el análisis. Los casos completos de texto pueden tardar varios minutos.</p>
         <div class="actions">
           <button id="destroyInput" class="danger secondary-danger" type="button">Borrar sesión</button>
           <button id="analyzeCase" class="primary" type="button">Organizar información clínica</button>
@@ -152,7 +152,7 @@
   <script src="config.js"></script>
   <script src="fixture-loader.js"></script>
   <script src="fixture-case3.js"></script>
+  <script src="semantic-role-ui.js"></script>
   <script src="loader.js"></script>
-  <script src="speaker-correction.js"></script>
 </body>
 </html>
