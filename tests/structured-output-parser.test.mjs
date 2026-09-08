@@ -78,7 +78,9 @@ test("Producción usa responses.parse + Zod en lugar de JSON.parse manual", asyn
   assert.equal(captured.text.format.strict, true);
   assert.equal(result.meta.structured_output_parser, "responses.parse+zod");
   assert.equal(result.meta.structured_output_attempts, 1);
-  assert.match(result.report, /MIR MAtesanz/);
+  assert.doesNotMatch(result.report, /MIR MAtesanz/);
+  assert.match(result.report, /PSQ GUARDIA\nNo consta\./);
+  assert.ok(result.meta.warnings.includes("psq_guardia_unsupported_identity_removed"));
 });
 
 test("JSON estructurado malformado provoca un único reintento y no genera informe parcial", async () => {
@@ -97,6 +99,7 @@ test("JSON estructurado malformado provoca un único reintento y no genera infor
           output_parsed: assessment,
           _request_id: "req_test_retry",
         };
+
       },
     },
   };
