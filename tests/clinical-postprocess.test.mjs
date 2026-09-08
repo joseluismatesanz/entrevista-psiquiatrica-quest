@@ -27,6 +27,9 @@ function assessmentFixture() {
       { id: "mother", label: "Madre", kind: "mother" },
     ],
     sections: {
+      motivo_consulta: { text: "Agitación y nerviosismo subjetivos; preocupación materna no especificada.", evidence_status: "supported", source_ids: ["patient", "mother"] },
+      antecedentes_salud_mental: { text: "En tratamiento psicofarmacológico habitual. Diagnóstico, evolución y antecedentes asistenciales no explorados.", evidence_status: "insufficient", source_ids: ["patient"] },
+      situacion_sociofamiliar: { text: "Convive con su padre y una hermana menor. Acude acompañada por su madre.", evidence_status: "supported", source_ids: ["patient", "mother"] },
       tratamiento_habitual: { text: "Sertralina 50 mg. Risperdal por la noche. Cetralina.", evidence_status: "supported", source_ids: ["patient"] },
       tratamiento_actual: { text: "", evidence_status: "not_provided", source_ids: [] },
     },
@@ -108,4 +111,41 @@ test("V0.5.4 postproceso: discrepancias clínicas reales se conservan", () => {
   }];
   const result = applyClinicalPostprocessing(fixture, "PACIENTE: Tomo sertralina todos los días.\nMADRE: La toma tres días por semana.");
   assert.equal(result.assessment.conflicts.length, 1);
+});
+
+test("V0.5.4 postproceso: acompañamiento en la consulta no se convierte en situación sociofamiliar", () => {
+  const transcript = `PACIENTE: Vivo con mi padre y mi hermana pequeña.\nMADRE: Yo la he acompañado hoy porque estaba preocupada.`;
+  const result = applyClinicalPostprocessing(assessmentFixture(), transcript);
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.text, "Convive con su padre y una hermana menor.");
+  assert.ok(result.warnings.includes("sociofamily_encounter_accompaniment_pruned_postprocess"));
+});
+
+test("V0.5.4 postproceso: psicofármacos actuales no crean antecedentes personales en salud mental", () => {
+  const transcript = `PSIQUIATRA: ¿Qué tratamiento tomas habitualmente?\nPACIENTE: Sertralina 50 mg por la mañana y Risperdal por la noche.`;
+  const result = applyClinicalPostprocessing(assessmentFixture(), transcript);
+  const section = result.assessment.sections.antecedentes_salud_mental;
+  assert.equal(section.text, "");
+  assert.equal(section.evidence_status, "not_explored");
+  assert.deepEqual(section.source_ids, []);
+  assert.ok(result.warnings.includes("mental_history_not_inferred_from_current_psychotropic_medication"));
+});
+
+test("V0.5.4 postproceso: antecedentes de salud mental explícitos sí se conservan", () => {
+  const fixture = assessmentFixture();
+  fixture.sections.antecedentes_salud_mental = {
+    text: "Seguimiento en Salud Mental desde 2024 por ansiedad.",
+    evidence_status: "supported",
+    source_ids: ["patient"],
+  };
+  const transcript = `PSIQUIATRA: ¿Has tenido seguimiento previo en Salud Mental?\nPACIENTE: Sí, voy a Salud Mental desde 2024 por ansiedad.`;
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.equal(result.assessment.sections.antecedentes_salud_mental.evidence_status, "supported");
+  assert.match(result.assessment.sections.antecedentes_salud_mental.text, /2024/);
+});
+
+test("V0.5.4 postproceso: motivo elimina preocupación familiar inespecífica si ya existe motivo clínico concreto", () => {
+  const transcript = `PACIENTE: Estoy muy agitada y muy nerviosa.\nMADRE: Estoy preocupada.`;
+  const result = applyClinicalPostprocessing(assessmentFixture(), transcript);
+  assert.equal(result.assessment.sections.motivo_consulta.text, "Agitación y nerviosismo subjetivos");
+  assert.ok(result.warnings.includes("generic_unspecified_family_concern_pruned_from_motive"));
 });
