@@ -24,6 +24,14 @@ test("V0.5.6 informe: resume pendientes sin convertirlos en hallazgos negativos"
   assert.match(reportJs, /revisión obligatoria/);
 });
 
+test("V0.5.6 informe: la validación siempre requiere una acción explícita del profesional", () => {
+  assert.match(reportJs, /function resetReportValidation/);
+  assert.match(reportJs, /checkbox\.checked = false/);
+  assert.match(reportJs, /copyButton\.disabled = true/);
+  assert.match(reportJs, /window\.addEventListener\('pageshow', resetReportValidation\)/);
+  assert.match(reportJs, /resetReportValidation\(\);/);
+});
+
 test("V0.5.6 informe: assets de pantalla 3 están conectados", () => {
   assert.match(indexHtml, /report-v056\.css/);
   assert.match(indexHtml, /report-v056\.js/);
