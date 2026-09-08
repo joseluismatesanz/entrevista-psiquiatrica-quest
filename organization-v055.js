@@ -10,6 +10,21 @@
     requires_review: 'Requiere revisión',
   };
 
+  const SOURCE_KIND_LABELS = {
+    patient: 'Paciente',
+    mother: 'Madre',
+    father: 'Padre',
+    family: 'Familiar',
+    caregiver: 'Cuidador/a',
+    psychiatrist: 'Psiquiatra',
+    clinician_observation: 'Observación clínica',
+    ehr: 'Historia clínica',
+    nurse: 'Enfermería',
+    police: 'Policía / custodia',
+    security: 'Seguridad',
+    other: 'Otra fuente',
+  };
+
   const STATUS_CLASSES = [
     'status-supported',
     'status-denied',
@@ -86,6 +101,30 @@
       card.classList.add(statusClass(displayStatus));
       badge.classList.remove(...STATUS_CLASSES);
       badge.classList.add(statusClass(displayStatus));
+    });
+  }
+
+  function localizeSourceLabels() {
+    document.querySelectorAll('#sourcesList .tag').forEach((tag) => {
+      let rawKind = tag.dataset.rawSourceKind || '';
+      let sourceLabel = tag.dataset.sourceLabel || '';
+
+      if (!rawKind || !sourceLabel) {
+        const current = tag.textContent?.trim() || '';
+        const separatorIndex = current.lastIndexOf(' · ');
+        if (separatorIndex < 0) return;
+
+        sourceLabel = current.slice(0, separatorIndex).trim();
+        rawKind = current.slice(separatorIndex + 3).trim();
+        if (!sourceLabel || !rawKind) return;
+
+        tag.dataset.sourceLabel = sourceLabel;
+        tag.dataset.rawSourceKind = rawKind;
+      }
+
+      const localizedKind = SOURCE_KIND_LABELS[rawKind] || rawKind;
+      const desired = `${sourceLabel} · ${localizedKind}`;
+      if (tag.textContent !== desired) tag.textContent = desired;
     });
   }
 
@@ -221,13 +260,14 @@
   function refreshOrganizationUi() {
     pruneTechnicalGuardWarnings();
     decorateRouteStatuses();
+    localizeSourceLabels();
     updateSafetySummaryHeading();
     updateAttentionBanner();
     updateGenerateButton();
   }
 
   function installObserver() {
-    const targets = ['routingGrid', 'missingList', 'conflictList', 'alertList']
+    const targets = ['routingGrid', 'sourcesList', 'missingList', 'conflictList', 'alertList']
       .map((id) => document.getElementById(id))
       .filter(Boolean);
 
