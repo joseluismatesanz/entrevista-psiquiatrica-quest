@@ -81,7 +81,6 @@ function syncMedicationSection(assessment, group, sectionKey, statuses) {
     return;
   }
 
-  // Si solo hay medicación histórica, no convertirla en tratamiento habitual/actual.
   if (list.length) {
     section.text = "";
     section.evidence_status = "not_provided";
@@ -94,10 +93,6 @@ const OBSERVED_NO_MOTOR_ACTIVATION_PATTERN = /\b(?:sin\s+inquietud\s+motora|no\s
 
 function isSubjectiveAgitationVsObservedMotorNonConflict(conflict, kinds) {
   const accounts = Array.isArray(conflict?.accounts) ? conflict.accounts : [];
-
-  // Vía preferente: exige que el malestar subjetivo proceda del paciente y la ausencia de
-  // activación motora proceda de psiquiatra/observación clínica. Son dominios compatibles,
-  // no versiones mutuamente excluyentes.
   const patientSubjective = accounts.some((account) => {
     const kind = kinds.get(account?.source_id);
     return kind === "patient" && SUBJECTIVE_AGITATION_PATTERN.test(normalize(account?.statement));
@@ -109,7 +104,6 @@ function isSubjectiveAgitationVsObservedMotorNonConflict(conflict, kinds) {
   });
   if (patientSubjective && clinicianObserved) return true;
 
-  // Fallback conservador para salidas antiguas sin tipado de fuente suficiente.
   const topic = normalize(conflict?.topic);
   const statements = accounts.map((account) => normalize(account?.statement)).filter(Boolean);
   const combined = statements.join(" ");
@@ -119,12 +113,42 @@ function isSubjectiveAgitationVsObservedMotorNonConflict(conflict, kinds) {
     && OBSERVED_NO_MOTOR_ACTIVATION_PATTERN.test(combined);
 }
 
+const ENCOUNTER_ACCOMPANIMENT_PATTERN = /\b(?:acude\s+acompanad[oa]|acude\s+con\s+(?:su\s+)?(?:madre|padre|familiar|acompanante)|acompanad[oa]\s+por\s+(?:su\s+)?(?:madre|padre|familiar|acompanante)|participa\s+en\s+(?:la\s+)?(?:valoracion|entrevista)|esta\s+presente\s+(?:en|durante))\b/i;
+const CONCRETE_SOCIOFAMILY_PATTERN = /\b(?:vive|convive|reside|domicilio|hogar|relacion|se\s+lleva|apoyo|red\s+de\s+apoyo|contacto\s+(?:frecuente|diario|semanal)|pareja|hij[oa]s?|custodia|escolariz|instituto|colegio|trabaj|emple|desemple|amig)\w*/i;
+
+function pruneEncounterPresenceFromSociofamily(assessment, warnings) {
+  const section = assessment.sections?.situacion_sociofamiliar;
+  if (!section?.text) return;
+
+  const sentences = String(section.text)
+    .match(/[^.!?]+[.!?]?/g)?.map((sentence) => sentence.trim()).filter(Boolean) || [];
+  const retained = [];
+  let pruned = false;
+
+  for (const sentence of sentences) {
+    const normalized = normalize(sentence);
+    const encounterOnly = ENCOUNTER_ACCOMPANIMENT_PATTERN.test(normalized)
+      && !CONCRETE_SOCIOFAMILY_PATTERN.test(normalized);
+    if (encounterOnly) {
+      pruned = true;
+      continue;
+    }
+    retained.push(sentence);
+  }
+
+  if (!pruned) return;
+  warnings.push("sociofamily_encounter_accompaniment_pruned_postprocess");
+  section.text = retained.join(" ").trim();
+  if (!section.text) {
+    section.evidence_status = "insufficient";
+    section.source_ids = [];
+  }
+}
+
 export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
 
-  // Temporalidad farmacológica: una mención inequívocamente pasada no puede aparecer
-  // como tratamiento habitual activo aunque el modelo la haya clasificado así.
   for (const med of assessment.medications?.habitual || []) {
     const rawName = clean(med.raw_name) || clean(med.display_name);
     if (!rawName || med.status !== "active") continue;
@@ -137,13 +161,11 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
     }
   }
 
-  // Las tarjetas y el informe deben usar la entidad farmacológica ya verificada, no el
-  // texto libre previo del modelo. Esto hace visible p. ej. Risperidona (Risperdal).
   syncMedicationSection(assessment, "habitual", "tratamiento_habitual", ["active"]);
   syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
 
-  // Sentirse agitado y no mostrar inquietud motora son dimensiones compatibles; no es
-  // una discrepancia entre fuentes por sí misma.
+  pruneEncounterPresenceFromSociofamily(assessment, warnings);
+
   const kinds = sourceKindMap(assessment);
   const originalConflicts = Array.isArray(assessment.conflicts) ? assessment.conflicts : [];
   assessment.conflicts = originalConflicts.filter((conflict) => {
@@ -160,6 +182,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       medication_sections_synced_from_structured_entities: true,
       subjective_objective_pseudoconflict_guard: true,
       adherence_label_deduplicated: true,
+      sociofamily_encounter_accompaniment_guard: true,
     },
   };
 }
