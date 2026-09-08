@@ -33,6 +33,24 @@
     return 'status-not-explored';
   }
 
+  function isPureExplicitDenial(text) {
+    const clauses = String(text || '')
+      .split(/[.;]\s*/)
+      .map((clause) => clause.trim())
+      .filter(Boolean);
+
+    if (!clauses.length) return false;
+
+    const denialStart = /^(?:niega\b|no\s+(?:refiere|presenta|toma|consume|tiene|ha\b|consta\b|se\s+objetiva\b|existen\b|hay\b)|sin\s+(?:antecedentes\b|tratamiento\b|medicaci[oó]n\b|alergias\b|consumo\b|enfermedad\b))/i;
+    return clauses.every((clause) => denialStart.test(clause));
+  }
+
+  function displayStatusForCard(card, rawStatus) {
+    if (rawStatus !== 'supported') return rawStatus;
+    const preview = card.querySelector('.route-preview')?.textContent?.trim() || '';
+    return isPureExplicitDenial(preview) ? 'explicitly_denied' : rawStatus;
+  }
+
   function decorateRouteStatuses() {
     document.querySelectorAll('#routingGrid .route-card').forEach((card) => {
       const badge = card.querySelector('.route-count');
@@ -42,13 +60,14 @@
       if (!rawStatus) return;
 
       if (badge.dataset.rawStatus !== rawStatus) badge.dataset.rawStatus = rawStatus;
-      const label = STATUS_LABELS[rawStatus];
+      const displayStatus = displayStatusForCard(card, rawStatus);
+      const label = STATUS_LABELS[displayStatus];
       if (label && badge.textContent !== label) badge.textContent = label;
 
       card.classList.remove(...STATUS_CLASSES);
-      card.classList.add(statusClass(rawStatus));
+      card.classList.add(statusClass(displayStatus));
       badge.classList.remove(...STATUS_CLASSES);
-      badge.classList.add(statusClass(rawStatus));
+      badge.classList.add(statusClass(displayStatus));
     });
   }
 
