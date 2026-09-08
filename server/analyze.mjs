@@ -6,6 +6,7 @@ import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
 import { groundInterventionToTranscript } from "./intervention-grounding.mjs";
 import { groundExplicitMseAssessment } from "./mse-grounding.mjs";
 import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
+import { groundReportContentToTranscript } from "./report-content-grounding.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
 import { verifyAssessmentMedications } from "./medication-verification.mjs";
@@ -207,6 +208,13 @@ export async function analyzeTranscript(transcript, options = {}) {
   assessment = psqGuardResult.assessment;
   warnings.push(...psqGuardResult.warnings);
 
+  // Última capa factual antes del informe: evita fusionar una negación inespecífica de
+  // "hacerse daño" con una negación formal de autolesiones, elimina escolarización inferida
+  // y conserva en el plan las ampliaciones diagnósticas expresadas por el psiquiatra.
+  const reportGroundResult = groundReportContentToTranscript(assessment, transcript);
+  assessment = reportGroundResult.assessment;
+  warnings.push(...reportGroundResult.warnings);
+
   const violations = collectClinicalInvariantViolations(assessment);
 
   return {
@@ -224,6 +232,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       intervention_transcript_grounded: true,
       mse_explicit_observation_grounded: true,
       psq_guardia_transcript_grounded: true,
+      report_content_transcript_grounded: true,
       ...medicationMeta,
       ...postprocessResult.meta,
     },
