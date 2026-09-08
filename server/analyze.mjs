@@ -4,6 +4,7 @@ import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
+import { verifyAssessmentMedications } from "./medication-verification.mjs";
 
 function extractRefusal(response) {
   for (const item of response.output || []) {
@@ -18,7 +19,7 @@ function extractRefusal(response) {
 function extractParsed(response) {
   if (response?.output_parsed) return response.output_parsed;
 
-  for (const item of response?.output || []) {
+  for (const item of response.output || []) {
     if (item.type !== "message") continue;
     for (const content of item.content || []) {
       if (content.type === "output_text" && content.parsed) return content.parsed;
@@ -156,7 +157,25 @@ export async function analyzeTranscript(transcript, options = {}) {
     text: { format: textFormat },
   });
 
-  const { assessment, warnings } = applyClinicalInvariants(parsed);
+  const invariantResult = applyClinicalInvariants(parsed);
+  let assessment = invariantResult.assessment;
+  const warnings = [...invariantResult.warnings];
+  let medicationMeta = {
+    medication_verification_enabled: false,
+    medication_verification_source: "not_run",
+  };
+
+  // En producción se contrasta cada nombre farmacológico con CIMA (AEMPS).
+  // En pruebas con cliente inyectado no se toca la red salvo que se aporte un verificador explícito.
+  const shouldVerifyMedications = !options.client || typeof options.medicationVerifier === "function";
+  if (shouldVerifyMedications) {
+    const verifier = options.medicationVerifier || verifyAssessmentMedications;
+    const medicationResult = await verifier(assessment, options.medicationVerificationOptions || {});
+    assessment = medicationResult.assessment;
+    warnings.push(...(medicationResult.warnings || []));
+    medicationMeta = medicationResult.meta || medicationMeta;
+  }
+
   const violations = collectClinicalInvariantViolations(assessment);
 
   return {
@@ -171,6 +190,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       request_id: response?._request_id || "",
       warnings,
       invariant_violations: violations,
+      ...medicationMeta,
     },
   };
 }
