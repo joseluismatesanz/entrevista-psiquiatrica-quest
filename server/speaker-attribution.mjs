@@ -1,0 +1,242 @@
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
+import { resolveModelAuth } from "./model-auth.mjs";
+
+export const SPEAKER_ROLE_MODEL = "gpt-5.6";
+
+const RoleSchema = z.enum([
+  "psychiatrist",
+  "patient",
+  "mother",
+  "father",
+  "sibling",
+  "caregiver",
+  "family",
+  "nurse",
+  "police",
+  "security",
+  "other",
+  "unknown",
+]);
+
+const AttributionSchema = z.object({
+  assignments: z.array(z.object({
+    segment_id: z.string(),
+    role: RoleSchema,
+    confidence: z.enum(["high", "medium", "low"]),
+  }).strict()),
+}).strict();
+
+const ROLE_LABELS = {
+  psychiatrist: "PSIQUIATRA",
+  patient: "PACIENTE",
+  mother: "MADRE",
+  father: "PADRE",
+  sibling: "HERMANO/A",
+  caregiver: "CUIDADOR/A",
+  family: "FAMILIAR",
+  nurse: "ENFERMERÍA",
+  police: "POLICÍA",
+  security: "SEGURIDAD",
+  other: "OTRO",
+  unknown: "INTERLOCUTOR_NO_IDENTIFICADO",
+};
+
+const ROLE_DISPLAY = {
+  psychiatrist: "Psiquiatra",
+  patient: "Paciente",
+  mother: "Madre",
+  father: "Padre",
+  sibling: "Hermano/a",
+  caregiver: "Cuidador/a",
+  family: "Familiar",
+  nurse: "Enfermería",
+  police: "Policía",
+  security: "Seguridad",
+  other: "Otro",
+  unknown: "No identificado",
+};
+
+const SOURCE_SENSITIVE_PATTERNS = [
+  /\b(?:suicid\w*|autol\w*|autoles\w*|hacerse\s+daño|morir|muerte|matarse|cort(?:e|es|arse)|sobredosis|plan\s+suicida)\b/i,
+  /\b(?:heteroagres\w*|agresi[oó]n|agredir|golpear|matar\s+a|hacer\s+daño\s+a|amenaz\w*|violencia)\b/i,
+  /\b(?:tratamiento|medicaci[oó]n|f[aá]rmaco|pastill\w*|\d+(?:[.,]\d+)?\s*mg\b|dosis|adherencia|toma\w*|sertralina|lorazepam|olanzapina|risperidona|haloperidol|litio|lamotrigina)\b/i,
+  /\b(?:alerg\w*|reacci[oó]n\s+adversa|ram\b|urticaria|diston[ií]a|anafilax\w*)\b/i,
+  /\b(?:madre|padre|herman\w*|t[ií]o|t[ií]a|abuelo|abuela|familia)\b.*\b(?:depres\w*|bipolar|esquizofren\w*|psicos\w*|suicid\w*|alcohol\w*)\b/i,
+  /\b(?:cannabis|hach[ií]s|marihuana|coca[ií]na|anfetamin\w*|speed|mdma|ketamina|alcohol|benzodiacepin\w*|t[oó]xicos|drogas)\b/i,
+  /\b(?:diagn[oó]stic\w*|psicos\w*|depres\w*|man[ií]a|bipolar|ingreso|unidad\s+de\s+agudos|alta|seguimiento|plan\s+terap[eé]utico|propongo|acepta|rechaza|se\s+niega)\b/i,
+];
+
+function isSourceSensitive(text) {
+  return SOURCE_SENSITIVE_PATTERNS.some((pattern) => pattern.test(String(text || "")));
+}
+
+function normalizeSegments(segments) {
+  return (Array.isArray(segments) ? segments : [])
+    .map((segment, index) => ({
+      id: String(segment?.id || `segment-${index + 1}`),
+      speaker: String(segment?.speaker || "?").trim() || "?",
+      start: Number.isFinite(Number(segment?.start)) ? Number(segment.start) : 0,
+      end: Number.isFinite(Number(segment?.end)) ? Number(segment.end) : 0,
+      text: String(segment?.text || "").trim(),
+    }))
+    .filter((segment) => segment.text);
+}
+
+function buildPromptInput(segments) {
+  return JSON.stringify(segments.map((segment) => ({
+    segment_id: segment.id,
+    acoustic_speaker: segment.speaker,
+    text: segment.text,
+  })));
+}
+
+function clinicalRoleInstructions() {
+  return `Eres un clasificador de interlocutores de una entrevista psiquiátrica transcrita. Debes atribuir un ROL CLÍNICO a cada segmento usando el contenido verbal, el orden de turnos y la etiqueta acústica solo como una pista secundaria.
+
+REGLAS CRÍTICAS:
+- La diarización acústica puede fusionar personas distintas bajo la misma letra. Por tanto, dos segmentos con acoustic_speaker=B PUEDEN pertenecer a roles humanos diferentes.
+- No hagas biometría de voz ni infieras identidad por sexo, edad aparente, acento o timbre. Solo usa el texto y la estructura conversacional.
+- psychiatrist: preguntas clínicas, exploración, síntesis/observaciones del clínico, propuestas y plan.
+- patient: habla en primera persona sobre sus propios síntomas, historia, consumo, tratamiento o experiencia.
+- mother/father/sibling/caregiver/family: información colateral sobre el paciente. Usa mother/father/etc. solo si el diálogo lo hace explícito; si solo consta que es un familiar, usa family.
+- nurse/police/security: solo cuando el contenido o contexto lo haga explícito.
+- unknown: cuando no pueda distinguirse razonablemente la fuente.
+- confidence=high solo con evidencia contextual clara; medium cuando es probable pero no inequívoco; low cuando es débil.
+- No diagnostiques, no resumas y no cambies el contenido. Devuelve exactamente una asignación por segment_id.`;
+}
+
+function extractParsed(response) {
+  if (response?.output_parsed) return response.output_parsed;
+  for (const item of response?.output || []) {
+    if (item.type !== "message") continue;
+    for (const content of item.content || []) {
+      if (content.type === "output_text" && content.parsed) return content.parsed;
+    }
+  }
+  return null;
+}
+
+async function resolveClient(options = {}) {
+  if (options.client) {
+    return { client: options.client, transport: "injected-test-client", model: options.model || SPEAKER_ROLE_MODEL };
+  }
+
+  const { default: OpenAI } = await import("openai");
+  const auth = await resolveModelAuth();
+  if (!auth) throw new Error("No hay credenciales de modelo configuradas para atribuir interlocutores.");
+
+  return {
+    client: new OpenAI({ apiKey: auth.apiKey, ...(auth.baseURL ? { baseURL: auth.baseURL } : {}) }),
+    transport: auth.transport,
+    model: options.model || process.env.SPEAKER_ROLE_MODEL || process.env.OPENAI_MODEL || auth.defaultModel || SPEAKER_ROLE_MODEL,
+  };
+}
+
+export async function attributeClinicalSpeakerRoles(inputSegments, options = {}) {
+  const segments = normalizeSegments(inputSegments);
+  if (!segments.length) throw new TypeError("No hay segmentos para atribuir interlocutores.");
+
+  const { client, transport, model } = await resolveClient(options);
+  if (typeof client.responses?.parse !== "function") {
+    throw new TypeError("El cliente de modelo no expone Responses.parse para atribución de interlocutores.");
+  }
+
+  const format = zodTextFormat(AttributionSchema, "clinical_speaker_roles_v054");
+  const response = await client.responses.parse({
+    model,
+    store: false,
+    background: false,
+    reasoning: { effort: "low" },
+    max_output_tokens: Math.max(1800, Math.min(12000, segments.length * 90)),
+    instructions: clinicalRoleInstructions(),
+    input: [{
+      role: "user",
+      content: [{
+        type: "input_text",
+        text: `Atribuye el rol clínico de cada segmento. Segmentos JSON:\n${buildPromptInput(segments)}`,
+      }],
+    }],
+    text: { format },
+  });
+
+  if (response.status !== "completed") {
+    throw new Error(`Atribución de interlocutores incompleta: ${response.status}`);
+  }
+
+  const parsed = extractParsed(response);
+  if (!parsed) throw new Error("No se obtuvo una atribución estructurada de interlocutores.");
+
+  const byId = new Map((parsed.assignments || []).map((item) => [String(item.segment_id), item]));
+  const attributedSegments = segments.map((segment) => {
+    const assignment = byId.get(segment.id) || { role: "unknown", confidence: "low" };
+    const role = ROLE_LABELS[assignment.role] ? assignment.role : "unknown";
+    const confidence = ["high", "medium", "low"].includes(assignment.confidence) ? assignment.confidence : "low";
+    const sourceSensitive = isSourceSensitive(segment.text);
+    const reviewRequired = sourceSensitive && (role === "unknown" || confidence !== "high");
+    return {
+      ...segment,
+      acoustic_speaker: segment.speaker,
+      role,
+      role_label: ROLE_LABELS[role],
+      role_display: ROLE_DISPLAY[role],
+      role_confidence: confidence,
+      source_sensitive: sourceSensitive,
+      review_required: reviewRequired,
+    };
+  });
+
+  const participantRoles = [...new Set(attributedSegments.map((segment) => segment.role).filter((role) => role !== "unknown"))];
+  const reviewItems = attributedSegments
+    .filter((segment) => segment.review_required)
+    .map((segment) => ({
+      segment_id: segment.id,
+      text: segment.text,
+      suggested_role: segment.role,
+      confidence: segment.role_confidence,
+      acoustic_speaker: segment.acoustic_speaker,
+    }));
+
+  const transcript = attributedSegments
+    .map((segment) => `${segment.role_label}: ${segment.text}`)
+    .join("\n");
+
+  return {
+    transcript,
+    segments: attributedSegments,
+    participants: participantRoles.map((role) => ({ role, label: ROLE_DISPLAY[role] })),
+    review_items: reviewItems,
+    meta: {
+      automatic_role_attribution: true,
+      role_model: model,
+      role_transport: transport,
+      store: false,
+      abstention_enabled: true,
+      critical_review_count: reviewItems.length,
+      request_id: response?._request_id || "",
+    },
+  };
+}
+
+export function applyReviewedSpeakerRoles(attributedSegments, corrections = {}) {
+  const segments = normalizeSegments(attributedSegments).map((base) => {
+    const original = (attributedSegments || []).find((item) => String(item?.id) === base.id) || {};
+    const correctedRole = corrections[base.id];
+    const role = ROLE_LABELS[correctedRole] ? correctedRole : (ROLE_LABELS[original.role] ? original.role : "unknown");
+    return {
+      ...original,
+      ...base,
+      acoustic_speaker: original.acoustic_speaker || base.speaker,
+      role,
+      role_label: ROLE_LABELS[role],
+      role_display: ROLE_DISPLAY[role],
+      role_confidence: correctedRole ? "human_confirmed" : (original.role_confidence || "low"),
+      review_required: false,
+    };
+  });
+
+  return {
+    segments,
+    transcript: segments.map((segment) => `${segment.role_label}: ${segment.text}`).join("\n"),
+  };
+}
