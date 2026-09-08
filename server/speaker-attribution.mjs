@@ -67,6 +67,10 @@ const SOURCE_SENSITIVE_PATTERNS = [
   /\b(?:diagn[oó]stic\w*|psicos\w*|depres\w*|man[ií]a|bipolar|ingreso|unidad\s+de\s+agudos|alta|seguimiento|plan\s+terap[eé]utico|propongo|acepta|rechaza|se\s+niega)\b/i,
 ];
 
+const FILLER_WORDS = new Set([
+  "pues", "bueno", "vale", "sí", "si", "no", "y", "ya", "eh", "mmm", "ajá", "aja",
+]);
+
 function isSourceSensitive(text) {
   return SOURCE_SENSITIVE_PATTERNS.some((pattern) => pattern.test(String(text || "")));
 }
@@ -81,6 +85,82 @@ function normalizeSegments(segments) {
       text: String(segment?.text || "").trim(),
     }))
     .filter((segment) => segment.text);
+}
+
+function normalizedWords(text) {
+  return String(text || "")
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9áéíóúüñ]+/gi, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function endsWithWords(haystack, needle) {
+  if (!needle.length || needle.length > haystack.length) return false;
+  const offset = haystack.length - needle.length;
+  return needle.every((word, index) => haystack[offset + index] === word);
+}
+
+function startsWithWords(haystack, needle) {
+  if (!needle.length || needle.length > haystack.length) return false;
+  return needle.every((word, index) => haystack[index] === word);
+}
+
+function maximalSuffixPrefixOverlap(leftWords, rightWords) {
+  const max = Math.min(leftWords.length, rightWords.length);
+  for (let size = max; size >= 4; size -= 1) {
+    const suffix = leftWords.slice(leftWords.length - size);
+    const prefix = rightWords.slice(0, size);
+    if (suffix.every((word, index) => word === prefix[index])) return size;
+  }
+  return 0;
+}
+
+function isClearDuplicateTail(previousText, currentText) {
+  const previousWords = normalizedWords(previousText);
+  const currentWords = normalizedWords(currentText);
+  if (previousWords.length < 4 || currentWords.length < 4) return false;
+
+  if (previousWords.length === currentWords.length
+      && previousWords.every((word, index) => word === currentWords[index])) {
+    return true;
+  }
+
+  if (currentWords.length <= previousWords.length && endsWithWords(previousWords, currentWords)) {
+    return true;
+  }
+
+  if (previousWords.length <= currentWords.length && startsWithWords(currentWords, previousWords)) {
+    const tail = currentWords.slice(previousWords.length);
+    return tail.length <= 2 && tail.every((word) => FILLER_WORDS.has(word));
+  }
+
+  const overlap = maximalSuffixPrefixOverlap(previousWords, currentWords);
+  if (overlap < 4) return false;
+  const tail = currentWords.slice(overlap);
+  return tail.length <= 2 && tail.every((word) => FILLER_WORDS.has(word));
+}
+
+export function deduplicateClearAdjacentOverlaps(inputSegments) {
+  const segments = normalizeSegments(inputSegments);
+  const output = [];
+  let removed = 0;
+
+  for (const segment of segments) {
+    const previous = output.at(-1);
+    if (previous && previous.speaker === segment.speaker && isClearDuplicateTail(previous.text, segment.text)) {
+      previous.end = Math.max(previous.end, segment.end);
+      previous.merged_from_ids = [...(previous.merged_from_ids || [previous.id]), segment.id];
+      removed += 1;
+      continue;
+    }
+    output.push({ ...segment });
+  }
+
+  return { segments: output, removed };
 }
 
 function buildPromptInput(segments) {
@@ -134,7 +214,8 @@ async function resolveClient(options = {}) {
 }
 
 export async function attributeClinicalSpeakerRoles(inputSegments, options = {}) {
-  const segments = normalizeSegments(inputSegments);
+  const deduplication = deduplicateClearAdjacentOverlaps(inputSegments);
+  const segments = deduplication.segments;
   if (!segments.length) throw new TypeError("No hay segmentos para atribuir interlocutores.");
 
   const { client, transport, model } = await resolveClient(options);
@@ -213,6 +294,7 @@ export async function attributeClinicalSpeakerRoles(inputSegments, options = {})
       store: false,
       abstention_enabled: true,
       critical_review_count: reviewItems.length,
+      deduplicated_overlap_segments: deduplication.removed,
       request_id: response?._request_id || "",
     },
   };
