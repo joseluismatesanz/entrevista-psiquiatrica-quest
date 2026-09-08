@@ -66,16 +66,16 @@ test("V0.5.5 organización: seguridad clínica no se cuenta automáticamente com
   assert.match(organizationCss, /safety-summary-card/);
 });
 
-test("V0.5.5 organización: assets y llamada a borrador están conectados", () => {
+test("V0.5.5 organización: assets y llamada a borrador siguen conectados en versiones posteriores", () => {
   assert.match(indexHtml, /organization-v055\.css/);
   assert.match(indexHtml, /organization-v055\.js/);
   assert.match(indexHtml, /Generar borrador de informe/);
-  assert.match(indexHtml, /V0\.5\.5/);
+  assert.match(indexHtml, /V0\.5\.[5-9]/);
   assert.match(organizationCss, /organization-attention/);
 });
 
-test("V0.5.5 health expone las nuevas capacidades de organización", () => {
-  assert.match(healthApi, /version: "0\.5\.5"/);
+test("V0.5.5 organización: health mantiene las capacidades en versiones posteriores", () => {
+  assert.match(healthApi, /version: "0\.5\.[5-9]"/);
   assert.match(healthApi, /organization_status_labels_enabled: true/);
   assert.match(healthApi, /organization_attention_summary_enabled: true/);
 });
