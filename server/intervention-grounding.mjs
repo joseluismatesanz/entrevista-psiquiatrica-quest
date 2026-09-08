@@ -29,6 +29,7 @@ function parseTranscript(transcript) {
 const PROPOSAL_VERB_PATTERN = /\b(?:propongo|proponemos|propone|planteo|planteamos|plantea|recomiendo|recomendamos|recomienda|sugiero|sugerimos|sugiere|ofrezco|ofrecemos|ofrece)\b/i;
 const ACCEPT_PATTERN = /\b(?:acepto|acepta|aceptamos|de\s+acuerdo|conforme|estoy\s+de\s+acuerdo|estamos\s+de\s+acuerdo|me\s+parece\s+bien|nos\s+parece\s+bien)\b/i;
 const REJECT_PATTERN = /\b(?:rechazo|rechaza|rechazamos|no\s+acepto|no\s+acepta|no\s+aceptamos|me\s+niego|se\s+niega|no\s+quiero|no\s+quiere)\b/i;
+const GENERIC_PROPOSAL_REFERENCE_PATTERN = /\b(?:la|esta|dicha)\s+propuesta\b|\bacept\w*\s+la\s+propuesta\b|\brechaz\w*\s+la\s+propuesta\b/i;
 
 function proposalSentenceFromLine(text) {
   const sentences = splitSentences(text);
@@ -91,6 +92,15 @@ function responseSummary(speaker, text) {
   return null;
 }
 
+function clearGenericUngroundedIntervention(section, warnings) {
+  const text = String(section?.text || "").trim();
+  if (!text || !GENERIC_PROPOSAL_REFERENCE_PATTERN.test(text)) return;
+  section.text = "";
+  section.evidence_status = "not_provided";
+  section.source_ids = [];
+  warnings.push("intervention_generic_proposal_reference_removed_without_grounding");
+}
+
 export function groundInterventionToTranscript(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
@@ -111,6 +121,7 @@ export function groundInterventionToTranscript(inputAssessment, transcript) {
   }
 
   if (!proposal || proposalIndex < 0) {
+    clearGenericUngroundedIntervention(section, warnings);
     return { assessment, warnings, grounded: false };
   }
 
@@ -124,6 +135,7 @@ export function groundInterventionToTranscript(inputAssessment, transcript) {
 
   const patientResponse = responses.find((item) => item.patient);
   if (!patientResponse) {
+    clearGenericUngroundedIntervention(section, warnings);
     return { assessment, warnings, grounded: false };
   }
 
