@@ -84,13 +84,60 @@ function isUnverifiedFamilyIdentityBeliefSentence(sentence) {
     && (attributionPattern.test(text) || strongPsychoticIdentityMarker.test(text));
 }
 
-function pruneUnverifiedFamilyIdentityBeliefs(text) {
+function isEncounterPresenceOnlySentence(sentence) {
+  const text = String(sentence || "").trim();
+  if (!text) return false;
+
+  const encounterPresencePattern = /\b(?:acompañ(?:a|ada|ado|ó)|acude\s+acompañad[oa]|participa\s+en\s+(?:la\s+)?(?:valoración|entrevista)|está\s+presente\s+(?:en|durante)|presente\s+(?:en|durante))\b/i;
+  const encounterContextPattern = /\b(?:urgencias|consulta|valoración|entrevista|exploración|hospital)\b/i;
+  const concreteSocioFactPattern = /\b(?:vive|convive|reside|domicilio|hogar|relación|se\s+lleva|apoyo|red\s+de\s+apoyo|contacto\s+(?:frecuente|diario|semanal)|pareja|hij[oa]s?|custodia|escolariz\w*|instituto|colegio|trabaj\w*|emple\w*|desemple\w*|amig\w*)\b/i;
+
+  return encounterPresencePattern.test(text)
+    && encounterContextPattern.test(text)
+    && !concreteSocioFactPattern.test(text);
+}
+
+function pruneSociofamilyNonfacts(text) {
+  const sentences = splitClinicalSentences(text);
+  const retained = [];
+  let identityBeliefPruned = false;
+  let encounterPresencePruned = false;
+
+  for (const sentence of sentences) {
+    if (isUnverifiedFamilyIdentityBeliefSentence(sentence)) {
+      identityBeliefPruned = true;
+      continue;
+    }
+    if (isEncounterPresenceOnlySentence(sentence)) {
+      encounterPresencePruned = true;
+      continue;
+    }
+    retained.push(sentence);
+  }
+
+  return {
+    text: retained.join(" ").trim(),
+    identityBeliefPruned,
+    encounterPresencePruned,
+  };
+}
+
+function isUnsupportedObjectiveMseSentence(sentence, mseKinds) {
+  const text = String(sentence || "").trim();
+  if (!text) return false;
+  if (mseKinds.has("clinician_observation")) return false;
+
+  const objectiveObservationPattern = /\b(?:objetiv\w*|se\s+observa|observad[oa]\s+durante|a\s+la\s+exploración\s+se\s+aprecia|durante\s+la\s+entrevista\s+se\s+aprecia)\b/i;
+  return objectiveObservationPattern.test(text);
+}
+
+function pruneUnsupportedObjectiveMse(text, mseKinds) {
   const sentences = splitClinicalSentences(text);
   const retained = [];
   let pruned = false;
 
   for (const sentence of sentences) {
-    if (isUnverifiedFamilyIdentityBeliefSentence(sentence)) {
+    if (isUnsupportedObjectiveMseSentence(sentence, mseKinds)) {
       pruned = true;
       continue;
     }
@@ -122,16 +169,19 @@ export function applyClinicalInvariants(input) {
     );
   }
 
-  // SITUACIÓN SOCIOFAMILIAR solo debe contener hechos de convivencia/relación/apoyo.
-  // Una creencia de identidad/filiación no verificada se mantiene fuera de este apartado.
+  // SITUACIÓN SOCIOFAMILIAR solo contiene hechos de convivencia, relación, apoyos,
+  // escolarización/empleo, etc. La mera presencia de un familiar durante Urgencias o la
+  // valoración no se convierte por sí sola en dato sociofamiliar.
   const socio = assessment.sections.situacion_sociofamiliar;
   if (socio.evidence_status === "supported" && socio.text.trim()) {
     const originalSocio = socio.text.trim();
-    const { text: retainedSocio, pruned } = pruneUnverifiedFamilyIdentityBeliefs(originalSocio);
-    if (pruned) {
-      warnings.push("sociofamily_unverified_identity_belief_pruned");
-      if (retainedSocio) {
-        socio.text = retainedSocio;
+    const pruned = pruneSociofamilyNonfacts(originalSocio);
+    if (pruned.identityBeliefPruned) warnings.push("sociofamily_unverified_identity_belief_pruned");
+    if (pruned.encounterPresencePruned) warnings.push("sociofamily_encounter_presence_pruned");
+
+    if (pruned.text !== originalSocio) {
+      if (pruned.text) {
+        socio.text = pruned.text;
       } else {
         clearSection(socio, "insufficient");
       }
@@ -179,10 +229,30 @@ export function applyClinicalInvariants(input) {
         "exploracion_psicopatologica",
         "Se retiró una exploración que no estaba sustentada por entrevista directa u observación clínica actual."
       );
+    } else {
+      // Palabras como "objetiva" o "se observa" requieren una fuente explícita de observación
+      // clínica. Un paciente que dice "estoy agitado" aporta un síntoma referido, no una
+      // observación objetiva del psiquiatra.
+      const originalMse = mse.text.trim();
+      const prunedMse = pruneUnsupportedObjectiveMse(originalMse, mseKinds);
+      if (prunedMse.pruned) {
+        warnings.push("mse_unsupported_objective_observation_pruned");
+        if (prunedMse.text) {
+          mse.text = prunedMse.text;
+        } else {
+          clearSection(mse, "insufficient");
+          addMissing(
+            assessment,
+            "exploracion_psicopatologica",
+            "Se retiró una afirmación observacional no respaldada por observación clínica explícita; el síntoma referido debe documentarse como tal."
+          );
+        }
+      }
     }
   }
 
   // Nunca inventar principio activo: si no se conoce, display_name = raw_name.
+  // La verificación posterior contra CIMA puede confirmar o enriquecer este campo.
   for (const group of ["habitual", "current"]) {
     for (const med of assessment.medications?.[group] || []) {
       if (!med.active_ingredient_known) med.display_name = med.raw_name;
@@ -240,6 +310,16 @@ export function collectClinicalInvariantViolations(assessment) {
   const socio = assessment.sections?.situacion_sociofamiliar?.text?.trim() || "";
   if (splitClinicalSentences(socio).some(isUnverifiedFamilyIdentityBeliefSentence)) {
     violations.push("sociofamily_contains_unverified_identity_belief");
+  }
+  if (splitClinicalSentences(socio).some(isEncounterPresenceOnlySentence)) {
+    violations.push("sociofamily_contains_encounter_presence_only");
+  }
+
+  const mse = assessment.sections?.exploracion_psicopatologica;
+  const kinds = sourceKindMap(assessment);
+  const mseKinds = sectionKinds(mse, kinds);
+  if (splitClinicalSentences(mse?.text || "").some((sentence) => isUnsupportedObjectiveMseSentence(sentence, mseKinds))) {
+    violations.push("mse_contains_unsupported_objective_observation");
   }
 
   const judgment = assessment.diagnostic_judgment || {};
