@@ -29,7 +29,7 @@ function med(overrides = {}) {
 function baseAssessment() {
   const sections = {
     motivo_consulta: section(),
-    psq_guardia: section("texto incorrecto", "supported", ["psy"]),
+    psq_guardia: section(),
     alergias_ram: section(),
     antecedentes_somaticos: section(),
     antecedentes_salud_mental: section(),
@@ -139,7 +139,7 @@ test("Caso 1: motivo directo, tratamiento por líneas, NSSI no se convierte en i
   assert.match(report, /Melatonina 3,8 mg: 0 - 0 - 1/);
   assert.doesNotMatch(report, /\nINTERVENCIÓN\n/);
   assert.match(report, /JUICIO CLÍNICO: Episodio depresivo moderado\. CIE-10: F32\.1\. DSM-5: 296\.22\./);
-  assert.equal(assessment.sections.psq_guardia.text, "MIR MAtesanz");
+  assert.equal(assessment.sections.psq_guardia.text, "");
   assert.deepEqual(collectClinicalInvariantViolations(assessment), []);
 });
 
@@ -308,6 +308,7 @@ test("Backend OpenAI: usa Responses + Structured Outputs + store:false", async (
     "supported",
     ["pat"]
   );
+  // Simula una identidad alucinada por el modelo: la transcripción no la respalda.
   a.sections.psq_guardia = section("MIR MAtesanz", "supported", []);
   setDiagnosis(a, "Episodio depresivo moderado", "F32.1", "296.22");
 
@@ -336,7 +337,9 @@ test("Backend OpenAI: usa Responses + Structured Outputs + store:false", async (
   assert.equal(captured.text.format.strict, true);
   assert.equal(captured.model, "gpt-5.6");
   assert.match(captured.input[0].content[0].text, /JSON/);
-  assert.match(result.report, /MIR MAtesanz/);
+  assert.doesNotMatch(result.report, /MIR MAtesanz/);
+  assert.match(result.report, /PSQ GUARDIA\nNo consta\./);
+  assert.ok(result.meta.warnings.includes("psq_guardia_unsupported_identity_removed"));
   assert.match(result.report, /CIE-10: F32\.1/);
   assert.equal(result.meta.store, false);
 });
