@@ -60,7 +60,7 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
-    version: "0.5.5",
+    version: "0.5.6",
     mode: "audio_pilot",
     recording_enabled: true,
     transcription_enabled: true,
@@ -83,6 +83,7 @@ export default async function handler(req, res) {
     subjective_objective_pseudoconflict_guard: true,
     organization_status_labels_enabled: true,
     organization_attention_summary_enabled: true,
+    report_draft_pending_summary_enabled: true,
     persistent_audio_storage: false,
     persistent_clinical_storage: false,
     response_cache: "no-store",
