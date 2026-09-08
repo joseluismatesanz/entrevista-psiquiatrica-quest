@@ -27,6 +27,7 @@ export default async function handler(req, res) {
   let clinicalEngineProbe = "not_checked";
   let speakerAttributionLoadable = false;
   let medicationVerificationLoadable = false;
+  let clinicalPostprocessLoadable = false;
   try {
     const module = await import("../server/analyze.mjs");
     clinicalEngineLoadable = typeof module.analyzeTranscript === "function";
@@ -50,6 +51,13 @@ export default async function handler(req, res) {
     medicationVerificationLoadable = false;
   }
 
+  try {
+    const module = await import("../server/clinical-postprocess.mjs");
+    clinicalPostprocessLoadable = typeof module.applyClinicalPostprocessing === "function";
+  } catch {
+    clinicalPostprocessLoadable = false;
+  }
+
   return res.status(200).json({
     ok: true,
     version: "0.5.4",
@@ -68,8 +76,11 @@ export default async function handler(req, res) {
     medication_name_only_external_query: true,
     medication_similarity_autocorrection: false,
     medication_formulation_inference: false,
+    medication_temporality_grounded_in_transcript: true,
+    medication_sections_synced_from_structured_entities: true,
     sociofamily_encounter_presence_guard: true,
     objective_mse_requires_observation_source: true,
+    subjective_objective_pseudoconflict_guard: true,
     persistent_audio_storage: false,
     persistent_clinical_storage: false,
     response_cache: "no-store",
@@ -78,5 +89,6 @@ export default async function handler(req, res) {
     clinical_engine_probe: clinicalEngineProbe,
     speaker_attribution_loadable: speakerAttributionLoadable,
     medication_verification_loadable: medicationVerificationLoadable,
+    clinical_postprocess_loadable: clinicalPostprocessLoadable,
   });
 }
