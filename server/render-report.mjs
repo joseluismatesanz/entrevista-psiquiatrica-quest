@@ -20,12 +20,16 @@ function clean(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function cleanAdherence(value) {
+  return clean(value).replace(/^adherencia\s*:?\s*/i, "").trim();
+}
+
 function medicationLine(med) {
   const name = clean(med.display_name) || clean(med.raw_name) || "Medicamento no identificado";
   const dose = clean(med.dose);
   const schedule = clean(med.schedule);
   const route = clean(med.route);
-  const adherence = clean(med.adherence_text);
+  const adherence = cleanAdherence(med.adherence_text);
 
   let line = name;
   if (dose) line += ` ${dose}`;
