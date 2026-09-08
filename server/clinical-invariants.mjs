@@ -152,18 +152,10 @@ export function applyClinicalInvariants(input) {
   const kinds = sourceKindMap(assessment);
   const warnings = [];
 
-  // Familiares psiquiátricos: solo contenido aportado por el paciente.
-  const family = assessment.sections.antecedentes_familiares_psiquiatricos;
-  const familyKinds = sectionKinds(family, kinds);
-  if (family.evidence_status === "supported" && [...familyKinds].some((kind) => kind !== "patient")) {
-    warnings.push("family_history_non_patient_source_removed");
-    clearSection(family);
-    addMissing(
-      assessment,
-      "antecedentes_familiares_psiquiatricos",
-      "Se retiró contenido porque no estaba sustentado exclusivamente por el paciente en la entrevista actual."
-    );
-  }
+  // ANTECEDENTES FAMILIARES PSIQUIÁTRICOS pueden proceder del paciente o de informantes
+  // colaterales clínicamente pertinentes (madre, padre, otros familiares/cuidadores).
+  // No se borra información válida por el mero hecho de que la aporte un familiar;
+  // los source_ids deben conservar la atribución para que el informe pueda diferenciar la fuente.
 
   // SITUACIÓN SOCIOFAMILIAR solo contiene hechos de convivencia, relación, apoyos,
   // escolarización/empleo, etc. La mera presencia de un familiar durante Urgencias o la
