@@ -2,6 +2,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { SYSTEM_PROMPT } from "./prompt.mjs";
 import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
+import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
 import { verifyAssessmentMedications } from "./medication-verification.mjs";
@@ -176,6 +177,13 @@ export async function analyzeTranscript(transcript, options = {}) {
     medicationMeta = medicationResult.meta || medicationMeta;
   }
 
+  // Segunda capa determinista: usa la transcripción para corregir temporalidad farmacológica,
+  // sincroniza las tarjetas con las entidades verificadas y elimina pseudodiscrepancias
+  // subjetivo/objetivo que no representan versiones incompatibles.
+  const postprocessResult = applyClinicalPostprocessing(assessment, transcript);
+  assessment = postprocessResult.assessment;
+  warnings.push(...postprocessResult.warnings);
+
   const violations = collectClinicalInvariantViolations(assessment);
 
   return {
@@ -191,6 +199,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       warnings,
       invariant_violations: violations,
       ...medicationMeta,
+      ...postprocessResult.meta,
     },
   };
 }
