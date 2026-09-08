@@ -26,6 +26,7 @@ export default async function handler(req, res) {
   let clinicalEngineLoadable = false;
   let clinicalEngineProbe = "not_checked";
   let speakerAttributionLoadable = false;
+  let medicationVerificationLoadable = false;
   try {
     const module = await import("../server/analyze.mjs");
     clinicalEngineLoadable = typeof module.analyzeTranscript === "function";
@@ -42,6 +43,13 @@ export default async function handler(req, res) {
     speakerAttributionLoadable = false;
   }
 
+  try {
+    const module = await import("../server/medication-verification.mjs");
+    medicationVerificationLoadable = typeof module.verifyAssessmentMedications === "function";
+  } catch {
+    medicationVerificationLoadable = false;
+  }
+
   return res.status(200).json({
     ok: true,
     version: "0.5.4",
@@ -55,6 +63,9 @@ export default async function handler(req, res) {
     critical_only_role_review: true,
     voice_calibration_required: false,
     segment_role_correction_default: false,
+    medication_verification_enabled: true,
+    medication_verification_source: "AEMPS_CIMA",
+    medication_name_only_external_query: true,
     persistent_audio_storage: false,
     persistent_clinical_storage: false,
     response_cache: "no-store",
@@ -62,5 +73,6 @@ export default async function handler(req, res) {
     clinical_engine_loadable: clinicalEngineLoadable,
     clinical_engine_probe: clinicalEngineProbe,
     speaker_attribution_loadable: speakerAttributionLoadable,
+    medication_verification_loadable: medicationVerificationLoadable,
   });
 }
