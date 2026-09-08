@@ -1,13 +1,13 @@
 {
   "name": "entrevista-psiquiatrica-quest",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "private": true,
   "type": "module",
   "description": "Prototipo móvil con transcripción diarizada efímera, atribución semántica conservadora de interlocutores, verificación farmacológica CIMA y documentación psiquiátrica estructurada con revisión clínica obligatoria.",
   "scripts": {
     "start:api": "node server/http.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check server/analyze.mjs && node --check server/transcribe.mjs && node --check server/speaker-attribution.mjs && node --check server/medication-verification.mjs && node --check server/clinical-postprocess.mjs && node --check server/intervention-grounding.mjs && node --check server/mse-grounding.mjs && node --check server/psq-guard.mjs && node --check server/model-auth.mjs && node --check server/clinical-schema.mjs && node --check server/http.mjs && node --check server/render-report.mjs && node --check server/clinical-invariants.mjs && node --check api/analyze.mjs && node --check api/transcribe.mjs && node --check api/health.mjs && node --check backend-client.js && node --check organization-v055.js && node --check semantic-role-ui.js && node --check fixture-loader.js && node --check fixture-case3.js && node --check loader.js && node --check config.js"
+    "check": "node --check server/analyze.mjs && node --check server/transcribe.mjs && node --check server/speaker-attribution.mjs && node --check server/medication-verification.mjs && node --check server/clinical-postprocess.mjs && node --check server/intervention-grounding.mjs && node --check server/mse-grounding.mjs && node --check server/psq-guard.mjs && node --check server/model-auth.mjs && node --check server/clinical-schema.mjs && node --check server/http.mjs && node --check server/render-report.mjs && node --check server/clinical-invariants.mjs && node --check api/analyze.mjs && node --check api/transcribe.mjs && node --check api/health.mjs && node --check backend-client.js && node --check organization-v055.js && node --check report-v056.js && node --check semantic-role-ui.js && node --check fixture-loader.js && node --check fixture-case3.js && node --check loader.js && node --check config.js"
   },
   "dependencies": {
     "@vercel/oidc": "3.8.5",
