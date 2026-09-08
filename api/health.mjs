@@ -25,6 +25,7 @@ export default async function handler(req, res) {
 
   let clinicalEngineLoadable = false;
   let clinicalEngineProbe = "not_checked";
+  let speakerAttributionLoadable = false;
   try {
     const module = await import("../server/analyze.mjs");
     clinicalEngineLoadable = typeof module.analyzeTranscript === "function";
@@ -34,21 +35,32 @@ export default async function handler(req, res) {
     clinicalEngineProbe = "import_failed";
   }
 
+  try {
+    const module = await import("../server/speaker-attribution.mjs");
+    speakerAttributionLoadable = typeof module.attributeClinicalSpeakerRoles === "function";
+  } catch {
+    speakerAttributionLoadable = false;
+  }
+
   return res.status(200).json({
     ok: true,
-    version: "0.5.3",
+    version: "0.5.4",
     mode: "audio_pilot",
     recording_enabled: true,
     transcription_enabled: true,
     transcription_model: AUDIO_TRANSCRIPTION_MODEL,
     max_audio_seconds: 120,
-    speaker_role_confirmation_required: true,
-    segment_role_correction_enabled: true,
+    automatic_role_attribution_enabled: true,
+    role_attribution_abstention_enabled: true,
+    critical_only_role_review: true,
+    voice_calibration_required: false,
+    segment_role_correction_default: false,
     persistent_audio_storage: false,
     persistent_clinical_storage: false,
     response_cache: "no-store",
     model_transport_available: auth?.transport || "missing",
     clinical_engine_loadable: clinicalEngineLoadable,
     clinical_engine_probe: clinicalEngineProbe,
+    speaker_attribution_loadable: speakerAttributionLoadable,
   });
 }
