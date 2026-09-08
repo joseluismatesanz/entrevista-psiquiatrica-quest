@@ -29,6 +29,19 @@ test("V0.5.5 organización: una negación explícita pura se diferencia de un ap
   assert.match(organizationJs, /consumo\\b/);
 });
 
+test("V0.5.5 organización: el texto vacío es coherente con el estado clínico", () => {
+  assert.match(organizationJs, /function emptyPreviewForStatus/);
+  assert.match(organizationJs, /return 'No explorado\.'/);
+  assert.match(organizationJs, /return 'Información insuficiente\.'/);
+  assert.match(organizationJs, /normalizeEmptyRoutePreview\(card, rawStatus\)/);
+});
+
+test("V0.5.5 organización: las guardas técnicas no se mezclan con la seguridad clínica", () => {
+  assert.match(organizationJs, /function pruneTechnicalGuardWarnings/);
+  assert.match(organizationJs, /topic === 'guarda clínica aplicada'/);
+  assert.match(organizationJs, /pruneTechnicalGuardWarnings\(\);/);
+});
+
 test("V0.5.5 organización: el resumen de pendientes es determinista y no presenta una puntuación de fiabilidad", () => {
   assert.match(organizationJs, /missingList/);
   assert.match(organizationJs, /conflictList/);
