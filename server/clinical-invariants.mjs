@@ -152,10 +152,6 @@ export function applyClinicalInvariants(input) {
   const kinds = sourceKindMap(assessment);
   const warnings = [];
 
-  assessment.sections.psq_guardia.text = "MIR MAtesanz";
-  assessment.sections.psq_guardia.evidence_status = "supported";
-  assessment.sections.psq_guardia.source_ids = [];
-
   // Familiares psiquiátricos: solo contenido aportado por el paciente.
   const family = assessment.sections.antecedentes_familiares_psiquiatricos;
   const familyKinds = sectionKinds(family, kinds);
@@ -303,9 +299,6 @@ export function collectClinicalInvariantViolations(assessment) {
   if (/(^|[.!?]\s+)(la|el)\s+(paciente|madre|padre|hermano|hermana)\s+(refiere|explica|comenta|dice)/i.test(motivo)) {
     violations.push("motivo_is_narrative_instead_of_direct_clinical_formulation");
   }
-
-  const psq = assessment.sections?.psq_guardia?.text?.trim();
-  if (psq !== "MIR MAtesanz") violations.push("psq_guardia_not_exact");
 
   const socio = assessment.sections?.situacion_sociofamiliar?.text?.trim() || "";
   if (splitClinicalSentences(socio).some(isUnverifiedFamilyIdentityBeliefSentence)) {
