@@ -4,9 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#eaf4f5" />
-  <title>Salud Mental · Asistente clínico V0.5.5</title>
+  <title>Salud Mental · Asistente clínico V0.5.6</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="organization-v055.css" />
+  <link rel="stylesheet" href="report-v056.css" />
 </head>
 <body>
   <main class="app-shell">
@@ -18,7 +19,7 @@
         </svg>
       </div>
       <div class="brand-copy">
-        <p class="eyebrow">PROTOTIPO CLÍNICO · V0.5.5</p>
+        <p class="eyebrow">PROTOTIPO CLÍNICO · V0.5.6</p>
         <h1>Salud Mental</h1>
         <p>Asistente de organización de entrevista psiquiátrica</p>
       </div>
@@ -125,13 +126,15 @@
     </section>
 
     <section id="screen-report" class="screen">
+      <section id="reportPendingBanner" class="report-pending-banner hidden" aria-live="polite"></section>
+
       <div class="card report-card">
         <div class="row-between report-heading">
           <div>
-            <p class="section-label">BORRADOR CLÍNICO ORGANIZADO</p>
-            <h2>Informe psiquiátrico</h2>
+            <p class="section-label">DOCUMENTO CLÍNICO PENDIENTE DE REVISIÓN</p>
+            <h2>Borrador de informe clínico</h2>
           </div>
-          <span class="draft-badge">Requiere validación médica</span>
+          <span class="draft-badge">Pendiente de validación profesional</span>
         </div>
         <div id="reportEditor" class="report-editor" contenteditable="true" role="textbox" aria-label="Informe clínico editable"></div>
       </div>
@@ -156,5 +159,6 @@
   <script src="semantic-role-ui.js"></script>
   <script src="loader.js"></script>
   <script src="organization-v055.js"></script>
+  <script src="report-v056.js"></script>
 </body>
 </html>
