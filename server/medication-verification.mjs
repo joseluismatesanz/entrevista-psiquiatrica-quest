@@ -95,9 +95,11 @@ async function searchCima(rawName, options = {}) {
   const query = clean(rawName);
   const encoded = encodeURIComponent(query);
 
+  // Sin filtro de autorización/comercialización: interesa reconocer también medicación
+  // histórica o retirada. El estado se conserva como metadato, no decide si el nombre existe.
   const searches = [
-    `${CIMA_BASE_URL}/medicamentos?nombre=${encoded}&autorizados=1`,
-    `${CIMA_BASE_URL}/medicamentos?practiv1=${encoded}&autorizados=1`,
+    `${CIMA_BASE_URL}/medicamentos?nombre=${encoded}`,
+    `${CIMA_BASE_URL}/medicamentos?practiv1=${encoded}`,
   ];
 
   let lastError = null;
@@ -136,6 +138,8 @@ async function searchCima(rawName, options = {}) {
     officialName: clean(detail?.nombre || match.item?.nombre),
     activeIngredients: ingredients,
     nregistro: clean(detail?.nregistro || match.item?.nregistro),
+    registryState: detail?.estado ?? match.item?.estado ?? null,
+    commercialized: detail?.comerc ?? match.item?.comerc ?? null,
   };
 }
 
