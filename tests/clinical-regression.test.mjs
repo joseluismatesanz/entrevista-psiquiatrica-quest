@@ -339,7 +339,7 @@ test("Backend OpenAI: usa Responses + Structured Outputs + store:false", async (
   assert.equal(captured.model, "gpt-5.6");
   assert.match(captured.input[0].content[0].text, /JSON/);
   assert.doesNotMatch(result.report, /MIR MAtesanz/);
-  assert.match(result.report, /PSQ GUARDIA\nNo consta\./);
+  assert.doesNotMatch(result.report, /PSQ GUARDIA/);
   assert.ok(result.meta.warnings.includes("psq_guardia_unsupported_identity_removed"));
   assert.match(result.report, /CIE-10: F32\.1/);
   assert.equal(result.meta.store, false);
