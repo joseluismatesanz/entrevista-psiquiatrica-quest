@@ -42,6 +42,16 @@ test("V0.5.5 organización: las guardas técnicas no se mezclan con la seguridad
   assert.match(organizationJs, /pruneTechnicalGuardWarnings\(\);/);
 });
 
+test("V0.5.5 organización: las fuentes se presentan en español sin exponer tipos internos", () => {
+  assert.match(organizationJs, /const SOURCE_KIND_LABELS/);
+  assert.match(organizationJs, /patient: 'Paciente'/);
+  assert.match(organizationJs, /mother: 'Madre'/);
+  assert.match(organizationJs, /psychiatrist: 'Psiquiatra'/);
+  assert.match(organizationJs, /clinician_observation: 'Observación clínica'/);
+  assert.match(organizationJs, /function localizeSourceLabels/);
+  assert.match(organizationJs, /'sourcesList'/);
+});
+
 test("V0.5.5 organización: el resumen de pendientes es determinista y no presenta una puntuación de fiabilidad", () => {
   assert.match(organizationJs, /missingList/);
   assert.match(organizationJs, /conflictList/);
