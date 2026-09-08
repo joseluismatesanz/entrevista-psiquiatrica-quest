@@ -33,6 +33,23 @@
     return 'status-not-explored';
   }
 
+  function emptyPreviewForStatus(status) {
+    if (status === 'not_explored' || status === 'not_provided') return 'No explorado.';
+    if (status === 'insufficient' || status === 'insufficient_information') return 'Información insuficiente.';
+    return '';
+  }
+
+  function normalizeEmptyRoutePreview(card, rawStatus) {
+    const preview = card.querySelector('.route-preview');
+    if (!preview) return;
+
+    const current = preview.textContent?.trim() || '';
+    if (!current || current === 'Sin información suficiente.' || current === 'Sin información clasificada') {
+      const replacement = emptyPreviewForStatus(rawStatus);
+      if (replacement && current !== replacement) preview.textContent = replacement;
+    }
+  }
+
   function isPureExplicitDenial(text) {
     const clauses = String(text || '')
       .split(/[.;]\s*/)
@@ -60,6 +77,7 @@
       if (!rawStatus) return;
 
       if (badge.dataset.rawStatus !== rawStatus) badge.dataset.rawStatus = rawStatus;
+      normalizeEmptyRoutePreview(card, rawStatus);
       const displayStatus = displayStatusForCard(card, rawStatus);
       const label = STATUS_LABELS[displayStatus];
       if (label && badge.textContent !== label) badge.textContent = label;
@@ -69,6 +87,20 @@
       badge.classList.remove(...STATUS_CLASSES);
       badge.classList.add(statusClass(displayStatus));
     });
+  }
+
+  function pruneTechnicalGuardWarnings() {
+    const list = document.getElementById('alertList');
+    if (!list) return;
+
+    [...list.querySelectorAll('li')].forEach((item) => {
+      const topic = item.querySelector('b')?.textContent?.trim().toLowerCase() || '';
+      if (topic === 'guarda clínica aplicada') item.remove();
+    });
+
+    if (!list.querySelector('li')) {
+      list.innerHTML = '<li>Sin alertas estructuradas.</li>';
+    }
   }
 
   function meaningfulItems(listId, emptyPhrases) {
@@ -187,6 +219,7 @@
   }
 
   function refreshOrganizationUi() {
+    pruneTechnicalGuardWarnings();
     decorateRouteStatuses();
     updateSafetySummaryHeading();
     updateAttentionBanner();
