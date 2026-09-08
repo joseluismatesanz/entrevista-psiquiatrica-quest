@@ -61,7 +61,6 @@ export function renderClinicalReport(assessment) {
     }
 
     let body = clean(section.text);
-    if (key === "psq_guardia") body = "MIR MAtesanz";
 
     // Habitual = exclusivamente medicación vigente antes de la valoración.
     // Current = régimen final + dosis administradas una sola vez durante el episodio actual.
