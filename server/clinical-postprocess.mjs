@@ -11,6 +11,10 @@ function normalize(value) {
     .trim();
 }
 
+function sourceKindMap(assessment) {
+  return new Map((assessment.sources || []).map((source) => [source.id, source.kind]));
+}
+
 function transcriptUnits(transcript) {
   return String(transcript || "")
     .split(/\n+|(?<=[.!?])\s+/)
@@ -43,12 +47,16 @@ function inferMedicationTemporality(transcript, rawName) {
   return "ambiguous";
 }
 
+function cleanAdherence(value) {
+  return clean(value).replace(/^adherencia\s*:?\s*/i, "").trim();
+}
+
 function medicationLine(med) {
   const name = clean(med.display_name) || clean(med.raw_name) || "Medicamento no identificado";
   const dose = clean(med.dose);
   const schedule = clean(med.schedule);
   const route = clean(med.route);
-  const adherence = clean(med.adherence_text);
+  const adherence = cleanAdherence(med.adherence_text);
 
   let line = name;
   if (dose) line += ` ${dose}`;
@@ -81,16 +89,34 @@ function syncMedicationSection(assessment, group, sectionKey, statuses) {
   }
 }
 
-function isSubjectiveAgitationVsObservedMotorNonConflict(conflict) {
+const SUBJECTIVE_AGITATION_PATTERN = /\b(?:me\s+siento\s+(?:muy\s+)?agitad[oa]|se\s+siente\s+(?:muy\s+)?agitad[oa]|refiere\s+(?:encontrarse|estar)?\s*(?:muy\s+)?agitad[oa]|manifiesta\s+(?:encontrarse|estar)?\s*(?:muy\s+)?agitad[oa]|(?:estoy|esta|está)\s+(?:muy\s+)?agitad[oa]|nervios[oa]|nerviosismo|agitacion\s+subjetiva)\b/i;
+const OBSERVED_NO_MOTOR_ACTIVATION_PATTERN = /\b(?:sin\s+inquietud\s+motora|no\s+se\s+objetiva\s+inquietud\s+motora|sin\s+agitacion\s+psicomotriz|permanece\s+sentad[oa]|psicomotricidad\s+sin\s+alteraciones)\b/i;
+
+function isSubjectiveAgitationVsObservedMotorNonConflict(conflict, kinds) {
+  const accounts = Array.isArray(conflict?.accounts) ? conflict.accounts : [];
+
+  // Vía preferente: exige que el malestar subjetivo proceda del paciente y la ausencia de
+  // activación motora proceda de psiquiatra/observación clínica. Son dominios compatibles,
+  // no versiones mutuamente excluyentes.
+  const patientSubjective = accounts.some((account) => {
+    const kind = kinds.get(account?.source_id);
+    return kind === "patient" && SUBJECTIVE_AGITATION_PATTERN.test(normalize(account?.statement));
+  });
+  const clinicianObserved = accounts.some((account) => {
+    const kind = kinds.get(account?.source_id);
+    return (kind === "psychiatrist" || kind === "clinician_observation")
+      && OBSERVED_NO_MOTOR_ACTIVATION_PATTERN.test(normalize(account?.statement));
+  });
+  if (patientSubjective && clinicianObserved) return true;
+
+  // Fallback conservador para salidas antiguas sin tipado de fuente suficiente.
   const topic = normalize(conflict?.topic);
-  const statements = (conflict?.accounts || []).map((account) => normalize(account?.statement)).filter(Boolean);
-  const combined = [topic, ...statements].join(" ");
-
-  const subjective = /\b(?:agitacion\s+subjetiva|subjetiv\w*|se\s+siente\s+agitad|refiere\s+(?:estar\s+)?agitad|manifiesta\s+(?:estar\s+)?agitad|nervios\w*)\b/i.test(combined);
-  const observedNoMotorActivation = /\b(?:sin\s+inquietud\s+motora|no\s+se\s+objetiva\s+inquietud\s+motora|sin\s+agitacion\s+psicomotriz|permanece\s+sentad[oa]|psicomotricidad\s+sin\s+alteraciones)\b/i.test(combined);
-  const framing = /\b(?:frente\s+a|versus|vs\.?|discrepancia|contradiccion)\b/i.test(topic);
-
-  return subjective && observedNoMotorActivation && (framing || /subjetiv/.test(topic));
+  const statements = accounts.map((account) => normalize(account?.statement)).filter(Boolean);
+  const combined = statements.join(" ");
+  const agitationTopic = /\bagitacion\b|\bpsicomotric/.test(topic);
+  return agitationTopic
+    && SUBJECTIVE_AGITATION_PATTERN.test(combined)
+    && OBSERVED_NO_MOTOR_ACTIVATION_PATTERN.test(combined);
 }
 
 export function applyClinicalPostprocessing(inputAssessment, transcript) {
@@ -118,9 +144,10 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
 
   // Sentirse agitado y no mostrar inquietud motora son dimensiones compatibles; no es
   // una discrepancia entre fuentes por sí misma.
+  const kinds = sourceKindMap(assessment);
   const originalConflicts = Array.isArray(assessment.conflicts) ? assessment.conflicts : [];
   assessment.conflicts = originalConflicts.filter((conflict) => {
-    const prune = isSubjectiveAgitationVsObservedMotorNonConflict(conflict);
+    const prune = isSubjectiveAgitationVsObservedMotorNonConflict(conflict, kinds);
     if (prune) warnings.push("subjective_agitation_vs_observed_psychomotor_pseudoconflict_pruned");
     return !prune;
   });
@@ -132,6 +159,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       medication_temporality_grounded_in_transcript: true,
       medication_sections_synced_from_structured_entities: true,
       subjective_objective_pseudoconflict_guard: true,
+      adherence_label_deduplicated: true,
     },
   };
 }
