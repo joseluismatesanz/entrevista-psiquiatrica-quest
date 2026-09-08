@@ -55,6 +55,13 @@ export function renderClinicalReport(assessment) {
   for (const [key, title] of SECTION_ORDER) {
     const section = assessment.sections?.[key] ?? { text: "", evidence_status: "not_provided" };
 
+    // PSQ GUARDIA es un dato identificativo del profesional, no un hallazgo clínico.
+    // Si el profesional no se ha identificado de forma explícita, el apartado se omite
+    // en lugar de mostrar un "No consta" sin utilidad asistencial.
+    if (key === "psq_guardia" && (!clean(section.text) || section.evidence_status !== "supported")) {
+      continue;
+    }
+
     // INTERVENCIÓN solo existe si hubo propuesta explícita + aceptación/rechazo.
     if (key === "intervencion" && (!clean(section.text) || section.evidence_status !== "supported")) {
       continue;
