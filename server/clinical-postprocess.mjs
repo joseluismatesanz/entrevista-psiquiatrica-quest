@@ -113,6 +113,26 @@ function isSubjectiveAgitationVsObservedMotorNonConflict(conflict, kinds) {
     && OBSERVED_NO_MOTOR_ACTIVATION_PATTERN.test(combined);
 }
 
+const IDENTITY_SUBSTITUTION_BELIEF_PATTERN = /\b(?:no\s+es\s+(?:realmente\s+)?mi\s+(?:madre|padre)|podria\s+haber\s+sido\s+sustituid[oa]|puede\s+haber\s+sido\s+sustituid[oa]|ha\s+sido\s+sustituid[oa]|fue\s+sustituid[oa]|reemplazad[oa]|impostor(?:a)?|persona\s+distinta)\b/i;
+const IDENTITY_REALITY_CHECK_PATTERN = /\b(?:soy\s+su\s+(?:madre|padre)\s+biologic[oa]|es\s+su\s+(?:madre|padre)\s+biologic[oa]|no\s+ha\s+habido\s+adopcion|no\s+hubo\s+adopcion|niega\s+adopcion|no\s+ha\s+habido\s+(?:ningun\s+)?cambio\s+de\s+cuidador|no\s+hubo\s+cambio\s+de\s+cuidador|niega\s+(?:un\s+)?cambio\s+de\s+cuidador)\b/i;
+
+function isIdentitySubstitutionRealityCheckNonConflict(conflict, kinds) {
+  const accounts = Array.isArray(conflict?.accounts) ? conflict.accounts : [];
+  const patientBelief = accounts.some((account) => {
+    const kind = kinds.get(account?.source_id);
+    return kind === "patient" && IDENTITY_SUBSTITUTION_BELIEF_PATTERN.test(normalize(account?.statement));
+  });
+  if (!patientBelief) return false;
+
+  const collateralRealityCheck = accounts.some((account) => {
+    const kind = kinds.get(account?.source_id);
+    return ["mother", "father", "family", "caregiver", "psychiatrist", "clinician_observation"].includes(kind)
+      && IDENTITY_REALITY_CHECK_PATTERN.test(normalize(account?.statement));
+  });
+
+  return collateralRealityCheck;
+}
+
 const ENCOUNTER_ACCOMPANIMENT_PATTERN = /\b(?:acude\s+acompanad[oa]|acude\s+con\s+(?:su\s+)?(?:madre|padre|familiar|acompanante)|acompanad[oa]\s+por\s+(?:su\s+)?(?:madre|padre|familiar|acompanante)|participa\s+en\s+(?:la\s+)?(?:valoracion|entrevista)|esta\s+presente\s+(?:en|durante))\b/i;
 const CONCRETE_SOCIOFAMILY_PATTERN = /\b(?:vive|convive|reside|domicilio|hogar|relacion|se\s+lleva|apoyo|red\s+de\s+apoyo|contacto\s+(?:frecuente|diario|semanal)|pareja|hij[oa]s?|custodia|escolariz|instituto|colegio|trabaj|emple|desemple|amig)\w*/i;
 
@@ -218,9 +238,15 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const kinds = sourceKindMap(assessment);
   const originalConflicts = Array.isArray(assessment.conflicts) ? assessment.conflicts : [];
   assessment.conflicts = originalConflicts.filter((conflict) => {
-    const prune = isSubjectiveAgitationVsObservedMotorNonConflict(conflict, kinds);
-    if (prune) warnings.push("subjective_agitation_vs_observed_psychomotor_pseudoconflict_pruned");
-    return !prune;
+    if (isSubjectiveAgitationVsObservedMotorNonConflict(conflict, kinds)) {
+      warnings.push("subjective_agitation_vs_observed_psychomotor_pseudoconflict_pruned");
+      return false;
+    }
+    if (isIdentitySubstitutionRealityCheckNonConflict(conflict, kinds)) {
+      warnings.push("identity_substitution_reality_check_pseudoconflict_pruned");
+      return false;
+    }
+    return true;
   });
 
   return {
@@ -230,6 +256,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       medication_temporality_grounded_in_transcript: true,
       medication_sections_synced_from_structured_entities: true,
       subjective_objective_pseudoconflict_guard: true,
+      identity_substitution_reality_check_guard: true,
       adherence_label_deduplicated: true,
       sociofamily_encounter_accompaniment_guard: true,
       mental_history_medication_only_guard: true,
