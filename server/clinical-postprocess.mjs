@@ -145,6 +145,53 @@ function pruneEncounterPresenceFromSociofamily(assessment, warnings) {
   }
 }
 
+function transcriptWithoutSpeakerLabels(transcript) {
+  return String(transcript || "")
+    .split(/\n+/)
+    .map((line) => line.replace(/^\s*(?:PSIQUIATRA|PACIENTE|MADRE|PADRE|HERMAN[OA]|CUIDADOR(?:A)?|ENFERMER[OA]|POLIC[IÍ]A|SEGURIDAD|OTRO)\s*:\s*/i, ""))
+    .join("\n");
+}
+
+const MENTAL_HISTORY_EXPLORATION_PATTERN = /\b(?:antecedentes?\s+(?:psiquiatricos?|de\s+salud\s+mental)|diagnostic\w*\s+(?:previo|anterior|de|con)|ingres\w*\s+(?:previo|anterior|en\s+(?:psiquiatria|salud\s+mental|unidad))|hospitaliz\w*\s+(?:psiquiatr|salud\s+mental)|seguimiento\s+(?:por|en|con)\s+(?:salud\s+mental|psiquiatr|psicolog)|(?:voy|acudo|me\s+siguen|me\s+lleva[n]?)\s+(?:a|en|por|con)\s+(?:salud\s+mental|psiquiatr|psicolog)|psicoterapia\s+(?:previa|anterior|desde|actual)|episodio\s+(?:previo|anterior|psicotico|depresivo|maniaco)|intento\s+(?:autolitico|de\s+suicidio)\s+(?:previo|anterior)?|autolesion(?:es)?\s+(?:previas|anteriores)|urgencias\s+psiquiatricas?|tratamiento\s+(?:psiquiatrico|psicofarmacologico)\s+(?:previo|anterior)|desde\s+hace\s+\w+\s+(?:anos?|meses?)\s+(?:en|con)\s+(?:salud\s+mental|psiquiatr|psicolog))\b/i;
+
+function guardMentalHistoryFromMedicationOnly(assessment, transcript, warnings) {
+  const section = assessment.sections?.antecedentes_salud_mental;
+  if (!section?.text || section.evidence_status === "not_explored") return;
+
+  const explored = MENTAL_HISTORY_EXPLORATION_PATTERN.test(normalize(transcriptWithoutSpeakerLabels(transcript)));
+  if (explored) return;
+
+  const text = normalize(section.text);
+  const medicationDerived = /\b(?:en\s+tratamiento\s+(?:psicofarmacologico|farmacologico)|tratamiento\s+(?:psicofarmacologico|farmacologico)\s+(?:habitual|actual|vigente)|medicacion\s+(?:psiquiatrica|psicofarmacologica)\s+(?:habitual|actual))\b/i.test(text);
+  const onlyUnexploredRemainder = /\b(?:diagnostico|evolucion|antecedentes?\s+asistenciales?|ingresos?|seguimiento)\b.*\b(?:no\s+explorad|sin\s+explorar|no\s+consta|sin\s+datos)\b/i.test(text);
+
+  if (!medicationDerived && !onlyUnexploredRemainder) return;
+
+  section.text = "";
+  section.evidence_status = "not_explored";
+  section.source_ids = [];
+  warnings.push("mental_history_not_inferred_from_current_psychotropic_medication");
+}
+
+const GENERIC_UNSPECIFIED_CONCERN_PATTERN = /\b(?:preocupacion\s+(?:materna|paterna|familiar)\s+(?:no\s+especificada|no\s+concretada|sin\s+especificar|sin\s+concretar)|(?:madre|padre|familia)\s+(?:preocupad[oa]|manifiesta\s+preocupacion)\s+(?:sin\s+especificar|sin\s+concretar))\b/i;
+
+function pruneGenericUnspecifiedConcernFromMotive(assessment, warnings) {
+  const section = assessment.sections?.motivo_consulta;
+  if (!section?.text) return;
+
+  const clauses = String(section.text)
+    .split(/\s*;\s*|(?<=[.!?])\s+/)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+  if (clauses.length < 2) return;
+
+  const retained = clauses.filter((clause) => !GENERIC_UNSPECIFIED_CONCERN_PATTERN.test(normalize(clause)));
+  if (!retained.length || retained.length === clauses.length) return;
+
+  section.text = retained.join("; ").replace(/[;,.\s]+$/, "").trim();
+  warnings.push("generic_unspecified_family_concern_pruned_from_motive");
+}
+
 export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
@@ -165,6 +212,8 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
 
   pruneEncounterPresenceFromSociofamily(assessment, warnings);
+  guardMentalHistoryFromMedicationOnly(assessment, transcript, warnings);
+  pruneGenericUnspecifiedConcernFromMotive(assessment, warnings);
 
   const kinds = sourceKindMap(assessment);
   const originalConflicts = Array.isArray(assessment.conflicts) ? assessment.conflicts : [];
@@ -183,6 +232,8 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       subjective_objective_pseudoconflict_guard: true,
       adherence_label_deduplicated: true,
       sociofamily_encounter_accompaniment_guard: true,
+      mental_history_medication_only_guard: true,
+      motive_generic_family_concern_guard: true,
     },
   };
 }
