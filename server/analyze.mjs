@@ -3,6 +3,7 @@ import { SYSTEM_PROMPT } from "./prompt.mjs";
 import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
 import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
+import { groundExplicitMseAssessment } from "./mse-grounding.mjs";
 import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
@@ -185,6 +186,13 @@ export async function analyzeTranscript(transcript, options = {}) {
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
 
+  // Si existe exploración psicopatológica sustantiva y la transcripción contiene una
+  // observación clínica explícita del psiquiatra, el apartado no puede quedar marcado
+  // como insuficiente por un simple desacople del modelo.
+  const mseGroundResult = groundExplicitMseAssessment(assessment, transcript);
+  assessment = mseGroundResult.assessment;
+  warnings.push(...mseGroundResult.warnings);
+
   // La identidad de PSQ Guardia nunca se acepta por inferencia ni por memoria del modelo.
   // Solo puede conservarse si el profesional se identifica explícitamente en la transcripción.
   const psqGuardResult = groundPsqGuardiaToTranscript(assessment, transcript);
@@ -205,6 +213,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       request_id: response?._request_id || "",
       warnings,
       invariant_violations: violations,
+      mse_explicit_observation_grounded: true,
       psq_guardia_transcript_grounded: true,
       ...medicationMeta,
       ...postprocessResult.meta,
