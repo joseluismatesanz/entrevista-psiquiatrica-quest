@@ -3,6 +3,7 @@ import { SYSTEM_PROMPT } from "./prompt.mjs";
 import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
 import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
+import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
 import { verifyAssessmentMedications } from "./medication-verification.mjs";
@@ -184,6 +185,12 @@ export async function analyzeTranscript(transcript, options = {}) {
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
 
+  // La identidad de PSQ Guardia nunca se acepta por inferencia ni por memoria del modelo.
+  // Solo puede conservarse si el profesional se identifica explícitamente en la transcripción.
+  const psqGuardResult = groundPsqGuardiaToTranscript(assessment, transcript);
+  assessment = psqGuardResult.assessment;
+  warnings.push(...psqGuardResult.warnings);
+
   const violations = collectClinicalInvariantViolations(assessment);
 
   return {
@@ -198,6 +205,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       request_id: response?._request_id || "",
       warnings,
       invariant_violations: violations,
+      psq_guardia_transcript_grounded: true,
       ...medicationMeta,
       ...postprocessResult.meta,
     },
