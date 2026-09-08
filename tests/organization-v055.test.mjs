@@ -25,9 +25,15 @@ test("V0.5.5 organización: la interfaz usa estados clínicos comprensibles", ()
 test("V0.5.5 organización: el resumen de pendientes es determinista y no presenta una puntuación de fiabilidad", () => {
   assert.match(organizationJs, /missingList/);
   assert.match(organizationJs, /conflictList/);
-  assert.match(organizationJs, /alertList/);
+  assert.match(organizationJs, /mandatoryReviewItems/);
   assert.match(organizationJs, /No se completarán por inferencia/);
   assert.doesNotMatch(organizationJs, /% fiable|fiabilidad|risk score|riesgo bajo|riesgo alto/i);
+});
+
+test("V0.5.5 organización: seguridad clínica no se cuenta automáticamente como pendiente", () => {
+  assert.match(organizationJs, /topic === 'revisión obligatoria'/);
+  assert.match(organizationJs, /Resumen de seguridad clínica/);
+  assert.match(organizationCss, /safety-summary-card/);
 });
 
 test("V0.5.5 organización: assets y llamada a borrador están conectados", () => {
