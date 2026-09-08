@@ -79,7 +79,7 @@ test("Producción usa responses.parse + Zod en lugar de JSON.parse manual", asyn
   assert.equal(result.meta.structured_output_parser, "responses.parse+zod");
   assert.equal(result.meta.structured_output_attempts, 1);
   assert.doesNotMatch(result.report, /MIR MAtesanz/);
-  assert.match(result.report, /PSQ GUARDIA\nNo consta\./);
+  assert.doesNotMatch(result.report, /PSQ GUARDIA/);
   assert.ok(result.meta.warnings.includes("psq_guardia_unsupported_identity_removed"));
 });
 
