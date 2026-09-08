@@ -22,6 +22,13 @@ test("V0.5.5 organización: la interfaz usa estados clínicos comprensibles", ()
   }
 });
 
+test("V0.5.5 organización: una negación explícita pura se diferencia de un apartado con información positiva", () => {
+  assert.match(organizationJs, /function isPureExplicitDenial/);
+  assert.match(organizationJs, /clauses\.every/);
+  assert.match(organizationJs, /return isPureExplicitDenial\(preview\) \? 'explicitly_denied' : rawStatus/);
+  assert.match(organizationJs, /consumo\\b/);
+});
+
 test("V0.5.5 organización: el resumen de pendientes es determinista y no presenta una puntuación de fiabilidad", () => {
   assert.match(organizationJs, /missingList/);
   assert.match(organizationJs, /conflictList/);
