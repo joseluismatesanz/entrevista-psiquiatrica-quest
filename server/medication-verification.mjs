@@ -42,6 +42,11 @@ function ingredientNames(item) {
   return [...new Set(names)];
 }
 
+function ingredientContainsExactToken(ingredient, wanted) {
+  if (!wanted || wanted.includes(" ") || wanted.length < 5) return false;
+  return normalize(ingredient).split(/\s+/).includes(wanted);
+}
+
 function exactCandidate(rawName, items) {
   const wanted = normalize(rawName);
   if (!wanted) return null;
@@ -53,6 +58,10 @@ function exactCandidate(rawName, items) {
 
     if (normalizedIngredients.includes(wanted)) {
       return { item, matchType: "active_ingredient_exact", ingredients };
+    }
+
+    if (ingredients.some((ingredient) => ingredientContainsExactToken(ingredient, wanted))) {
+      return { item, matchType: "active_ingredient_exact_token", ingredients };
     }
 
     if (officialName === wanted || officialName.startsWith(`${wanted} `)) {
@@ -102,10 +111,10 @@ async function searchCima(rawName, options = {}) {
     }
   }
 
-  const unique = [...new Map(merged.map((item) => [String(item?.nregistro || item?.nombre || Math.random()), item])).values()];
+  const unique = [...new Map(merged.map((item, index) => [String(item?.nregistro || item?.nombre || `item-${index}`), item])).values()];
   if (!unique.length && lastError) throw lastError;
 
-  let match = exactCandidate(rawName, unique);
+  const match = exactCandidate(rawName, unique);
   if (!match) return { status: "not_found", rawName, source: "AEMPS CIMA" };
 
   let detail = match.item;
