@@ -13,14 +13,14 @@ function psychiatristLines(transcript) {
 export function explicitPsychiatristIdentityFromTranscript(transcript) {
   for (const speech of psychiatristLines(transcript)) {
     const titled = speech.match(
-      /\b(?:soy|me\s+llamo)\s+(?:(?:la|el)\s+)?((?:Dra?\.?|Dr\.?|MIR)\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'’.-]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'’.-]+){0,2})/i
+      /\b(?:soy|me\s+llamo)\s+(?:(?:la|el)\s+)?((?:Dra?\.?|Dr\.?|MIR)\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'’-]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'’-]+){0,2})/i
     );
-    if (titled?.[1]) return titled[1].replace(/[.,;:]+$/, "").trim();
+    if (titled?.[1]) return titled[1].trim();
 
     const named = speech.match(
-      /\bme\s+llamo\s+([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'’.-]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'’.-]+){1,2})\b/
+      /\bme\s+llamo\s+([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'’-]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'’-]+){1,2})\b/
     );
-    if (named?.[1]) return named[1].replace(/[.,;:]+$/, "").trim();
+    if (named?.[1]) return named[1].trim();
   }
   return "";
 }
