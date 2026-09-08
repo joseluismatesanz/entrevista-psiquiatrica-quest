@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
+import {
+  attributeClinicalSpeakerRoles,
+  deduplicateClearAdjacentOverlaps,
+} from "../server/speaker-attribution.mjs";
 
 function mockClient(assignments) {
   return {
@@ -84,4 +87,43 @@ test("V0.5.4: si falta una asignación sensible, se abstiene y la eleva a revisi
   assert.equal(result.review_items[0].segment_id, "s2");
   assert.equal(result.review_items[0].suggested_role, "unknown");
   assert.match(result.transcript, /^INTERLOCUTOR_NO_IDENTIFICADO: Sertralina 50 mg/m);
+});
+
+test("V0.5.4: elimina solo solapamientos adyacentes claros del mismo hablante acústico", () => {
+  const input = [
+    {
+      id: "s1",
+      speaker: "B",
+      start: 0,
+      end: 4,
+      text: "Pues que estoy muy nerviosa últimamente, que no puedo dormir bien, que siempre estoy agitada.",
+    },
+    {
+      id: "s2",
+      speaker: "B",
+      start: 3.8,
+      end: 5,
+      text: "que siempre estoy agitada, pues",
+    },
+    {
+      id: "s3",
+      speaker: "B",
+      start: 5.1,
+      end: 5.8,
+      text: "Sí, sí.",
+    },
+    {
+      id: "s4",
+      speaker: "A",
+      start: 6,
+      end: 7,
+      text: "Muy bien.",
+    },
+  ];
+
+  const result = deduplicateClearAdjacentOverlaps(input);
+  assert.equal(result.removed, 1);
+  assert.deepEqual(result.segments.map((segment) => segment.id), ["s1", "s3", "s4"]);
+  assert.match(result.segments[0].text, /siempre estoy agitada/i);
+  assert.equal(result.segments[1].text, "Sí, sí.");
 });
