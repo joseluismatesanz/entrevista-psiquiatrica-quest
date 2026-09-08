@@ -3,6 +3,7 @@ import { SYSTEM_PROMPT } from "./prompt.mjs";
 import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
 import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
+import { groundInterventionToTranscript } from "./intervention-grounding.mjs";
 import { groundExplicitMseAssessment } from "./mse-grounding.mjs";
 import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
@@ -186,6 +187,13 @@ export async function analyzeTranscript(transcript, options = {}) {
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
 
+  // INTERVENCIÓN conserva siempre la propuesta concreta + la respuesta. Una frase genérica
+  // como "acepta la propuesta" no es suficiente si no puede anclarse a una propuesta explícita
+  // del psiquiatra en la transcripción.
+  const interventionGroundResult = groundInterventionToTranscript(assessment, transcript);
+  assessment = interventionGroundResult.assessment;
+  warnings.push(...interventionGroundResult.warnings);
+
   // Si existe exploración psicopatológica sustantiva y la transcripción contiene una
   // observación clínica explícita del psiquiatra, el apartado no puede quedar marcado
   // como insuficiente por un simple desacople del modelo.
@@ -213,6 +221,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       request_id: response?._request_id || "",
       warnings,
       invariant_violations: violations,
+      intervention_transcript_grounded: true,
       mse_explicit_observation_grounded: true,
       psq_guardia_transcript_grounded: true,
       ...medicationMeta,
