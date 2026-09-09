@@ -21,6 +21,10 @@
     return document.querySelector('.validation-card .muted.small');
   }
 
+  function validationLabel() {
+    return document.querySelector('.validation-card .checkline span');
+  }
+
   function isEditing() {
     return Boolean(editor()?.querySelector('.report-section-editing'));
   }
@@ -36,7 +40,7 @@
     button.id = 'reviewReportChanges';
     button.type = 'button';
     button.className = 'secondary hidden';
-    button.textContent = 'Revisar cambios del informe';
+    button.textContent = 'He revisado los cambios';
     actions.prepend(button);
     return button;
   }
@@ -44,6 +48,11 @@
   function setHint(message) {
     const hint = validationHint();
     if (hint) hint.textContent = message;
+  }
+
+  function setValidationLabel(message) {
+    const label = validationLabel();
+    if (label) label.textContent = message;
   }
 
   function hasUnreviewedChanges() {
@@ -67,6 +76,14 @@
       if (editing || pendingReview) check.checked = false;
     }
 
+    if (editing) {
+      setValidationLabel('Finaliza la edición para poder validar el informe.');
+    } else if (pendingReview) {
+      setValidationLabel('Validación bloqueada hasta confirmar que has revisado los cambios.');
+    } else {
+      setValidationLabel('He revisado el contenido y asumo la validación clínica del informe.');
+    }
+
     if (copy) {
       const validCurrent = Boolean(
         check?.checked
@@ -78,7 +95,7 @@
     }
   }
 
-  function invalidateValidation(message = 'Cambios pendientes de revalidación. Revisa los cambios antes de volver a validar el informe.') {
+  function invalidateValidation(message = 'Cambios pendientes de revalidación. Pulsa «He revisado los cambios» antes de volver a validar el informe.') {
     state.revision += 1;
     state.reviewedRevision = null;
     state.validatedRevision = null;
@@ -122,7 +139,7 @@
       check.focus();
     }
 
-    setHint('Cambios revisados. Marca la casilla para validar esta versión del informe.');
+    setHint('Cambios revisados; falta la validación clínica. Marca ahora la casilla para validar esta versión del informe.');
     syncControls();
   }
 
@@ -137,7 +154,7 @@
       state.validatedRevision = null;
       if (copy) copy.disabled = true;
       setHint(hasUnreviewedChanges()
-        ? 'Cambios pendientes de revalidación. Revisa los cambios antes de validar.'
+        ? 'Cambios pendientes de revalidación. Pulsa «He revisado los cambios» antes de validar.'
         : 'El borrador no debe exportarse sin revisión profesional.');
       syncControls();
       return;
@@ -149,7 +166,7 @@
       if (copy) copy.disabled = true;
       setHint(isEditing()
         ? 'Finaliza la edición antes de validar el informe.'
-        : 'Primero revisa los cambios del informe antes de volver a validarlo.');
+        : 'Primero confirma que has revisado los cambios antes de volver a validar.');
       syncControls();
       return;
     }
@@ -205,7 +222,7 @@
     }
 
     if (event.target.closest?.('.report-edit-button')) {
-      invalidateValidation('Edición iniciada. Finaliza los cambios y revísalos antes de volver a validar el informe.');
+      invalidateValidation('Edición iniciada. Finaliza los cambios y después pulsa «He revisado los cambios».');
       setTimeout(syncControls, 0);
       return;
     }
@@ -217,7 +234,7 @@
     }
 
     if (event.target.closest?.('.report-section-cancel')) {
-      invalidateValidation('La validación anterior se ha retirado tras abrir una edición. Revisa el informe antes de volver a validarlo.');
+      invalidateValidation('La validación anterior se ha retirado tras abrir una edición. Pulsa «He revisado los cambios» antes de volver a validar.');
       setTimeout(syncControls, 0);
       return;
     }
