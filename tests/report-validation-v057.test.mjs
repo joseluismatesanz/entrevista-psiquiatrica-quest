@@ -33,6 +33,6 @@ test("V0.5.6 informe: copiar exige validación y revisión de la versión actual
 
 test("V0.5.6 informe: el navegador fuerza la carga de la nueva capa de validación", () => {
   assert.match(indexHtml, /report-v056\.js\?v=20260909-3/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-1/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-2/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);
 });
