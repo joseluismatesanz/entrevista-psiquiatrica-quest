@@ -58,7 +58,20 @@
       actions.prepend(reopen);
     }
 
-    return { validate, reopen };
+    let download = document.getElementById('downloadReportTxt');
+    if (!download) {
+      download = document.createElement('button');
+      download.id = 'downloadReportTxt';
+      download.type = 'button';
+      download.className = 'secondary';
+      download.textContent = 'Descargar TXT';
+      download.disabled = true;
+      const copy = copyButton();
+      if (copy) copy.before(download);
+      else actions.append(download);
+    }
+
+    return { validate, reopen, download };
   }
 
   function hideLegacyValidationCheckbox() {
@@ -94,10 +107,11 @@
 
     const check = checkbox();
     const copy = copyButton();
-    const { validate, reopen } = ensureActionButtons();
+    const { validate, reopen, download } = ensureActionButtons();
 
     if (check) check.checked = false;
     if (copy) copy.disabled = true;
+    if (download) download.disabled = true;
     if (validate) validate.classList.remove('hidden');
     if (reopen) reopen.classList.add('hidden');
 
@@ -119,31 +133,63 @@
 
     const check = checkbox();
     const copy = copyButton();
-    const { validate, reopen } = ensureActionButtons();
+    const { validate, reopen, download } = ensureActionButtons();
 
     if (check) check.checked = true;
     if (copy) copy.disabled = false;
+    if (download) download.disabled = false;
     if (validate) validate.classList.add('hidden');
     if (reopen) reopen.classList.remove('hidden');
 
     setEditLocked(true);
     if (badge()) badge().textContent = 'Informe validado · edición bloqueada';
     if (eyebrow()) eyebrow().textContent = 'DOCUMENTO CLÍNICO VALIDADO';
-    setHint('Informe validado. La edición está bloqueada. Pulsa «Reabrir edición» si necesitas modificarlo.');
+    setHint('Informe validado. La edición está bloqueada. Puedes copiarlo o descargarlo en TXT.');
   }
 
   function reopenEditing() {
-    setUnvalidated('Edición reabierta. Cualquier cambio requerirá una nueva validación antes de copiar el informe.');
+    setUnvalidated('Edición reabierta. Cualquier cambio requerirá una nueva validación antes de copiar o descargar el informe.');
   }
 
   function invalidateBeforeLeavingReport() {
     if (!state.validated) return;
-    setUnvalidated('Has salido del informe validado. Al volver, deberás validarlo de nuevo antes de copiarlo.');
+    setUnvalidated('Has salido del informe validado. Al volver, deberás validarlo de nuevo antes de copiarlo o descargarlo.');
   }
 
   function resetValidation() {
     hideLegacyValidationCheckbox();
     setUnvalidated('Revisa el borrador y pulsa «Validar informe» cuando esté listo.');
+  }
+
+  function getValidatedReportText() {
+    if (!state.validated || isEditing()) return '';
+    if (typeof window.getClinicalReportText === 'function') {
+      return window.getClinicalReportText().trim();
+    }
+    return (editor()?.innerText || editor()?.textContent || '').trim();
+  }
+
+  function downloadValidatedTxt() {
+    const download = document.getElementById('downloadReportTxt');
+    const text = getValidatedReportText();
+
+    if (!text) {
+      if (download) download.disabled = true;
+      setHint('El informe debe estar validado antes de descargarlo.');
+      return;
+    }
+
+    const blob = new Blob([`\uFEFF${text}\n`], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'informe_clinico_validado.txt';
+    link.style.display = 'none';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    setHint('TXT generado localmente en el navegador. La aplicación no conserva una copia del archivo.');
   }
 
   document.addEventListener('click', (event) => {
@@ -158,6 +204,13 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       reopenEditing();
+      return;
+    }
+
+    if (event.target.closest?.('#downloadReportTxt')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      downloadValidatedTxt();
       return;
     }
 
@@ -180,7 +233,9 @@
     if (!event.target.matches?.('.report-section-input')) return;
     const copy = copyButton();
     const check = checkbox();
+    const download = document.getElementById('downloadReportTxt');
     if (copy) copy.disabled = true;
+    if (download) download.disabled = true;
     if (check) check.checked = false;
     state.validated = false;
     syncValidateAvailability();
