@@ -90,7 +90,7 @@
       email.className = 'primary';
       email.textContent = '@ Envío/Destruir';
       email.disabled = true;
-      email.setAttribute('aria-label', 'Enviar informe y destruir sesión');
+      email.setAttribute('aria-label', 'Preparar envío del informe y destruir sesión');
       email.setAttribute('title', 'Envío/Destruir');
       actions.append(email);
     }
@@ -193,11 +193,6 @@
     return (editor()?.innerText || editor()?.textContent || '').trim();
   }
 
-  function createRequestId() {
-    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-    return `report-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
-
   function destroyEphemeralSession() {
     window.__CLINICAL_SESSION_DESTROYING = true;
     state.validated = false;
@@ -217,13 +212,20 @@
       if (element) element.replaceChildren();
     });
 
+    const copy = copyButton();
+    const email = document.getElementById('prepareReportEmail');
+    if (copy) copy.disabled = true;
+    if (email) email.disabled = true;
+
+    // El mailto ya contiene una copia independiente del texto. Tras entregarlo al
+    // sistema, limpiamos la interfaz y recargamos la sesión efímera.
     setTimeout(() => {
       const cleanUrl = `${window.location.pathname}${window.location.search}`;
       window.location.replace(cleanUrl);
-    }, 250);
+    }, 900);
   }
 
-  async function sendAndDestroy() {
+  function sendAndDestroy() {
     const emailButton = document.getElementById('prepareReportEmail');
     const text = getValidatedReportText();
 
@@ -233,56 +235,25 @@
       return;
     }
 
+    const subject = 'Informe clínico validado';
+    const body = `Informe clínico validado\n\n${text}`;
+    const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
     if (emailButton) {
       emailButton.disabled = true;
-      emailButton.textContent = 'Enviando…';
+      emailButton.textContent = 'Abriendo correo…';
     }
-    setHint(`Enviando informe validado a ${EMAIL_RECIPIENT}…`);
+    setHint('Abriendo el correo institucional y destruyendo la sesión local…');
 
-    try {
-      const response = await fetch('/api/send-report', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'clinical-report',
-        },
-        credentials: 'same-origin',
-        cache: 'no-store',
-        body: JSON.stringify({
-          report: text,
-          requestId: createRequestId(),
-        }),
-      });
+    const link = document.createElement('a');
+    link.href = mailto;
+    link.style.display = 'none';
+    link.setAttribute('aria-hidden', 'true');
+    document.body.append(link);
+    link.click();
+    link.remove();
 
-      let payload = {};
-      try {
-        payload = await response.json();
-      } catch {
-        payload = {};
-      }
-
-      if (!response.ok || payload?.ok !== true || payload?.accepted !== true) {
-        const error = new Error(payload?.error || 'email_send_failed');
-        error.status = response.status;
-        error.code = payload?.error || 'email_send_failed';
-        throw error;
-      }
-
-      setHint('Envío aceptado por el servidor. Destruyendo la sesión…');
-      destroyEphemeralSession();
-    } catch (error) {
-      if (emailButton) {
-        emailButton.textContent = '@ Envío/Destruir';
-        emailButton.disabled = !state.validated;
-      }
-
-      if (error?.status === 503 || error?.code === 'email_transport_not_configured') {
-        setHint('El envío automático todavía no está configurado en el servidor. No se ha enviado nada y la sesión se conserva.');
-        return;
-      }
-
-      setHint('No se ha podido confirmar el envío. La sesión se conserva para poder reintentarlo.');
-    }
+    destroyEphemeralSession();
   }
 
   document.addEventListener('click', (event) => {
@@ -303,7 +274,7 @@
     if (event.target.closest?.('#prepareReportEmail')) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      void sendAndDestroy();
+      sendAndDestroy();
       return;
     }
 
