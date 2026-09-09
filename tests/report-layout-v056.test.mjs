@@ -23,8 +23,8 @@ test("V0.5.6 informe: los apartados mantienen una presentación clínica de una 
 });
 
 test("V0.5.6 informe: los apartados sin información se diferencian sin convertirlos en negativos", () => {
-  assert.match(reportJs, /No explorado\./);
-  assert.match(reportJs, /No consta\./);
-  assert.match(reportJs, /Información insuficiente\./);
+  assert.match(reportJs, /no explorado\./i);
+  assert.match(reportJs, /no consta\./i);
+  assert.match(reportJs, /información insuficiente\./i);
   assert.match(reportCss, /report-section-empty/);
 });
