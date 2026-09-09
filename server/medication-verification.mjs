@@ -116,10 +116,13 @@ function confirmedResult(rawName, detail, matchType, fallbackItem = detail) {
 
 async function findExactActiveIngredient(rawName, items, fetchFn, timeoutMs) {
   const limited = items.slice(0, MAX_ACTIVE_CANDIDATE_DETAILS);
-  for (const item of limited) {
-    const detail = await withMedicationDetail(item, fetchFn, timeoutMs);
+  // Los detalles candidatos son independientes. Resolverlos en paralelo evita hasta
+  // seis esperas HTTP consecutivas cuando CIMA no incluye principios activos en el listado.
+  const details = await Promise.all(limited.map((item) => withMedicationDetail(item, fetchFn, timeoutMs)));
+  for (let index = 0; index < details.length; index += 1) {
+    const detail = details[index];
     const match = activeIngredientMatch(rawName, detail);
-    if (match) return confirmedResult(rawName, detail, match.matchType, item);
+    if (match) return confirmedResult(rawName, detail, match.matchType, limited[index]);
   }
   return null;
 }
@@ -213,38 +216,50 @@ export async function verifyMedicationName(rawName, options = {}) {
 export async function verifyAssessmentMedications(inputAssessment, options = {}) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
-  const cache = new Map();
+  const medicationEntries = [];
 
   for (const group of ["habitual", "current"]) {
     for (const med of assessment.medications?.[group] || []) {
       const rawName = clean(med.raw_name) || clean(med.display_name);
       if (!rawName) continue;
+      medicationEntries.push({ med, rawName, key: normalize(rawName) });
+    }
+  }
 
-      const key = normalize(rawName);
-      let verification = cache.get(key);
-      if (!verification) {
-        verification = await verifyMedicationName(rawName, options);
-        cache.set(key, verification);
-      }
+  // Los nombres farmacológicos independientes se verifican a la vez. Los duplicados
+  // habitual/actual siguen compartiendo un único resultado.
+  const uniqueNames = new Map();
+  for (const entry of medicationEntries) {
+    if (!uniqueNames.has(entry.key)) uniqueNames.set(entry.key, entry.rawName);
+  }
 
-      med.medication_verification = verification;
+  const verificationPairs = await Promise.all(
+    [...uniqueNames.entries()].map(async ([key, rawName]) => [
+      key,
+      await verifyMedicationName(rawName, options),
+    ])
+  );
+  const cache = new Map(verificationPairs);
 
-      if (verification.status === "confirmed") {
-        med.display_name = canonicalDisplayName(verification, rawName);
-        med.active_ingredient_known = Boolean(verification.activeIngredients?.length)
-          || verification.matchType === "active_ingredient_exact"
-          || verification.matchType === "active_ingredient_exact_token";
-      } else if (verification.status === "not_found") {
-        med.display_name = `${rawName} (no encontrada correspondencia en CIMA)`;
-        med.active_ingredient_known = false;
-        warnings.push(`medication_not_found_in_cima:${rawName}`);
-        appendSafetyReview(assessment, med, `No se encontró correspondencia en CIMA para «${rawName}». Mantener el nombre transcrito y confirmar manualmente antes de validar el informe.`);
-      } else {
-        med.display_name = `${rawName} (verificación CIMA no disponible)`;
-        med.active_ingredient_known = false;
-        warnings.push(`medication_verification_unavailable:${rawName}`);
-        appendSafetyReview(assessment, med, `No se pudo verificar «${rawName}» en CIMA por indisponibilidad técnica. Confirmar manualmente antes de validar el informe.`);
-      }
+  for (const { med, rawName, key } of medicationEntries) {
+    const verification = cache.get(key);
+    med.medication_verification = verification;
+
+    if (verification.status === "confirmed") {
+      med.display_name = canonicalDisplayName(verification, rawName);
+      med.active_ingredient_known = Boolean(verification.activeIngredients?.length)
+        || verification.matchType === "active_ingredient_exact"
+        || verification.matchType === "active_ingredient_exact_token";
+    } else if (verification.status === "not_found") {
+      med.display_name = `${rawName} (no encontrada correspondencia en CIMA)`;
+      med.active_ingredient_known = false;
+      warnings.push(`medication_not_found_in_cima:${rawName}`);
+      appendSafetyReview(assessment, med, `No se encontró correspondencia en CIMA para «${rawName}». Mantener el nombre transcrito y confirmar manualmente antes de validar el informe.`);
+    } else {
+      med.display_name = `${rawName} (verificación CIMA no disponible)`;
+      med.active_ingredient_known = false;
+      warnings.push(`medication_verification_unavailable:${rawName}`);
+      appendSafetyReview(assessment, med, `No se pudo verificar «${rawName}» en CIMA por indisponibilidad técnica. Confirmar manualmente antes de validar el informe.`);
     }
   }
 
@@ -258,6 +273,7 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
       medication_similarity_autocorrection: false,
       medication_formulation_inference: false,
       medication_active_ingredient_lookup_precedes_product_lookup: true,
+      medication_verification_parallelized: true,
     },
   };
 }
