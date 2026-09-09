@@ -6,6 +6,30 @@
     'sin alertas estructuradas',
   ];
 
+  const REPORT_HEADINGS = new Set([
+    'MOTIVO DE LA CONSULTA',
+    'PSQ GUARDIA',
+    'ALERGIAS / RAM',
+    'ANTECEDENTES PERSONALES SOMÁTICOS',
+    'ANTECEDENTES PERSONALES EN SALUD MENTAL',
+    'ANTECEDENTES FAMILIARES PSIQUIÁTRICOS',
+    'SITUACIÓN SOCIOFAMILIAR',
+    'HÁBITOS TÓXICOS',
+    'TRATAMIENTO HABITUAL',
+    'ENFERMEDAD ACTUAL',
+    'INTERVENCIÓN',
+    'EXPLORACIÓN PSICOPATOLÓGICA',
+    'ORIENTACIÓN DIAGNÓSTICA',
+    'PLAN TERAPÉUTICO',
+    'TRATAMIENTO ACTUAL',
+  ]);
+
+  const EMPTY_SECTION_TEXTS = new Set([
+    'no explorado.',
+    'no consta.',
+    'información insuficiente.',
+  ]);
+
   function meaningfulItems(listId) {
     const list = document.getElementById(listId);
     if (!list) return [];
@@ -90,6 +114,49 @@
     if (badge) badge.textContent = 'Pendiente de validación profesional';
   }
 
+  function parseReportSections(rawText) {
+    const lines = String(rawText || '').replace(/\r/g, '').split('\n');
+    const sections = [];
+    let current = null;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (REPORT_HEADINGS.has(trimmed)) {
+        if (current) sections.push(current);
+        current = { title: trimmed, body: [] };
+        continue;
+      }
+
+      if (current) current.body.push(line);
+    }
+
+    if (current) sections.push(current);
+    return sections.map((section) => ({
+      title: section.title,
+      body: section.body.join('\n').trim(),
+    }));
+  }
+
+  function formatReportEditor() {
+    const editor = document.getElementById('reportEditor');
+    if (!editor || editor.querySelector('.report-section-block')) return;
+
+    const rawText = editor.innerText || editor.textContent || '';
+    const sections = parseReportSections(rawText);
+    if (!sections.length) return;
+
+    editor.innerHTML = sections.map((section) => {
+      const empty = EMPTY_SECTION_TEXTS.has(section.body.toLowerCase());
+      return `
+        <section class="report-section-block${empty ? ' report-section-empty' : ''}">
+          <h3>${escapeHtml(section.title)}</h3>
+          <p>${escapeHtml(section.body || 'No consta.')}</p>
+        </section>
+      `;
+    }).join('');
+    editor.classList.add('structured-report-editor');
+  }
+
   function resetReportValidation() {
     const checkbox = document.getElementById('validateCheck');
     const copyButton = document.getElementById('copyReport');
@@ -101,6 +168,7 @@
     resetReportValidation();
     normalizeReportHeading();
     buildReportPendingBanner();
+    formatReportEditor();
   }
 
   document.addEventListener('click', (event) => {
