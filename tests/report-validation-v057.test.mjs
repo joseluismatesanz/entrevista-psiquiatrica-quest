@@ -41,12 +41,20 @@ test("V0.5.6 informe: navegar fuera de un informe validado invalida su validaci�
   assert.match(validationJs, /setUnvalidated\('Has salido del informe validado/);
 });
 
-test("V0.5.6 informe: el correo usa el texto clínico validado y solo el destino institucional", () => {
+test("V0.5.6 informe: el envío usa el texto clínico validado y solo el destino institucional", () => {
   assert.match(validationJs, /EMAIL_RECIPIENT/);
   assert.match(validationJs, /joseluis\.matesanz@salud-juntaex\.es/);
   assert.doesNotMatch(validationJs, /gmail\.com/);
   assert.match(validationJs, /getValidatedReportText/);
-  assert.match(validationJs, /window\.location\.href = mailto/);
+  assert.match(validationJs, /fetch\('\/api\/send-report'/);
+  assert.doesNotMatch(validationJs, /mailto:/);
+});
+
+test("V0.5.6 informe: tras envío confirmado destruye; ante fallo conserva la sesión", () => {
+  assert.match(validationJs, /async function sendAndDestroy/);
+  assert.match(validationJs, /destroyEphemeralSession\(\)/);
+  assert.match(validationJs, /La sesión se conserva/);
+  assert.match(validationJs, /window\.location\.replace/);
 });
 
 test("V0.5.6 informe: el pie validado se reduce a flecha, re-edición, copia y envío-destrucción", () => {
@@ -58,6 +66,7 @@ test("V0.5.6 informe: el pie validado se reduce a flecha, re-edición, copia y e
 
 test("V0.5.6 informe: el navegador fuerza la carga de la nueva capa de validación", () => {
   assert.match(indexHtml, /report-v056\.js\?v=20260909-3/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-8/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-9/);
+  assert.match(packageJson, /node --check api\/send-report\.mjs/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);
 });
