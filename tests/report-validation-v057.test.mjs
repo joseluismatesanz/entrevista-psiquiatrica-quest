@@ -28,8 +28,13 @@ test("V0.5.6 informe: copiar permanece bloqueado hasta validar", () => {
   assert.match(validationJs, /check\.checked = false/);
 });
 
+test("V0.5.6 informe: navegar fuera de un informe validado invalida su validación", () => {
+  assert.match(validationJs, /function invalidateBeforeLeavingReport/);
+  assert.match(validationJs, /setUnvalidated\('Has salido del informe validado/);
+});
+
 test("V0.5.6 informe: el navegador fuerza la carga de la nueva capa de validación", () => {
   assert.match(indexHtml, /report-v056\.js\?v=20260909-3/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-3/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-4/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);
 });
