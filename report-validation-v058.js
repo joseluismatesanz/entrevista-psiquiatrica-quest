@@ -193,7 +193,37 @@
     return (editor()?.innerText || editor()?.textContent || '').trim();
   }
 
-  function prepareSendDestroy() {
+  function createRequestId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `report-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function destroyEphemeralSession() {
+    window.__CLINICAL_SESSION_DESTROYING = true;
+    state.validated = false;
+
+    document.querySelectorAll('textarea').forEach((field) => {
+      field.value = '';
+    });
+    document.querySelectorAll('input[type="text"], input[type="search"]').forEach((field) => {
+      field.value = '';
+    });
+
+    const reportEditor = editor();
+    if (reportEditor) reportEditor.replaceChildren();
+
+    ['routingGrid', 'sourcesList', 'missingList', 'conflictList', 'alertList', 'reportPendingBanner'].forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) element.replaceChildren();
+    });
+
+    setTimeout(() => {
+      const cleanUrl = `${window.location.pathname}${window.location.search}`;
+      window.location.replace(cleanUrl);
+    }, 250);
+  }
+
+  async function sendAndDestroy() {
     const emailButton = document.getElementById('prepareReportEmail');
     const text = getValidatedReportText();
 
@@ -203,12 +233,56 @@
       return;
     }
 
-    const subject = 'Informe clínico validado';
-    const body = `Informe clínico validado\n\n${text}`;
-    const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (emailButton) {
+      emailButton.disabled = true;
+      emailButton.textContent = 'Enviando…';
+    }
+    setHint(`Enviando informe validado a ${EMAIL_RECIPIENT}…`);
 
-    setHint(`Prototipo: se abre el correo a ${EMAIL_RECIPIENT}. La sesión se conservará hasta disponer de confirmación real de envío; con el backend definitivo, el envío confirmado destruirá la sesión automáticamente.`);
-    window.location.href = mailto;
+    try {
+      const response = await fetch('/api/send-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'clinical-report',
+        },
+        credentials: 'same-origin',
+        cache: 'no-store',
+        body: JSON.stringify({
+          report: text,
+          requestId: createRequestId(),
+        }),
+      });
+
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch {
+        payload = {};
+      }
+
+      if (!response.ok || payload?.ok !== true || payload?.accepted !== true) {
+        const error = new Error(payload?.error || 'email_send_failed');
+        error.status = response.status;
+        error.code = payload?.error || 'email_send_failed';
+        throw error;
+      }
+
+      setHint('Envío aceptado por el servidor. Destruyendo la sesión…');
+      destroyEphemeralSession();
+    } catch (error) {
+      if (emailButton) {
+        emailButton.textContent = '@ Envío/Destruir';
+        emailButton.disabled = !state.validated;
+      }
+
+      if (error?.status === 503 || error?.code === 'email_transport_not_configured') {
+        setHint('El envío automático todavía no está configurado en el servidor. No se ha enviado nada y la sesión se conserva.');
+        return;
+      }
+
+      setHint('No se ha podido confirmar el envío. La sesión se conserva para poder reintentarlo.');
+    }
   }
 
   document.addEventListener('click', (event) => {
@@ -229,7 +303,7 @@
     if (event.target.closest?.('#prepareReportEmail')) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      prepareSendDestroy();
+      void sendAndDestroy();
       return;
     }
 
