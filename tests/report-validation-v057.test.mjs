@@ -21,11 +21,13 @@ test("V0.5.6 informe: no puede validarse mientras una sección está abierta", (
   assert.match(validationJs, /validate\.disabled = isEditing\(\) \|\| state\.validated/);
 });
 
-test("V0.5.6 informe: copiar y descargar permanecen bloqueados hasta validar", () => {
+test("V0.5.6 informe: copiar, descargar y preparar correo permanecen bloqueados hasta validar", () => {
   assert.match(validationJs, /copy\.disabled = true/);
   assert.match(validationJs, /copy\.disabled = false/);
   assert.match(validationJs, /download\.disabled = true/);
   assert.match(validationJs, /download\.disabled = false/);
+  assert.match(validationJs, /email\.disabled = true/);
+  assert.match(validationJs, /email\.disabled = false/);
   assert.match(validationJs, /check\.checked = true/);
   assert.match(validationJs, /check\.checked = false/);
 });
@@ -41,8 +43,14 @@ test("V0.5.6 informe: la descarga TXT usa únicamente el texto clínico validado
   assert.match(validationJs, /text\/plain;charset=utf-8/);
 });
 
+test("V0.5.6 informe: el correo usa el mismo texto clínico validado y destinatarios fijos", () => {
+  assert.match(validationJs, /EMAIL_RECIPIENTS/);
+  assert.match(validationJs, /getValidatedReportText/);
+  assert.match(validationJs, /window\.location\.href = mailto/);
+});
+
 test("V0.5.6 informe: el navegador fuerza la carga de la nueva capa de validación", () => {
   assert.match(indexHtml, /report-v056\.js\?v=20260909-3/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-5/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-6/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);
 });
