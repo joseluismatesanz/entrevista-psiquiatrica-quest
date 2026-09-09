@@ -137,6 +137,49 @@
     }));
   }
 
+  function updateEmptySectionState(block, body) {
+    block.classList.toggle('report-section-empty', EMPTY_SECTION_TEXTS.has(String(body || '').trim().toLowerCase()));
+  }
+
+  function closeSectionEditor(block) {
+    block.classList.remove('report-section-editing');
+    block.querySelector('.report-section-text')?.classList.remove('hidden');
+    block.querySelector('.report-section-input')?.classList.add('hidden');
+    block.querySelector('.report-section-edit-actions')?.classList.add('hidden');
+    block.querySelector('.report-edit-button')?.classList.remove('hidden');
+  }
+
+  function startSectionEditor(block) {
+    const text = block.querySelector('.report-section-text');
+    const input = block.querySelector('.report-section-input');
+    if (!text || !input) return;
+
+    input.value = text.textContent || '';
+    text.classList.add('hidden');
+    input.classList.remove('hidden');
+    block.querySelector('.report-section-edit-actions')?.classList.remove('hidden');
+    block.querySelector('.report-edit-button')?.classList.add('hidden');
+    block.classList.add('report-section-editing');
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+
+  function saveSectionEditor(block) {
+    const text = block.querySelector('.report-section-text');
+    const input = block.querySelector('.report-section-input');
+    if (!text || !input) return;
+
+    const newBody = input.value.trim();
+    text.textContent = newBody;
+    const generatedBody = block.dataset.generatedBody || '';
+    const edited = newBody !== generatedBody;
+    block.classList.toggle('report-section-edited', edited);
+    block.querySelector('.report-edited-label')?.classList.toggle('hidden', !edited);
+    updateEmptySectionState(block, newBody);
+    closeSectionEditor(block);
+    resetReportValidation();
+  }
+
   function formatReportEditor() {
     const editor = document.getElementById('reportEditor');
     if (!editor || editor.querySelector('.report-section-block')) return;
@@ -146,15 +189,47 @@
     if (!sections.length) return;
 
     editor.innerHTML = sections.map((section) => {
-      const empty = EMPTY_SECTION_TEXTS.has(section.body.toLowerCase());
+      const body = section.body || 'No consta.';
+      const empty = EMPTY_SECTION_TEXTS.has(body.toLowerCase());
       return `
         <section class="report-section-block${empty ? ' report-section-empty' : ''}">
-          <h3>${escapeHtml(section.title)}</h3>
-          <p>${escapeHtml(section.body || 'No consta.')}</p>
+          <div class="report-section-header">
+            <h3>${escapeHtml(section.title)}</h3>
+            <div class="report-section-tools" contenteditable="false">
+              <span class="report-edited-label hidden">Editado por profesional</span>
+              <button class="report-edit-button" type="button">Editar</button>
+            </div>
+          </div>
+          <p class="report-section-text">${escapeHtml(body)}</p>
+          <textarea class="report-section-input hidden" aria-label="Editar ${escapeHtml(section.title)}"></textarea>
+          <div class="report-section-edit-actions hidden" contenteditable="false">
+            <button class="report-section-cancel" type="button">Cancelar</button>
+            <button class="report-section-save" type="button">Guardar cambios</button>
+          </div>
         </section>
       `;
     }).join('');
+
+    [...editor.querySelectorAll('.report-section-block')].forEach((block, index) => {
+      block.dataset.generatedBody = sections[index]?.body || 'No consta.';
+    });
+
     editor.classList.add('structured-report-editor');
+    editor.setAttribute('contenteditable', 'false');
+  }
+
+  function getClinicalReportText() {
+    const editor = document.getElementById('reportEditor');
+    if (!editor) return '';
+
+    const blocks = [...editor.querySelectorAll('.report-section-block')];
+    if (!blocks.length) return (editor.innerText || editor.textContent || '').trim();
+
+    return blocks.map((block) => {
+      const title = block.querySelector('h3')?.textContent?.trim() || '';
+      const body = block.querySelector('.report-section-text')?.textContent?.trim() || '';
+      return `${title}\n${body}`.trim();
+    }).filter(Boolean).join('\n\n');
   }
 
   function resetReportValidation() {
@@ -172,10 +247,44 @@
   }
 
   document.addEventListener('click', (event) => {
+    const editButton = event.target.closest('.report-edit-button');
+    if (editButton) {
+      startSectionEditor(editButton.closest('.report-section-block'));
+      return;
+    }
+
+    const cancelButton = event.target.closest('.report-section-cancel');
+    if (cancelButton) {
+      closeSectionEditor(cancelButton.closest('.report-section-block'));
+      return;
+    }
+
+    const saveButton = event.target.closest('.report-section-save');
+    if (saveButton) {
+      saveSectionEditor(saveButton.closest('.report-section-block'));
+      return;
+    }
+
     const navigation = event.target.closest('[data-go="report"], [data-step="report"]');
     if (navigation) setTimeout(refreshReportScreen, 0);
   });
 
+  const copyButton = document.getElementById('copyReport');
+  copyButton?.addEventListener('click', async (event) => {
+    event.stopImmediatePropagation();
+    const checkbox = document.getElementById('validateCheck');
+    if (!checkbox?.checked) return;
+    try {
+      await navigator.clipboard.writeText(getClinicalReportText());
+      const message = document.getElementById('sessionMessage');
+      if (message) message.textContent = 'Informe copiado tras validación clínica.';
+    } catch {
+      const message = document.getElementById('sessionMessage');
+      if (message) message.textContent = 'No se pudo copiar automáticamente; selecciona el texto manualmente.';
+    }
+  }, { capture: true });
+
+  window.getClinicalReportText = getClinicalReportText;
   window.addEventListener('pageshow', resetReportValidation);
   refreshReportScreen();
 })();
