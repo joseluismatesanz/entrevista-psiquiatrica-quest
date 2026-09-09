@@ -7,7 +7,7 @@
   <title>Salud Mental · Asistente clínico V0.5.6</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="organization-v055.css" />
-  <link rel="stylesheet" href="report-v056.css?v=20260909-3" />
+  <link rel="stylesheet" href="report-v056.css?v=20260909-4" />
 </head>
 <body>
   <main class="app-shell">
@@ -145,9 +145,9 @@
           <span>He revisado el contenido y asumo la validación clínica del informe.</span>
         </label>
         <div class="actions">
-          <button class="secondary" data-go="review">Revisar categorización</button>
-          <button id="copyReport" class="primary" disabled>Copiar informe validado</button>
-          <button id="destroySession" class="danger">Cancelar y destruir sesión</button>
+          <button id="backToReview" class="secondary footer-back" data-go="review" aria-label="Volver a categorización" title="Volver a categorización">←</button>
+          <button id="copyReport" class="primary" disabled>Copiar</button>
+          <button id="destroySession" class="danger">DESTRUIR</button>
         </div>
         <p class="muted small">El borrador no debe exportarse sin revisión profesional.</p>
       </div>
@@ -160,6 +160,6 @@
   <script src="loader.js"></script>
   <script src="organization-v055.js"></script>
   <script src="report-v056.js?v=20260909-3"></script>
-  <script src="report-validation-v058.js?v=20260909-6"></script>
+  <script src="report-validation-v058.js?v=20260909-7"></script>
 </body>
 </html>
