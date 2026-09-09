@@ -136,6 +136,11 @@
     setUnvalidated('Edición reabierta. Cualquier cambio requerirá una nueva validación antes de copiar el informe.');
   }
 
+  function invalidateBeforeLeavingReport() {
+    if (!state.validated) return;
+    setUnvalidated('Has salido del informe validado. Al volver, deberás validarlo de nuevo antes de copiarlo.');
+  }
+
   function resetValidation() {
     hideLegacyValidationCheckbox();
     setUnvalidated('Revisa el borrador y pulsa «Validar informe» cuando esté listo.');
@@ -161,10 +166,15 @@
       return;
     }
 
+    if (event.target.closest?.('[data-go="review"], [data-step="review"], [data-go="input"], [data-step="input"]')) {
+      invalidateBeforeLeavingReport();
+      return;
+    }
+
     if (event.target.closest?.('[data-go="report"], [data-step="report"]')) {
       setTimeout(resetValidation, 0);
     }
-  });
+  }, true);
 
   document.addEventListener('input', (event) => {
     if (!event.target.matches?.('.report-section-input')) return;
