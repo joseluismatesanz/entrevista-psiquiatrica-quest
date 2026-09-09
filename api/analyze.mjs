@@ -44,6 +44,12 @@ export default async function handler(req, res) {
       });
     }
 
+    // Toda entrada —también texto pegado manualmente— pasa por la misma capa de
+    // desidentificación antes de que pueda alimentar Organización o Informe.
+    stage = "person_name_redaction";
+    const { redactPersonNamesInTranscript } = await import("../server/person-name-redaction.mjs");
+    const redaction = await redactPersonNamesInTranscript(transcript);
+
     // Importación diferida: si el bundle clínico no puede cargarse en Vercel,
     // el error queda atrapado y llega al cliente como diagnóstico técnico legible.
     stage = "load_clinical_engine";
@@ -51,19 +57,37 @@ export default async function handler(req, res) {
 
     stage = "clinical_analysis";
     // No se registra ni persiste deliberadamente el texto de la entrevista.
-    const result = await analyzeTranscript(transcript);
-    return res.status(200).json(result);
+    const result = await analyzeTranscript(redaction.transcript);
+    return res.status(200).json({
+      ...result,
+      deidentified_transcript: redaction.transcript,
+      meta: {
+        ...(result?.meta || {}),
+        person_name_redaction_enabled: true,
+        person_name_redaction_mask: redaction.meta.mask,
+        person_name_redaction_replacements: redaction.replacements,
+        person_name_redaction_store: false,
+        person_name_redaction_fail_closed: true,
+      },
+    });
   } catch (error) {
     const isClientError = error instanceof SyntaxError || error instanceof TypeError;
     const status = stage === "load_clinical_engine" ? 500 : (isClientError ? 400 : 502);
 
     return res.status(status).json({
-      error: stage === "load_clinical_engine" ? "clinical_engine_unavailable" : safeErrorName(error),
+      error:
+        stage === "load_clinical_engine"
+          ? "clinical_engine_unavailable"
+          : stage === "person_name_redaction"
+            ? "person_name_redaction_failed"
+            : safeErrorName(error),
       stage,
       message:
         stage === "load_clinical_engine"
           ? "No se pudo cargar el motor clínico en el backend."
-          : safeErrorMessage(error),
+          : stage === "person_name_redaction"
+            ? "No se pudo verificar la desidentificación de nombres personales. No se ha generado ningún documento."
+            : safeErrorMessage(error),
     });
   }
 }
