@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [indexHtml, validationJs] = await Promise.all([
+const [indexHtml, validationJs, reportCss] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../report-validation-v058.js", import.meta.url), "utf8"),
+  readFile(new URL("../report-v056.css", import.meta.url), "utf8"),
 ]);
 
 test("V0.5.6 validación: se sustituye la casilla visible por un botón explícito", () => {
@@ -14,18 +15,28 @@ test("V0.5.6 validación: se sustituye la casilla visible por un botón explíci
   assert.match(validationJs, /classList\.add\('hidden'\)/);
 });
 
-test("V0.5.6 validación: validar bloquea la edición y habilita copia, descarga y correo", () => {
+test("V0.5.6 validación: validar bloquea la edición y habilita copia y correo", () => {
   assert.match(validationJs, /function validateReport/);
   assert.match(validationJs, /state\.validated = true/);
   assert.match(validationJs, /copy\.disabled = false/);
-  assert.match(validationJs, /download\.disabled = false/);
   assert.match(validationJs, /email\.disabled = false/);
   assert.match(validationJs, /setEditLocked\(true\)/);
   assert.match(validationJs, /Informe validado · edición bloqueada/);
 });
 
-test("V0.5.6 validación: reabrir edición invalida la validación", () => {
-  assert.match(validationJs, /Reabrir edición/);
+test("V0.5.6 pie móvil: usa acciones cortas y elimina por completo la descarga TXT", () => {
+  assert.match(indexHtml, /id="backToReview"[^>]*>←<\/button>/);
+  assert.match(indexHtml, /id="copyReport"[^>]*>Copiar<\/button>/);
+  assert.match(indexHtml, /id="destroySession"[^>]*>DESTRUIR<\/button>/);
+  assert.match(validationJs, /reopen\.textContent = 'Re-editar'/);
+  assert.match(validationJs, /email\.textContent = 'Enviar @'/);
+  assert.doesNotMatch(validationJs, /Descargar TXT|downloadReportTxt|downloadValidatedTxt/);
+  assert.match(reportCss, /\.validation-card \.footer-back/);
+  assert.match(reportCss, /@media\(max-width:720px\)/);
+});
+
+test("V0.5.6 validación: re-editar invalida la validación", () => {
+  assert.match(validationJs, /Re-editar/);
   assert.match(validationJs, /function reopenEditing/);
   assert.match(validationJs, /setUnvalidated/);
   assert.match(validationJs, /Cualquier cambio requerirá una nueva validación/);
@@ -46,28 +57,17 @@ test("V0.5.6 validación: salir del informe validado invalida la validación ant
   assert.match(validationJs, /\}, true\);/);
 });
 
-test("V0.5.6 exportación: TXT solo se genera desde un informe validado y de forma local", () => {
-  assert.match(validationJs, /Descargar TXT/);
-  assert.match(validationJs, /function getValidatedReportText/);
-  assert.match(validationJs, /function downloadValidatedTxt/);
-  assert.match(validationJs, /new Blob/);
-  assert.match(validationJs, /URL\.createObjectURL/);
-  assert.match(validationJs, /informe_clinico_validado\.txt/);
-  assert.match(validationJs, /La aplicación no conserva una copia del archivo/);
-});
-
-test("V0.5.6 correo: prepara un mensaje solo desde informe validado a los dos destinatarios configurados", () => {
-  assert.match(validationJs, /Preparar correo/);
+test("V0.5.6 correo: usa los dos destinatarios seguidos y separados por punto y coma y espacio", () => {
   assert.match(validationJs, /joseluis\.matesanz@salud-juntaex\.es/);
   assert.match(validationJs, /jlmatesanzperez@gmail\.com/);
+  assert.match(validationJs, /EMAIL_RECIPIENTS_DISPLAY = EMAIL_RECIPIENTS\.join\('; '\)/);
   assert.match(validationJs, /function prepareValidatedEmail/);
-  assert.match(validationJs, /mailto:/);
-  assert.match(validationJs, /encodeURIComponent\(subject\)/);
-  assert.match(validationJs, /encodeURIComponent\(body\)/);
-  assert.match(validationJs, /La aplicación no envía el mensaje por sí sola/);
+  assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENTS_DISPLAY\}/);
+  assert.match(validationJs, /Abriendo el cliente de correo: \$\{EMAIL_RECIPIENTS_DISPLAY\}/);
 });
 
-test("V0.5.6 validación: index fuerza la carga de esta revisión del script", () => {
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-6/);
+test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
+  assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-7/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });
