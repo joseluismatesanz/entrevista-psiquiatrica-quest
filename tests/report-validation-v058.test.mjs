@@ -57,16 +57,26 @@ test("V0.5.6 validación: salir del informe validado invalida la validación ant
   assert.match(validationJs, /\}, true\);/);
 });
 
-test("V0.5.6 correo: usa solo la cuenta institucional y elimina la cuenta personal", () => {
+test("V0.5.6 correo: usa solo la cuenta institucional y llama al backend, nunca mailto", () => {
   assert.match(validationJs, /EMAIL_RECIPIENT = 'joseluis\.matesanz@salud-juntaex\.es'/);
   assert.doesNotMatch(validationJs, /jlmatesanzperez@gmail\.com/);
-  assert.match(validationJs, /function prepareSendDestroy/);
-  assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENT\}/);
-  assert.match(validationJs, /confirmación real de envío/);
+  assert.match(validationJs, /async function sendAndDestroy/);
+  assert.match(validationJs, /fetch\('\/api\/send-report'/);
+  assert.match(validationJs, /method: 'POST'/);
+  assert.match(validationJs, /report: text/);
+  assert.doesNotMatch(validationJs, /mailto:/);
+});
+
+test("V0.5.6 correo: solo destruye tras confirmación positiva y conserva sesión en error", () => {
+  assert.match(validationJs, /payload\?\.ok !== true/);
+  assert.match(validationJs, /payload\?\.accepted !== true/);
+  assert.match(validationJs, /destroyEphemeralSession\(\)/);
+  assert.match(validationJs, /No se ha podido confirmar el envío\. La sesión se conserva/);
+  assert.match(validationJs, /email_transport_not_configured/);
 });
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
   assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-8/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-9/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });
