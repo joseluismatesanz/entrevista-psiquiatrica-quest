@@ -36,7 +36,15 @@ test("V0.5.6 validación: los botones Editar desaparecen mientras el informe est
   assert.match(validationJs, /button\.classList\.toggle\('hidden', locked\)/);
 });
 
+test("V0.5.6 validación: salir del informe validado invalida la validación antes de navegar", () => {
+  assert.match(validationJs, /function invalidateBeforeLeavingReport/);
+  assert.match(validationJs, /Has salido del informe validado/);
+  assert.match(validationJs, /\[data-go=\"review\"\]/);
+  assert.match(validationJs, /\[data-go=\"input\"\]/);
+  assert.match(validationJs, /\}, true\);/);
+});
+
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script", () => {
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-3/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-4/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });
