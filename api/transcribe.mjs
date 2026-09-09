@@ -17,14 +17,22 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "method_not_allowed" });
   }
 
+  const totalStartedAt = Date.now();
+
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+
+    const transcriptionStartedAt = Date.now();
     const acoustic = await transcribeAudioPayload(body);
+    const transcriptionMs = Date.now() - transcriptionStartedAt;
 
     // Privacidad por diseño: antes de devolver o analizar cualquier texto procedente
     // del audio, se sustituyen los nombres/apellidos de personas por XXXXXXXXXXX.
     // Si esta capa falla, no se devuelve la transcripción nominal (fail closed).
+    const redactionStartedAt = Date.now();
     const redaction = await redactPersonNamesInSegments(acoustic.segments);
+    const redactionMs = Date.now() - redactionStartedAt;
+
     const safeAcoustic = {
       ...acoustic,
       transcript: redaction.transcript,
@@ -33,6 +41,7 @@ export default async function handler(req, res) {
         ...acoustic.meta,
         person_name_redaction_enabled: true,
         person_name_redaction_mask: redaction.meta.mask,
+        person_name_redaction_model: redaction.meta.model,
         person_name_redaction_replacements: redaction.replacements,
         person_name_redaction_store: false,
         person_name_redaction_fail_closed: true,
@@ -40,7 +49,10 @@ export default async function handler(req, res) {
     };
 
     try {
+      const attributionStartedAt = Date.now();
       const attributed = await attributeClinicalSpeakerRoles(safeAcoustic.segments);
+      const attributionMs = Date.now() - attributionStartedAt;
+
       return res.status(200).json({
         ...safeAcoustic,
         acoustic_transcript: safeAcoustic.transcript,
@@ -57,6 +69,12 @@ export default async function handler(req, res) {
           role_attribution_store: false,
           critical_role_review_count: attributed.meta.critical_review_count,
           speaker_role_confirmation_required: attributed.meta.critical_review_count > 0,
+          performance_ms: {
+            transcription: transcriptionMs,
+            person_name_redaction: redactionMs,
+            speaker_attribution: attributionMs,
+            total_audio_pipeline: Date.now() - totalStartedAt,
+          },
         },
       });
     } catch (attributionError) {
@@ -75,6 +93,12 @@ export default async function handler(req, res) {
           ...safeAcoustic.meta,
           automatic_role_attribution: false,
           speaker_role_confirmation_required: true,
+          performance_ms: {
+            transcription: transcriptionMs,
+            person_name_redaction: redactionMs,
+            speaker_attribution: null,
+            total_audio_pipeline: Date.now() - totalStartedAt,
+          },
         },
       });
     }
