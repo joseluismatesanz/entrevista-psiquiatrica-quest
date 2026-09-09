@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { redactPersonNamesInSegments } from "../server/person-name-redaction.mjs";
 
-const [bankSource, case3Source] = await Promise.all([
+const [bankSource, case3Source, backendClientSource] = await Promise.all([
   readFile(new URL("../fixture-privacy-bank.js", import.meta.url), "utf8"),
   readFile(new URL("../fixture-case3.js", import.meta.url), "utf8"),
+  readFile(new URL("../backend-client.js", import.meta.url), "utf8"),
 ]);
 
 function mockClient(items) {
@@ -30,6 +31,12 @@ test("Banco privacidad: integra A, B y C en un selector compacto", () => {
   assert.match(bankSource, /id = 'privacyTestBank'/);
   assert.match(bankSource, /loadPrivacyTest/);
   assert.match(case3Source, /fixture-privacy-bank\.js\?v=20260909-1/);
+});
+
+test("Banco privacidad: tras analizar muestra en la caja la transcripción desidentificada", () => {
+  assert.match(backendClientSource, /payload\.deidentified_transcript/);
+  assert.match(backendClientSource, /\$\('caseText'\)\.value = payload\.deidentified_transcript/);
+  assert.match(backendClientSource, /Transcripción desidentificada aplicada/);
 });
 
 test("Caso A: contiene nombres simples, compuestos y apellidos para estresar la máscara", () => {
