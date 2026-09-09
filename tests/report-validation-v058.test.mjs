@@ -14,10 +14,11 @@ test("V0.5.6 validación: se sustituye la casilla visible por un botón explíci
   assert.match(validationJs, /classList\.add\('hidden'\)/);
 });
 
-test("V0.5.6 validación: validar bloquea la edición y habilita la copia", () => {
+test("V0.5.6 validación: validar bloquea la edición y habilita copia y descarga", () => {
   assert.match(validationJs, /function validateReport/);
   assert.match(validationJs, /state\.validated = true/);
   assert.match(validationJs, /copy\.disabled = false/);
+  assert.match(validationJs, /download\.disabled = false/);
   assert.match(validationJs, /setEditLocked\(true\)/);
   assert.match(validationJs, /Informe validado · edición bloqueada/);
 });
@@ -44,7 +45,17 @@ test("V0.5.6 validación: salir del informe validado invalida la validación ant
   assert.match(validationJs, /\}, true\);/);
 });
 
+test("V0.5.6 exportación: TXT solo se genera desde un informe validado y de forma local", () => {
+  assert.match(validationJs, /Descargar TXT/);
+  assert.match(validationJs, /function getValidatedReportText/);
+  assert.match(validationJs, /function downloadValidatedTxt/);
+  assert.match(validationJs, /new Blob/);
+  assert.match(validationJs, /URL\.createObjectURL/);
+  assert.match(validationJs, /informe_clinico_validado\.txt/);
+  assert.match(validationJs, /La aplicación no conserva una copia del archivo/);
+});
+
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script", () => {
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-4/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-5/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });
