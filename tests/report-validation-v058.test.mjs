@@ -57,26 +57,29 @@ test("V0.5.6 validación: salir del informe validado invalida la validación ant
   assert.match(validationJs, /\}, true\);/);
 });
 
-test("V0.5.6 correo: usa solo la cuenta institucional y llama al backend, nunca mailto", () => {
+test("V0.5.6 correo: usa solo la cuenta institucional mediante mailto y no llama a backend de correo", () => {
   assert.match(validationJs, /EMAIL_RECIPIENT = 'joseluis\.matesanz@salud-juntaex\.es'/);
   assert.doesNotMatch(validationJs, /jlmatesanzperez@gmail\.com/);
-  assert.match(validationJs, /async function sendAndDestroy/);
-  assert.match(validationJs, /fetch\('\/api\/send-report'/);
-  assert.match(validationJs, /method: 'POST'/);
-  assert.match(validationJs, /report: text/);
-  assert.doesNotMatch(validationJs, /mailto:/);
+  assert.match(validationJs, /function sendAndDestroy/);
+  assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENT\}/);
+  assert.match(validationJs, /link\.click\(\)/);
+  assert.doesNotMatch(validationJs, /\/api\/send-report|RESEND_API_KEY/);
 });
 
-test("V0.5.6 correo: solo destruye tras confirmación positiva y conserva sesión en error", () => {
-  assert.match(validationJs, /payload\?\.ok !== true/);
-  assert.match(validationJs, /payload\?\.accepted !== true/);
-  assert.match(validationJs, /destroyEphemeralSession\(\)/);
-  assert.match(validationJs, /No se ha podido confirmar el envío\. La sesión se conserva/);
-  assert.match(validationJs, /email_transport_not_configured/);
+test("V0.5.6 correo: entrega el mailto y destruye inmediatamente el estado clínico local", () => {
+  assert.match(validationJs, /function destroyEphemeralSession/);
+  assert.match(validationJs, /reportEditor\.replaceChildren\(\)/);
+  assert.match(validationJs, /field\.value = ''/);
+  assert.match(validationJs, /link\.click\(\);[\s\S]*destroyEphemeralSession\(\)/);
+  assert.match(validationJs, /window\.location\.replace/);
+});
+
+test("V0.5.6 privacidad: la interfaz informa del enmascarado de nombres personales", () => {
+  assert.match(indexHtml, /nombres de personas enmascarados como XXXXXXXXXXX/);
 });
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
   assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-9/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-10/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });
