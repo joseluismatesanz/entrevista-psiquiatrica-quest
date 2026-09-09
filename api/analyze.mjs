@@ -23,6 +23,7 @@ export default async function handler(req, res) {
   }
 
   let stage = "request_validation";
+  const totalStartedAt = Date.now();
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
@@ -47,8 +48,10 @@ export default async function handler(req, res) {
     // Toda entrada —también texto pegado manualmente— pasa por la misma capa de
     // desidentificación antes de que pueda alimentar Organización o Informe.
     stage = "person_name_redaction";
+    const redactionStartedAt = Date.now();
     const { redactPersonNamesInTranscript } = await import("../server/person-name-redaction.mjs");
     const redaction = await redactPersonNamesInTranscript(transcript);
+    const redactionMs = Date.now() - redactionStartedAt;
 
     // Importación diferida: si el bundle clínico no puede cargarse en Vercel,
     // el error queda atrapado y llega al cliente como diagnóstico técnico legible.
@@ -57,7 +60,10 @@ export default async function handler(req, res) {
 
     stage = "clinical_analysis";
     // No se registra ni persiste deliberadamente el texto de la entrevista.
+    const analysisStartedAt = Date.now();
     const result = await analyzeTranscript(redaction.transcript);
+    const clinicalAnalysisMs = Date.now() - analysisStartedAt;
+
     return res.status(200).json({
       ...result,
       deidentified_transcript: redaction.transcript,
@@ -65,9 +71,15 @@ export default async function handler(req, res) {
         ...(result?.meta || {}),
         person_name_redaction_enabled: true,
         person_name_redaction_mask: redaction.meta.mask,
+        person_name_redaction_model: redaction.meta.model,
         person_name_redaction_replacements: redaction.replacements,
         person_name_redaction_store: false,
         person_name_redaction_fail_closed: true,
+        request_performance_ms: {
+          person_name_redaction: redactionMs,
+          clinical_analysis: clinicalAnalysisMs,
+          total_request: Date.now() - totalStartedAt,
+        },
       },
     });
   } catch (error) {
