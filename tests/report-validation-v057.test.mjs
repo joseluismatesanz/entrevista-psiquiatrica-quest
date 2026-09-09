@@ -21,7 +21,7 @@ test("V0.5.6 informe: no puede validarse mientras una sección está abierta", (
   assert.match(validationJs, /validate\.disabled = isEditing\(\) \|\| state\.validated/);
 });
 
-test("V0.5.6 informe: copiar y enviar correo permanecen bloqueados hasta validar", () => {
+test("V0.5.6 informe: copiar y envío-destrucción permanecen bloqueados hasta validar", () => {
   assert.match(validationJs, /copy\.disabled = true/);
   assert.match(validationJs, /copy\.disabled = false/);
   assert.match(validationJs, /email\.disabled = true/);
@@ -30,9 +30,10 @@ test("V0.5.6 informe: copiar y enviar correo permanecen bloqueados hasta validar
   assert.match(validationJs, /check\.checked = false/);
 });
 
-test("V0.5.6 informe: no existe ya la exportación TXT en el pie", () => {
+test("V0.5.6 informe: no existe exportación TXT ni destrucción separada en el pie", () => {
   assert.doesNotMatch(validationJs, /downloadReportTxt|downloadValidatedTxt|Descargar TXT/);
   assert.doesNotMatch(indexHtml, /Descargar TXT/);
+  assert.doesNotMatch(indexHtml, /id="destroySession"/);
 });
 
 test("V0.5.6 informe: navegar fuera de un informe validado invalida su validación", () => {
@@ -40,23 +41,23 @@ test("V0.5.6 informe: navegar fuera de un informe validado invalida su validaci�
   assert.match(validationJs, /setUnvalidated\('Has salido del informe validado/);
 });
 
-test("V0.5.6 informe: el correo usa el mismo texto clínico validado y destinatarios fijos", () => {
-  assert.match(validationJs, /EMAIL_RECIPIENTS/);
-  assert.match(validationJs, /EMAIL_RECIPIENTS_DISPLAY/);
+test("V0.5.6 informe: el correo usa el texto clínico validado y solo el destino institucional", () => {
+  assert.match(validationJs, /EMAIL_RECIPIENT/);
+  assert.match(validationJs, /joseluis\.matesanz@salud-juntaex\.es/);
+  assert.doesNotMatch(validationJs, /gmail\.com/);
   assert.match(validationJs, /getValidatedReportText/);
   assert.match(validationJs, /window\.location\.href = mailto/);
 });
 
-test("V0.5.6 informe: el pie validado se reduce a flecha, re-edición, copia, correo y destrucción", () => {
+test("V0.5.6 informe: el pie validado se reduce a flecha, re-edición, copia y envío-destrucción", () => {
   assert.match(indexHtml, />←<\/button>/);
   assert.match(validationJs, /Re-editar/);
   assert.match(indexHtml, />Copiar<\/button>/);
-  assert.match(validationJs, /Enviar @/);
-  assert.match(indexHtml, />DESTRUIR<\/button>/);
+  assert.match(validationJs, /@ Envío\/Destruir/);
 });
 
 test("V0.5.6 informe: el navegador fuerza la carga de la nueva capa de validación", () => {
   assert.match(indexHtml, /report-v056\.js\?v=20260909-3/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-7/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-8/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);
 });
