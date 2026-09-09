@@ -1,10 +1,6 @@
 (() => {
   const state = { validated: false };
-  const EMAIL_RECIPIENTS = [
-    'joseluis.matesanz@salud-juntaex.es',
-    'jlmatesanzperez@gmail.com',
-  ];
-  const EMAIL_RECIPIENTS_DISPLAY = EMAIL_RECIPIENTS.join('; ');
+  const EMAIL_RECIPIENT = 'joseluis.matesanz@salud-juntaex.es';
 
   function checkbox() {
     return document.getElementById('validateCheck');
@@ -52,17 +48,17 @@
     const copy = copyButton();
     if (copy) copy.textContent = 'Copiar';
 
-    const destroy = document.getElementById('destroySession');
-    if (destroy) destroy.textContent = 'DESTRUIR';
+    const legacyDestroy = document.getElementById('destroySession');
+    legacyDestroy?.remove();
 
-    return { back, copy, destroy };
+    return { back, copy };
   }
 
   function ensureActionButtons() {
     const actions = document.querySelector('.validation-card .actions');
     if (!actions) return {};
 
-    const { back, copy, destroy } = configureCompactFooter(actions);
+    const { back, copy } = configureCompactFooter(actions);
 
     let validate = document.getElementById('validateReport');
     if (!validate) {
@@ -92,13 +88,14 @@
       email.id = 'prepareReportEmail';
       email.type = 'button';
       email.className = 'primary';
-      email.textContent = 'Enviar @';
+      email.textContent = '@ Envío/Destruir';
       email.disabled = true;
-      if (destroy) destroy.before(email);
-      else actions.append(email);
+      email.setAttribute('aria-label', 'Enviar informe y destruir sesión');
+      email.setAttribute('title', 'Envío/Destruir');
+      actions.append(email);
     }
 
-    return { validate, reopen, email, back, copy, destroy };
+    return { validate, reopen, email, back, copy };
   }
 
   function hideLegacyValidationCheckbox() {
@@ -171,7 +168,7 @@
     setEditLocked(true);
     if (badge()) badge().textContent = 'Informe validado · edición bloqueada';
     if (eyebrow()) eyebrow().textContent = 'DOCUMENTO CLÍNICO VALIDADO';
-    setHint(`Informe validado. Destinatarios: ${EMAIL_RECIPIENTS_DISPLAY}`);
+    setHint(`Informe validado · destino: ${EMAIL_RECIPIENT}`);
   }
 
   function reopenEditing() {
@@ -196,21 +193,21 @@
     return (editor()?.innerText || editor()?.textContent || '').trim();
   }
 
-  function prepareValidatedEmail() {
+  function prepareSendDestroy() {
     const emailButton = document.getElementById('prepareReportEmail');
     const text = getValidatedReportText();
 
     if (!text) {
       if (emailButton) emailButton.disabled = true;
-      setHint('El informe debe estar validado antes de preparar el correo.');
+      setHint('El informe debe estar validado antes del envío.');
       return;
     }
 
     const subject = 'Informe clínico validado';
     const body = `Informe clínico validado\n\n${text}`;
-    const mailto = `mailto:${EMAIL_RECIPIENTS_DISPLAY}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-    setHint(`Abriendo el cliente de correo: ${EMAIL_RECIPIENTS_DISPLAY}. La aplicación no envía el mensaje por sí sola.`);
+    setHint(`Prototipo: se abre el correo a ${EMAIL_RECIPIENT}. La sesión se conservará hasta disponer de confirmación real de envío; con el backend definitivo, el envío confirmado destruirá la sesión automáticamente.`);
     window.location.href = mailto;
   }
 
@@ -232,7 +229,7 @@
     if (event.target.closest?.('#prepareReportEmail')) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      prepareValidatedEmail();
+      prepareSendDestroy();
       return;
     }
 
