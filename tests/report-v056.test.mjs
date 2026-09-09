@@ -32,6 +32,14 @@ test("V0.5.6 informe: la validación siempre requiere una acción explícita del
   assert.match(reportJs, /resetReportValidation\(\);/);
 });
 
+test("V0.5.6 informe: editar invalida cualquier validación previa", () => {
+  assert.match(reportJs, /function startSectionEditor[\s\S]*resetReportValidation\(\)/);
+  assert.match(reportJs, /function saveSectionEditor[\s\S]*resetReportValidation\(\)/);
+  assert.match(reportJs, /document\.addEventListener\('input',[\s\S]*report-section-input[\s\S]*resetReportValidation\(\)/);
+  assert.match(reportJs, /report-section-editing/);
+  assert.match(reportJs, /event\.target\.checked = false/);
+});
+
 test("V0.5.6 informe: assets de pantalla 3 están conectados", () => {
   assert.match(indexHtml, /report-v056\.css/);
   assert.match(indexHtml, /report-v056\.js/);
