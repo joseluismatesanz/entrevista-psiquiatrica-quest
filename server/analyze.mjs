@@ -112,6 +112,7 @@ async function requestParsedAssessment(client, baseParams) {
 }
 
 export async function analyzeTranscript(transcript, options = {}) {
+  const totalStartedAt = Date.now();
   if (typeof transcript !== "string" || transcript.trim().length < 20) {
     throw new TypeError("La transcripción debe contener texto suficiente para analizar.");
   }
@@ -139,11 +140,14 @@ export async function analyzeTranscript(transcript, options = {}) {
   const model = options.model || process.env.OPENAI_MODEL || defaultModel;
   const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
 
+  const modelStartedAt = Date.now();
   const { parsed, response, attempts, parser } = await requestParsedAssessment(client, {
     model,
     store: false,
     background: false,
-    reasoning: { effort: "medium" },
+    // La salida es extracción estructurada con múltiples guardas deterministas posteriores.
+    // Low reduce latencia manteniendo razonamiento explícito para el núcleo clínico.
+    reasoning: { effort: "low" },
     max_output_tokens: 16000,
     input: [
       {
@@ -161,7 +165,9 @@ export async function analyzeTranscript(transcript, options = {}) {
     ],
     text: { format: textFormat },
   });
+  const modelMs = Date.now() - modelStartedAt;
 
+  const deterministicStartedAt = Date.now();
   const invariantResult = applyClinicalInvariants(parsed);
   let assessment = invariantResult.assessment;
   const warnings = [...invariantResult.warnings];
@@ -173,9 +179,12 @@ export async function analyzeTranscript(transcript, options = {}) {
   // En producción se contrasta cada nombre farmacológico con CIMA (AEMPS).
   // En pruebas con cliente inyectado no se toca la red salvo que se aporte un verificador explícito.
   const shouldVerifyMedications = !options.client || typeof options.medicationVerifier === "function";
+  let medicationMs = 0;
   if (shouldVerifyMedications) {
+    const medicationStartedAt = Date.now();
     const verifier = options.medicationVerifier || verifyAssessmentMedications;
     const medicationResult = await verifier(assessment, options.medicationVerificationOptions || {});
+    medicationMs = Date.now() - medicationStartedAt;
     assessment = medicationResult.assessment;
     warnings.push(...(medicationResult.warnings || []));
     medicationMeta = medicationResult.meta || medicationMeta;
@@ -216,6 +225,8 @@ export async function analyzeTranscript(transcript, options = {}) {
   warnings.push(...reportGroundResult.warnings);
 
   const violations = collectClinicalInvariantViolations(assessment);
+  const deterministicAndMedicationMs = Date.now() - deterministicStartedAt;
+  const deterministicOnlyMs = Math.max(0, deterministicAndMedicationMs - medicationMs);
 
   return {
     assessment,
@@ -233,6 +244,12 @@ export async function analyzeTranscript(transcript, options = {}) {
       mse_explicit_observation_grounded: true,
       psq_guardia_transcript_grounded: true,
       report_content_transcript_grounded: true,
+      performance_ms: {
+        structured_clinical_model: modelMs,
+        medication_verification: medicationMs,
+        deterministic_postprocessing: deterministicOnlyMs,
+        total_analysis: Date.now() - totalStartedAt,
+      },
       ...medicationMeta,
       ...postprocessResult.meta,
     },
