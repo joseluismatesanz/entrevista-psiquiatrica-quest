@@ -7,34 +7,36 @@ const [indexHtml, validationJs] = await Promise.all([
   readFile(new URL("../report-validation-v058.js", import.meta.url), "utf8"),
 ]);
 
-test("V0.5.6 validación: una edición exige un paso explícito de revisión antes de volver a validar", () => {
-  assert.match(validationJs, /reviewedRevision/);
-  assert.match(validationJs, /Cambios pendientes de revalidación/);
-  assert.match(validationJs, /He revisado los cambios/);
-  assert.match(validationJs, /hasUnreviewedChanges/);
-  assert.match(validationJs, /check\.disabled = editing \|\| pendingReview/);
+test("V0.5.6 validación: se sustituye la casilla visible por un botón explícito", () => {
+  assert.match(validationJs, /Validar informe/);
+  assert.match(validationJs, /hideLegacyValidationCheckbox/);
+  assert.match(validationJs, /checkline/);
+  assert.match(validationJs, /classList\.add\('hidden'\)/);
 });
 
-test("V0.5.6 validación: el bloqueo de la casilla se explica de forma visible", () => {
-  assert.match(validationJs, /Validación bloqueada hasta confirmar que has revisado los cambios/);
-  assert.match(validationJs, /Finaliza la edición para poder validar el informe/);
-  assert.match(validationJs, /function setValidationLabel/);
+test("V0.5.6 validación: validar bloquea la edición y habilita la copia", () => {
+  assert.match(validationJs, /function validateReport/);
+  assert.match(validationJs, /state\.validated = true/);
+  assert.match(validationJs, /copy\.disabled = false/);
+  assert.match(validationJs, /setEditLocked\(true\)/);
+  assert.match(validationJs, /Informe validado · edición bloqueada/);
 });
 
-test("V0.5.6 validación: confirmar cambios no valida; solo vuelve a habilitar la casilla", () => {
-  assert.match(validationJs, /function markChangesReviewed/);
-  assert.match(validationJs, /state\.reviewedRevision = state\.revision/);
-  assert.match(validationJs, /state\.validatedRevision = null/);
-  assert.match(validationJs, /Cambios revisados; falta la validación clínica/);
+test("V0.5.6 validación: reabrir edición invalida la validación", () => {
+  assert.match(validationJs, /Reabrir edición/);
+  assert.match(validationJs, /function reopenEditing/);
+  assert.match(validationJs, /setUnvalidated/);
+  assert.match(validationJs, /Cualquier cambio requerirá una nueva validación/);
 });
 
-test("V0.5.6 validación: la copia exige revisión y validación de la misma revisión", () => {
-  assert.match(validationJs, /state\.validatedRevision === state\.revision/);
-  assert.match(validationJs, /state\.reviewedRevision === state\.revision/);
-  assert.match(validationJs, /!isEditing\(\)/);
+test("V0.5.6 validación: los botones Editar desaparecen mientras el informe está validado", () => {
+  assert.match(validationJs, /function setEditLocked/);
+  assert.match(validationJs, /report-edit-button/);
+  assert.match(validationJs, /button\.disabled = locked/);
+  assert.match(validationJs, /button\.classList\.toggle\('hidden', locked\)/);
 });
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script", () => {
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-2/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-3/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });
