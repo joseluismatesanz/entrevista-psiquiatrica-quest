@@ -4,6 +4,7 @@
     'joseluis.matesanz@salud-juntaex.es',
     'jlmatesanzperez@gmail.com',
   ];
+  const EMAIL_RECIPIENTS_DISPLAY = EMAIL_RECIPIENTS.join('; ');
 
   function checkbox() {
     return document.getElementById('validateCheck');
@@ -38,9 +39,30 @@
     if (hint) hint.textContent = message;
   }
 
+  function configureCompactFooter(actions) {
+    const back = actions?.querySelector('[data-go="review"]');
+    if (back) {
+      back.id = 'backToReview';
+      back.textContent = '←';
+      back.classList.add('footer-back');
+      back.setAttribute('aria-label', 'Volver a categorización');
+      back.setAttribute('title', 'Volver a categorización');
+    }
+
+    const copy = copyButton();
+    if (copy) copy.textContent = 'Copiar';
+
+    const destroy = document.getElementById('destroySession');
+    if (destroy) destroy.textContent = 'DESTRUIR';
+
+    return { back, copy, destroy };
+  }
+
   function ensureActionButtons() {
     const actions = document.querySelector('.validation-card .actions');
     if (!actions) return {};
+
+    const { back, copy, destroy } = configureCompactFooter(actions);
 
     let validate = document.getElementById('validateReport');
     if (!validate) {
@@ -49,7 +71,8 @@
       validate.type = 'button';
       validate.className = 'primary';
       validate.textContent = 'Validar informe';
-      actions.prepend(validate);
+      if (back) back.after(validate);
+      else actions.prepend(validate);
     }
 
     let reopen = document.getElementById('reopenReport');
@@ -58,21 +81,9 @@
       reopen.id = 'reopenReport';
       reopen.type = 'button';
       reopen.className = 'secondary hidden';
-      reopen.textContent = 'Reabrir edición';
-      actions.prepend(reopen);
-    }
-
-    let download = document.getElementById('downloadReportTxt');
-    if (!download) {
-      download = document.createElement('button');
-      download.id = 'downloadReportTxt';
-      download.type = 'button';
-      download.className = 'secondary';
-      download.textContent = 'Descargar TXT';
-      download.disabled = true;
-      const copy = copyButton();
-      if (copy) copy.before(download);
-      else actions.append(download);
+      reopen.textContent = 'Re-editar';
+      if (back) back.after(reopen);
+      else actions.prepend(reopen);
     }
 
     let email = document.getElementById('prepareReportEmail');
@@ -81,14 +92,13 @@
       email.id = 'prepareReportEmail';
       email.type = 'button';
       email.className = 'primary';
-      email.textContent = 'Preparar correo';
+      email.textContent = 'Enviar @';
       email.disabled = true;
-      const destroy = document.getElementById('destroySession');
       if (destroy) destroy.before(email);
       else actions.append(email);
     }
 
-    return { validate, reopen, download, email };
+    return { validate, reopen, email, back, copy, destroy };
   }
 
   function hideLegacyValidationCheckbox() {
@@ -124,11 +134,10 @@
 
     const check = checkbox();
     const copy = copyButton();
-    const { validate, reopen, download, email } = ensureActionButtons();
+    const { validate, reopen, email } = ensureActionButtons();
 
     if (check) check.checked = false;
     if (copy) copy.disabled = true;
-    if (download) download.disabled = true;
     if (email) email.disabled = true;
     if (validate) validate.classList.remove('hidden');
     if (reopen) reopen.classList.add('hidden');
@@ -151,11 +160,10 @@
 
     const check = checkbox();
     const copy = copyButton();
-    const { validate, reopen, download, email } = ensureActionButtons();
+    const { validate, reopen, email } = ensureActionButtons();
 
     if (check) check.checked = true;
     if (copy) copy.disabled = false;
-    if (download) download.disabled = false;
     if (email) email.disabled = false;
     if (validate) validate.classList.add('hidden');
     if (reopen) reopen.classList.remove('hidden');
@@ -163,16 +171,16 @@
     setEditLocked(true);
     if (badge()) badge().textContent = 'Informe validado · edición bloqueada';
     if (eyebrow()) eyebrow().textContent = 'DOCUMENTO CLÍNICO VALIDADO';
-    setHint('Informe validado. Puedes copiarlo, descargarlo o preparar el correo a los dos destinatarios configurados.');
+    setHint(`Informe validado. Destinatarios: ${EMAIL_RECIPIENTS_DISPLAY}`);
   }
 
   function reopenEditing() {
-    setUnvalidated('Edición reabierta. Cualquier cambio requerirá una nueva validación antes de copiar, descargar o preparar el correo.');
+    setUnvalidated('Edición reabierta. Cualquier cambio requerirá una nueva validación antes de copiar o enviar el informe.');
   }
 
   function invalidateBeforeLeavingReport() {
     if (!state.validated) return;
-    setUnvalidated('Has salido del informe validado. Al volver, deberás validarlo de nuevo antes de copiarlo, descargarlo o preparar el correo.');
+    setUnvalidated('Has salido del informe validado. Al volver, deberás validarlo de nuevo antes de copiarlo o enviarlo.');
   }
 
   function resetValidation() {
@@ -188,29 +196,6 @@
     return (editor()?.innerText || editor()?.textContent || '').trim();
   }
 
-  function downloadValidatedTxt() {
-    const download = document.getElementById('downloadReportTxt');
-    const text = getValidatedReportText();
-
-    if (!text) {
-      if (download) download.disabled = true;
-      setHint('El informe debe estar validado antes de descargarlo.');
-      return;
-    }
-
-    const blob = new Blob([`\uFEFF${text}\n`], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'informe_clinico_validado.txt';
-    link.style.display = 'none';
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-    setHint('TXT generado localmente en el navegador. La aplicación no conserva una copia del archivo.');
-  }
-
   function prepareValidatedEmail() {
     const emailButton = document.getElementById('prepareReportEmail');
     const text = getValidatedReportText();
@@ -223,9 +208,9 @@
 
     const subject = 'Informe clínico validado';
     const body = `Informe clínico validado\n\n${text}`;
-    const mailto = `mailto:${EMAIL_RECIPIENTS.join(',')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const mailto = `mailto:${EMAIL_RECIPIENTS_DISPLAY}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-    setHint(`Abriendo el cliente de correo con los destinatarios ${EMAIL_RECIPIENTS.join(' y ')}. La aplicación no envía el mensaje por sí sola.`);
+    setHint(`Abriendo el cliente de correo: ${EMAIL_RECIPIENTS_DISPLAY}. La aplicación no envía el mensaje por sí sola.`);
     window.location.href = mailto;
   }
 
@@ -241,13 +226,6 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       reopenEditing();
-      return;
-    }
-
-    if (event.target.closest?.('#downloadReportTxt')) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      downloadValidatedTxt();
       return;
     }
 
@@ -277,10 +255,8 @@
     if (!event.target.matches?.('.report-section-input')) return;
     const copy = copyButton();
     const check = checkbox();
-    const download = document.getElementById('downloadReportTxt');
     const email = document.getElementById('prepareReportEmail');
     if (copy) copy.disabled = true;
-    if (download) download.disabled = true;
     if (email) email.disabled = true;
     if (check) check.checked = false;
     state.validated = false;
