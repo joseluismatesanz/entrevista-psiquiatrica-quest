@@ -14,11 +14,12 @@ test("V0.5.6 informe: el texto clínico se presenta por apartados sin regenerar 
   assert.match(reportJs, /escapeHtml\(section\.body/);
 });
 
-test("V0.5.6 informe: los apartados mantienen una presentación clínica de una sola columna", () => {
+test("V0.5.6 informe: los apartados mantienen una presentación clínica compacta de una sola columna", () => {
   assert.match(reportCss, /\.report-section-block/);
   assert.match(reportCss, /\.report-section-block h3/);
   assert.match(reportCss, /\.report-section-block p/);
-  assert.match(reportCss, /white-space:pre-wrap/);
+  assert.match(reportCss, /\.structured-report-editor\{[^}]*white-space:normal/);
+  assert.match(reportCss, /\.report-section-block p\{[^}]*white-space:pre-wrap/);
   assert.doesNotMatch(reportCss, /grid-template-columns:[^}]*repeat\(2/i);
 });
 
