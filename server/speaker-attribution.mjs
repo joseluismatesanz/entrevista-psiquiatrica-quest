@@ -2,7 +2,7 @@ import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { resolveModelAuth } from "./model-auth.mjs";
 
-export const SPEAKER_ROLE_MODEL = "gpt-5.6";
+export const SPEAKER_ROLE_MODEL = "gpt-5.6-luna";
 
 const RoleSchema = z.enum([
   "psychiatrist",
@@ -209,7 +209,8 @@ async function resolveClient(options = {}) {
   return {
     client: new OpenAI({ apiKey: auth.apiKey, ...(auth.baseURL ? { baseURL: auth.baseURL } : {}) }),
     transport: auth.transport,
-    model: options.model || process.env.SPEAKER_ROLE_MODEL || process.env.OPENAI_MODEL || auth.defaultModel || SPEAKER_ROLE_MODEL,
+    // Clasificación estrecha: modelo rápido dedicado, sin heredar el modelo clínico principal.
+    model: options.model || process.env.SPEAKER_ROLE_MODEL || SPEAKER_ROLE_MODEL,
   };
 }
 
