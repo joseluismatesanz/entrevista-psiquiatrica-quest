@@ -25,13 +25,21 @@ PACIENTE: De acuerdo, acepto la valoración.
 MADRE: Yo también estoy de acuerdo.`;
 
   const button = document.getElementById('loadCase3');
-  if (!button) return;
+  if (button) {
+    button.addEventListener('click', () => {
+      document.getElementById('speakerMappingCard')?.classList.add('hidden');
+      const area = document.getElementById('caseText');
+      if (area) area.value = CASE3_THREE_SOURCES;
+      const message = document.getElementById('sessionMessage');
+      if (message) message.textContent = 'Caso 3 cargado: tres fuentes ficticias (Psiquiatra, Paciente y Madre).';
+    });
+  }
 
-  button.addEventListener('click', () => {
-    document.getElementById('speakerMappingCard')?.classList.add('hidden');
-    const area = document.getElementById('caseText');
-    if (area) area.value = CASE3_THREE_SOURCES;
-    const message = document.getElementById('sessionMessage');
-    if (message) message.textContent = 'Caso 3 cargado: tres fuentes ficticias (Psiquiatra, Paciente y Madre).';
-  });
+  if (!document.querySelector('script[data-privacy-test-bank]')) {
+    const script = document.createElement('script');
+    script.src = 'fixture-privacy-bank.js?v=20260909-1';
+    script.async = false;
+    script.dataset.privacyTestBank = 'true';
+    document.body.append(script);
+  }
 })();
