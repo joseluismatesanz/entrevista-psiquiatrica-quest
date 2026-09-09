@@ -141,6 +141,13 @@
     block.classList.toggle('report-section-empty', EMPTY_SECTION_TEXTS.has(String(body || '').trim().toLowerCase()));
   }
 
+  function resetReportValidation() {
+    const checkbox = document.getElementById('validateCheck');
+    const copyButton = document.getElementById('copyReport');
+    if (checkbox) checkbox.checked = false;
+    if (copyButton) copyButton.disabled = true;
+  }
+
   function closeSectionEditor(block) {
     block.classList.remove('report-section-editing');
     block.querySelector('.report-section-text')?.classList.remove('hidden');
@@ -154,6 +161,7 @@
     const input = block.querySelector('.report-section-input');
     if (!text || !input) return;
 
+    resetReportValidation();
     input.value = text.textContent || '';
     text.classList.add('hidden');
     input.classList.remove('hidden');
@@ -232,13 +240,6 @@
     }).filter(Boolean).join('\n\n');
   }
 
-  function resetReportValidation() {
-    const checkbox = document.getElementById('validateCheck');
-    const copyButton = document.getElementById('copyReport');
-    if (checkbox) checkbox.checked = false;
-    if (copyButton) copyButton.disabled = true;
-  }
-
   function refreshReportScreen() {
     resetReportValidation();
     normalizeReportHeading();
@@ -268,6 +269,21 @@
     const navigation = event.target.closest('[data-go="report"], [data-step="report"]');
     if (navigation) setTimeout(refreshReportScreen, 0);
   });
+
+  document.addEventListener('input', (event) => {
+    if (event.target.matches?.('.report-section-input')) resetReportValidation();
+  });
+
+  const validationCheck = document.getElementById('validateCheck');
+  validationCheck?.addEventListener('change', (event) => {
+    if (!event.target.checked) return;
+    const editor = document.getElementById('reportEditor');
+    if (editor?.querySelector('.report-section-editing')) {
+      event.target.checked = false;
+      const copy = document.getElementById('copyReport');
+      if (copy) copy.disabled = true;
+    }
+  }, { capture: true });
 
   const copyButton = document.getElementById('copyReport');
   copyButton?.addEventListener('click', async (event) => {
