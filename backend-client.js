@@ -403,6 +403,10 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || `Error del backend (${response.status})`);
+      if (typeof payload.deidentified_transcript === 'string' && payload.deidentified_transcript.trim()) {
+        $('caseText').value = payload.deidentified_transcript;
+        $('sessionMessage').textContent = 'Transcripción desidentificada aplicada. Al volver a Entrevista puedes comprobar literalmente la máscara XXXXXXXXXXX y las entidades conservadas.';
+      }
       state.result = payload;
       renderReview(payload);
       showScreen('review');
