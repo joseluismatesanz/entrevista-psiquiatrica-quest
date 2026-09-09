@@ -3,7 +3,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { resolveModelAuth } from "./model-auth.mjs";
 
 export const PERSON_NAME_MASK = "XXXXXXXXXXX";
-export const PERSON_NAME_REDACTION_MODEL = "gpt-5.6";
+export const PERSON_NAME_REDACTION_MODEL = "gpt-5.6-luna";
 
 const RedactionItemSchema = z.object({
   segment_id: z.string(),
@@ -53,7 +53,9 @@ async function resolveClient(options = {}) {
   return {
     client: new OpenAI({ apiKey: auth.apiKey, ...(auth.baseURL ? { baseURL: auth.baseURL } : {}) }),
     transport: auth.transport,
-    model: options.model || process.env.PERSON_NAME_REDACTION_MODEL || process.env.OPENAI_MODEL || auth.defaultModel || PERSON_NAME_REDACTION_MODEL,
+    // Tarea estrecha y fuertemente acotada: usamos un modelo de baja latencia
+    // independiente del modelo clínico principal. Puede sobrescribirse con su env específica.
+    model: options.model || process.env.PERSON_NAME_REDACTION_MODEL || PERSON_NAME_REDACTION_MODEL,
   };
 }
 
