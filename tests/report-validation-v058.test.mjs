@@ -14,11 +14,12 @@ test("V0.5.6 validación: se sustituye la casilla visible por un botón explíci
   assert.match(validationJs, /classList\.add\('hidden'\)/);
 });
 
-test("V0.5.6 validación: validar bloquea la edición y habilita copia y descarga", () => {
+test("V0.5.6 validación: validar bloquea la edición y habilita copia, descarga y correo", () => {
   assert.match(validationJs, /function validateReport/);
   assert.match(validationJs, /state\.validated = true/);
   assert.match(validationJs, /copy\.disabled = false/);
   assert.match(validationJs, /download\.disabled = false/);
+  assert.match(validationJs, /email\.disabled = false/);
   assert.match(validationJs, /setEditLocked\(true\)/);
   assert.match(validationJs, /Informe validado · edición bloqueada/);
 });
@@ -55,7 +56,18 @@ test("V0.5.6 exportación: TXT solo se genera desde un informe validado y de for
   assert.match(validationJs, /La aplicación no conserva una copia del archivo/);
 });
 
+test("V0.5.6 correo: prepara un mensaje solo desde informe validado a los dos destinatarios configurados", () => {
+  assert.match(validationJs, /Preparar correo/);
+  assert.match(validationJs, /joseluis\.matesanz@salud-juntaex\.es/);
+  assert.match(validationJs, /jlmatesanzperez@gmail\.com/);
+  assert.match(validationJs, /function prepareValidatedEmail/);
+  assert.match(validationJs, /mailto:/);
+  assert.match(validationJs, /encodeURIComponent\(subject\)/);
+  assert.match(validationJs, /encodeURIComponent\(body\)/);
+  assert.match(validationJs, /La aplicación no envía el mensaje por sí sola/);
+});
+
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script", () => {
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-5/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-6/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });
