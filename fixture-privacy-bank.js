@@ -20,6 +20,45 @@
     },
   };
 
+  function ensureControls() {
+    const host = document.querySelector('.fixture-buttons');
+    if (!host || document.getElementById('privacyTestBank')) return;
+
+    const wrapper = document.createElement('span');
+    wrapper.className = 'privacy-test-bank';
+    wrapper.setAttribute('aria-label', 'Banco de pruebas de privacidad');
+
+    const selector = document.createElement('select');
+    selector.id = 'privacyTestBank';
+    selector.setAttribute('aria-label', 'Seleccionar caso de privacidad');
+    selector.innerHTML = `
+      <option value="A">A · Nombres</option>
+      <option value="B">B · Ambiguos</option>
+      <option value="C">C · Entidades</option>
+    `;
+
+    const loadButton = document.createElement('button');
+    loadButton.id = 'loadPrivacyTest';
+    loadButton.type = 'button';
+    loadButton.className = 'secondary';
+    loadButton.textContent = 'Cargar';
+
+    wrapper.append(selector, loadButton);
+    host.append(wrapper);
+
+    if (!document.getElementById('privacyTestBankStyle')) {
+      const style = document.createElement('style');
+      style.id = 'privacyTestBankStyle';
+      style.textContent = `
+        .privacy-test-bank{display:inline-flex;gap:6px;align-items:center;padding-left:6px;border-left:1px solid #d6e3e6}
+        .privacy-test-bank select{border:1px solid #c8d9de;border-radius:11px;background:#fff;color:#294d61;padding:10px 11px;font-weight:750;max-width:170px}
+        .privacy-test-bank button{padding:10px 12px}
+        @media(max-width:720px){.privacy-test-bank{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:8px 0 0;border-left:0;border-top:1px solid #d6e3e6;margin-top:6px}.privacy-test-bank select{max-width:none;width:100%}}
+      `;
+      document.head.append(style);
+    }
+  }
+
   function resetSpeakerMappingUi() {
     document.getElementById('speakerMappingCard')?.classList.add('hidden');
     const fields = document.getElementById('speakerMappingFields');
@@ -46,6 +85,7 @@
     renderCriteria(testCase);
   }
 
+  ensureControls();
   document.getElementById('loadPrivacyTest')?.addEventListener('click', loadSelectedPrivacyCase);
   window.PRIVACY_TEST_CASES = PRIVACY_TEST_CASES;
 })();
