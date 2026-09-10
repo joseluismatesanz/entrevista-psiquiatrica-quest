@@ -34,7 +34,7 @@ test("rendimiento: prefetch solo reutiliza el análisis si la transcripción no 
 });
 
 test("rendimiento: el navegador fuerza una revisión fresca del cliente de privacidad", () => {
-  assert.match(index, /config\.js\?v=20260910-privacy-proof-1/);
+  assert.match(index, /config\.js\?v=20260910-realtime-1/);
 });
 
 test("privacidad combinada: conserva XXXXXXXXXXX y atribuye rol sin devolver nombre", async () => {
