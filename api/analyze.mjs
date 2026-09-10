@@ -14,9 +14,23 @@ function safeErrorMessage(error) {
   return message.length > 500 ? `${message.slice(0, 500)}…` : message;
 }
 
+const COMPLEX_CLINICAL_PATTERNS = [
+  /\b(?:suicid\w*|autoles\w*|autol[ií]tic\w*|matarse|morir|sobredosis|hacerse\s+daño)\b/i,
+  /\b(?:alucin\w*|delir\w*|psicos\w*|paranoi\w*|persecut\w*|voces|ideas?\s+de\s+referencia)\b/i,
+  /\b(?:heteroagres\w*|agresi[oó]n|violencia|contenci[oó]n|fuga|amenaz\w*)\b/i,
+  /\b(?:cannabis|coca[ií]na|anfetamin\w*|speed|mdma|ketamina|alcohol|benzodiacepin\w*|drogas)\b/i,
+  /\b(?:man[ií]a|maniforme|bipolar|esquizofren\w*)\b/i,
+  /\b(?:\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|ml|ui)\b|sertralina|risperidona|olanzapina|haloperidol|litio|lamotrigina|lorazepam)\b/i,
+];
+
+function useFastClinicalRoute(transcript) {
+  const text = String(transcript || "");
+  if (text.length > 5000) return false;
+  return !COMPLEX_CLINICAL_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 export default async function handler(req, res) {
   setPrivacyHeaders(res);
-
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "method_not_allowed" });
@@ -30,38 +44,25 @@ export default async function handler(req, res) {
     const transcript = body.transcript;
 
     if (typeof transcript !== "string" || transcript.trim().length < 20) {
-      return res.status(400).json({
-        error: "invalid_transcript",
-        stage,
-        message: "La transcripción debe contener texto suficiente para analizar.",
-      });
+      return res.status(400).json({ error: "invalid_transcript", stage, message: "La transcripción debe contener texto suficiente para analizar." });
     }
-
     if (transcript.length > 1_500_000) {
-      return res.status(413).json({
-        error: "transcript_too_large",
-        stage,
-        message: "La transcripción supera el tamaño permitido para esta fase de pruebas.",
-      });
+      return res.status(413).json({ error: "transcript_too_large", stage, message: "La transcripción supera el tamaño permitido para esta fase de pruebas." });
     }
 
-    // Toda entrada —también texto pegado manualmente— pasa por la misma capa de
-    // desidentificación antes de que pueda alimentar Organización o Informe.
     stage = "person_name_redaction";
     const redactionStartedAt = Date.now();
     const { redactPersonNamesInTranscript } = await import("../server/person-name-redaction.mjs");
     const redaction = await redactPersonNamesInTranscript(transcript);
     const redactionMs = Date.now() - redactionStartedAt;
 
-    // Importación diferida: si el bundle clínico no puede cargarse en Vercel,
-    // el error queda atrapado y llega al cliente como diagnóstico técnico legible.
     stage = "load_clinical_engine";
     const { analyzeTranscript } = await import("../server/analyze.mjs");
 
     stage = "clinical_analysis";
-    // No se registra ni persiste deliberadamente el texto de la entrevista.
+    const fastRoute = useFastClinicalRoute(redaction.transcript);
     const analysisStartedAt = Date.now();
-    const result = await analyzeTranscript(redaction.transcript);
+    const result = await analyzeTranscript(redaction.transcript, fastRoute ? { model: "gpt-5.6-luna" } : {});
     const clinicalAnalysisMs = Date.now() - analysisStartedAt;
 
     return res.status(200).json({
@@ -75,6 +76,7 @@ export default async function handler(req, res) {
         person_name_redaction_replacements: redaction.replacements,
         person_name_redaction_store: false,
         person_name_redaction_fail_closed: true,
+        adaptive_fast_route: fastRoute,
         request_performance_ms: {
           person_name_redaction: redactionMs,
           clinical_analysis: clinicalAnalysisMs,
@@ -85,21 +87,10 @@ export default async function handler(req, res) {
   } catch (error) {
     const isClientError = error instanceof SyntaxError || error instanceof TypeError;
     const status = stage === "load_clinical_engine" ? 500 : (isClientError ? 400 : 502);
-
     return res.status(status).json({
-      error:
-        stage === "load_clinical_engine"
-          ? "clinical_engine_unavailable"
-          : stage === "person_name_redaction"
-            ? "person_name_redaction_failed"
-            : safeErrorName(error),
+      error: stage === "load_clinical_engine" ? "clinical_engine_unavailable" : stage === "person_name_redaction" ? "person_name_redaction_failed" : safeErrorName(error),
       stage,
-      message:
-        stage === "load_clinical_engine"
-          ? "No se pudo cargar el motor clínico en el backend."
-          : stage === "person_name_redaction"
-            ? "No se pudo verificar la desidentificación de nombres personales. No se ha generado ningún documento."
-            : safeErrorMessage(error),
+      message: stage === "load_clinical_engine" ? "No se pudo cargar el motor clínico en el backend." : stage === "person_name_redaction" ? "No se pudo verificar la desidentificación de nombres personales. No se ha generado ningún documento." : safeErrorMessage(error),
     });
   }
 }
