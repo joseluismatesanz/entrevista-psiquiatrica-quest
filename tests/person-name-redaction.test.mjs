@@ -12,7 +12,7 @@ function mockClient(items) {
       async parse(params) {
         assert.equal(params.store, false);
         assert.equal(params.background, false);
-        assert.equal(params.reasoning.effort, "low");
+        assert.equal(params.reasoning.effort, "none");
         assert.match(params.instructions, /XXXXXXXXXXX/);
         return {
           status: "completed",
