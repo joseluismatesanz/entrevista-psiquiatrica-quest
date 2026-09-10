@@ -3,6 +3,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { resolveModelAuth } from "./model-auth.mjs";
 import { PERSON_NAME_MASK } from "./person-name-redaction.mjs";
 import { deduplicateClearAdjacentOverlaps } from "./speaker-attribution.mjs";
+import { anchorExplicitFamilyRole } from "./family-role-anchor.mjs";
 
 export const PRIVACY_ATTRIBUTION_MODEL = "gpt-5.6-luna";
 
@@ -84,6 +85,8 @@ ATRIBUCIÓN:
 - Usa contenido verbal, orden de turnos y acoustic_speaker solo como pista secundaria; una misma letra acústica puede contener personas distintas.
 - psychiatrist: preguntas/exploración/síntesis/plan del clínico; patient: primera persona sobre síntomas/historia propia.
 - mother/father/sibling/caregiver/family solo si el contexto lo hace explícito.
+- Si el psiquiatra identifica explícitamente al siguiente interlocutor como madre/padre/hermano, conserva ese parentesco; nunca lo rebajes a caregiver/family.
+- Si una persona dice explícitamente "soy su madre/padre/hermano", conserva ese parentesco.
 - nurse/police/security solo si es explícito; unknown si no puede saberse razonablemente.
 - confidence=high solo con evidencia contextual clara.
 - No diagnostiques ni resumas.
@@ -113,14 +116,27 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
   if (byId.size !== segments.length) throw new Error("El procesamiento privado no devolvió todos los segmentos.");
 
   let replacements = 0;
-  const attributedSegments = segments.map((segment) => {
+  let explicitFamilyRoleAnchors = 0;
+  const attributedSegments = segments.map((segment, index) => {
     const item = byId.get(segment.id);
     if (!item || item.residual_person_name) throw new Error("No se pudo verificar la eliminación de nombres personales.");
     const text = String(item.redacted_text || "").trim();
     if (!text) throw new Error("La desidentificación devolvió un fragmento vacío.");
     replacements += Number(item.replacements) || 0;
-    const role = ROLE_LABELS[item.role] ? item.role : "unknown";
-    const confidence = ["high", "medium", "low"].includes(item.confidence) ? item.confidence : "low";
+
+    const proposedRole = ROLE_LABELS[item.role] ? item.role : "unknown";
+    const previousItem = index > 0 ? byId.get(segments[index - 1].id) : null;
+    const role = anchorExplicitFamilyRole({
+      segments,
+      index,
+      proposedRole,
+      previousRole: previousItem?.role,
+    });
+    if (role !== proposedRole) explicitFamilyRoleAnchors += 1;
+
+    const confidence = role !== proposedRole
+      ? "high"
+      : (["high", "medium", "low"].includes(item.confidence) ? item.confidence : "low");
     const sourceSensitive = isSourceSensitive(text);
     return {
       ...segment,
@@ -157,6 +173,7 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
       fail_closed: true,
       automatic_role_attribution: true,
       critical_review_count: reviewItems.length,
+      explicit_family_role_anchors: explicitFamilyRoleAnchors,
       deduplicated_overlap_segments: deduplication.removed,
       request_id: response?._request_id || "",
     },
