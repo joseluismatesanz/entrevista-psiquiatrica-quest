@@ -53,8 +53,6 @@ async function resolveClient(options = {}) {
   return {
     client: new OpenAI({ apiKey: auth.apiKey, ...(auth.baseURL ? { baseURL: auth.baseURL } : {}) }),
     transport: auth.transport,
-    // Tarea estrecha y fuertemente acotada: usamos un modelo de baja latencia
-    // independiente del modelo clínico principal. Puede sobrescribirse con su env específica.
     model: options.model || process.env.PERSON_NAME_REDACTION_MODEL || PERSON_NAME_REDACTION_MODEL,
   };
 }
@@ -102,8 +100,8 @@ async function redactBatch(batch, runtime) {
     model: runtime.model,
     store: false,
     background: false,
-    reasoning: { effort: "low" },
-    max_output_tokens: Math.max(1800, Math.min(14000, batch.length * 220)),
+    reasoning: { effort: "none" },
+    max_output_tokens: Math.max(1200, Math.min(12000, batch.length * 190)),
     instructions: redactionInstructions(),
     input: [{
       role: "user",
