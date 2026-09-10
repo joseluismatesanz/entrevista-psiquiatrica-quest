@@ -42,6 +42,34 @@ export function useFastClinicalRoute(transcript) {
   return true;
 }
 
+function verifyLongInterviewBlocks(normalizedTranscript, rawBlocks) {
+  if (!Array.isArray(rawBlocks) || rawBlocks.length === 0) {
+    return { verified: false, count: 0 };
+  }
+  if (rawBlocks.length > 60) {
+    return { verified: false, count: rawBlocks.length };
+  }
+
+  const transcripts = [];
+  for (const raw of rawBlocks) {
+    const blockTranscript = typeof raw?.transcript === "string" ? raw.transcript.trim() : "";
+    const proof = typeof raw?.privacy_proof === "string" ? raw.privacy_proof : "";
+    if (!blockTranscript || blockTranscript.length > 100_000 || !proof) {
+      return { verified: false, count: rawBlocks.length };
+    }
+    if (!verifyPrivacyProof(blockTranscript, proof)) {
+      return { verified: false, count: rawBlocks.length };
+    }
+    transcripts.push(blockTranscript);
+  }
+
+  const joined = transcripts.join("\n").trim();
+  return {
+    verified: joined === normalizedTranscript,
+    count: rawBlocks.length,
+  };
+}
+
 export default async function handler(req, res) {
   setPrivacyHeaders(res);
   if (req.method !== "POST") {
@@ -64,13 +92,15 @@ export default async function handler(req, res) {
     }
 
     const normalizedTranscript = transcript.trim();
-    const privacyProofVerified = verifyPrivacyProof(normalizedTranscript, body.privacy_proof);
+    const singleProofVerified = verifyPrivacyProof(normalizedTranscript, body.privacy_proof);
+    const blockProofs = verifyLongInterviewBlocks(normalizedTranscript, body.verified_blocks);
+    const privacyProofVerified = singleProofVerified || blockProofs.verified;
 
     let safeTranscript = normalizedTranscript;
     let redactionMs = 0;
     let redactionMeta = {
       mask: "XXXXXXXXXXX",
-      model: "verified-upstream-audio",
+      model: blockProofs.verified ? "verified-upstream-audio-blocks" : "verified-upstream-audio",
       replacements: 0,
     };
 
@@ -110,6 +140,8 @@ export default async function handler(req, res) {
         person_name_redaction_fail_closed: true,
         privacy_proof_verified: privacyProofVerified,
         duplicate_redaction_skipped: privacyProofVerified,
+        long_interview_block_proofs_verified: blockProofs.verified,
+        long_interview_verified_block_count: blockProofs.verified ? blockProofs.count : 0,
         adaptive_fast_route: fastRoute,
         request_performance_ms: {
           person_name_redaction: redactionMs,
