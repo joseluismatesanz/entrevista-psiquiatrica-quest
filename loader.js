@@ -6,7 +6,7 @@
     window.fetch = (...args) => {
       const target = args[0];
       const url = typeof target === 'string' ? target : String(target?.url || '');
-      if (window.__CLINICAL_SESSION_DESTROYING && /\/api\/(?:transcribe|analyze)(?:$|[/?#])/i.test(url)) {
+      if (window.__CLINICAL_SESSION_DESTROYING && /\/api\/(?:transcribe(?:-block)?|analyze)(?:$|[/?#])/i.test(url)) {
         return Promise.reject(new DOMException('Sesión destruida: solicitud cancelada.', 'AbortError'));
       }
       return nativeFetch(...args);
