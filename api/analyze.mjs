@@ -1,3 +1,5 @@
+import { verifyPrivacyProof } from "../server/privacy-proof.mjs";
+
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
   res.setHeader("Pragma", "no-cache");
@@ -50,32 +52,53 @@ export default async function handler(req, res) {
       return res.status(413).json({ error: "transcript_too_large", stage, message: "La transcripción supera el tamaño permitido para esta fase de pruebas." });
     }
 
-    stage = "person_name_redaction";
-    const redactionStartedAt = Date.now();
-    const { redactPersonNamesInTranscript } = await import("../server/person-name-redaction.mjs");
-    const redaction = await redactPersonNamesInTranscript(transcript);
-    const redactionMs = Date.now() - redactionStartedAt;
+    const normalizedTranscript = transcript.trim();
+    const privacyProofVerified = verifyPrivacyProof(normalizedTranscript, body.privacy_proof);
+
+    let safeTranscript = normalizedTranscript;
+    let redactionMs = 0;
+    let redactionMeta = {
+      mask: "XXXXXXXXXXX",
+      model: "verified-upstream-audio",
+      replacements: 0,
+    };
+
+    if (!privacyProofVerified) {
+      stage = "person_name_redaction";
+      const redactionStartedAt = Date.now();
+      const { redactPersonNamesInTranscript } = await import("../server/person-name-redaction.mjs");
+      const redaction = await redactPersonNamesInTranscript(normalizedTranscript);
+      redactionMs = Date.now() - redactionStartedAt;
+      safeTranscript = redaction.transcript;
+      redactionMeta = {
+        mask: redaction.meta.mask,
+        model: redaction.meta.model,
+        replacements: redaction.replacements,
+      };
+    }
 
     stage = "load_clinical_engine";
     const { analyzeTranscript } = await import("../server/analyze.mjs");
 
     stage = "clinical_analysis";
-    const fastRoute = useFastClinicalRoute(redaction.transcript);
+    const fastRoute = useFastClinicalRoute(safeTranscript);
     const analysisStartedAt = Date.now();
-    const result = await analyzeTranscript(redaction.transcript, fastRoute ? { model: "gpt-5.6-luna" } : {});
+    const result = await analyzeTranscript(safeTranscript, fastRoute ? { model: "gpt-5.6-luna" } : {});
     const clinicalAnalysisMs = Date.now() - analysisStartedAt;
 
     return res.status(200).json({
       ...result,
-      deidentified_transcript: redaction.transcript,
+      deidentified_transcript: safeTranscript,
       meta: {
         ...(result?.meta || {}),
         person_name_redaction_enabled: true,
-        person_name_redaction_mask: redaction.meta.mask,
-        person_name_redaction_model: redaction.meta.model,
-        person_name_redaction_replacements: redaction.replacements,
+        person_name_redaction_mask: redactionMeta.mask,
+        person_name_redaction_model: redactionMeta.model,
+        person_name_redaction_replacements: redactionMeta.replacements,
         person_name_redaction_store: false,
         person_name_redaction_fail_closed: true,
+        privacy_proof_verified: privacyProofVerified,
+        duplicate_redaction_skipped: privacyProofVerified,
         adaptive_fast_route: fastRoute,
         request_performance_ms: {
           person_name_redaction: redactionMs,
