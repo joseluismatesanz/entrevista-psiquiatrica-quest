@@ -42,7 +42,7 @@
         <div>
           <p class="section-label">ENTRADA DESDE MÓVIL · PILOTO V0.5</p>
           <h2>Entrevista clínica por audio</h2>
-          <p class="muted">Prueba de micrófono de hasta 2 minutos. Cuando Realtime está disponible, el audio se transcribe durante la entrevista; se mantiene una copia efímera en memoria solo como respaldo y no se almacena deliberadamente en la aplicación.</p>
+          <p class="muted">Prueba de micrófono de hasta 2 minutos. El audio permanece en memoria solo hasta obtener la transcripción y no se almacena deliberadamente en la aplicación.</p>
         </div>
         <button id="recordButton" class="record-button" type="button" aria-pressed="false">
           <span class="record-dot"></span>
@@ -55,7 +55,7 @@
       <div id="speakerMappingCard" class="card speaker-card hidden">
         <p class="section-label">ATRIBUCIÓN AUTOMÁTICA DE INTERLOCUTORES</p>
         <h2>¿Quién aporta cada información?</h2>
-        <p class="muted">El sistema atribuye automáticamente los roles clínicos por el contenido y el contexto, y solo pide revisión si una fuente dudosa puede cambiar una decisión clínica. En el modo batch, la diarización acústica se usa únicamente como pista adicional.</p>
+        <p class="muted">La diarización acústica es solo una pista. El sistema atribuye automáticamente los roles clínicos por el contenido y el contexto, y solo pide revisión si una fuente dudosa puede cambiar una decisión clínica.</p>
         <div id="speakerMappingFields" class="speaker-mapping-grid"></div>
         <div class="actions">
           <button id="applySpeakerMapping" class="primary" type="button">Confirmar fuentes pendientes</button>
@@ -152,13 +152,11 @@
       </div>
     </section>
   </main>
-  <script src="config.js?v=20260910-realtime-1"></script>
+  <script src="config.js?v=20260910-privacy-proof-1"></script>
   <script src="fixture-loader.js"></script>
   <script src="fixture-case3.js"></script>
-  <script src="semantic-role-ui.js?v=20260910-realtime-1"></script>
-  <script src="realtime-audio.js?v=20260910-realtime-1"></script>
-  <script src="realtime-recorder-controller.js?v=20260910-realtime-1"></script>
-  <script src="loader.js?v=20260910-realtime-1"></script>
+  <script src="semantic-role-ui.js"></script>
+  <script src="loader.js"></script>
   <script src="organization-v055.js"></script>
   <script src="report-v056.js?v=20260909-3"></script>
   <script src="report-validation-v058.js?v=20260909-10"></script>

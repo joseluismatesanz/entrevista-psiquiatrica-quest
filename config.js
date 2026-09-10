@@ -11,7 +11,6 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
 
   const nativeFetch = window.fetch.bind(window);
   const samples = { audio: null, analysis: null };
-  const TRANSCRIPTION_RE = /\/api\/(?:transcribe|finalize-realtime-transcript)(?:$|[?#])/i;
   const seconds = (ms) => Number.isFinite(Number(ms)) ? `${(Number(ms) / 1000).toFixed(1)} s` : '—';
 
   function ensurePanel() {
@@ -39,11 +38,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
     const parts = [];
     if (samples.audio) {
       const p = samples.audio.server || {};
-      if (samples.audio.realtime) {
-        parts.push(`Audio post-fin navegador ${seconds(samples.audio.roundTripMs)} · transcripción durante la entrevista · privacidad+voces ${seconds(p.privacy_and_speaker_attribution)} · servidor ${seconds(p.total_audio_pipeline)} · Realtime`);
-      } else {
-        parts.push(`Audio navegador ${seconds(samples.audio.roundTripMs)} · transcripción ${seconds(p.transcription)} · privacidad+voces ${seconds(p.privacy_and_speaker_attribution)} · servidor ${seconds(p.total_audio_pipeline)} · batch`);
-      }
+      parts.push(`Audio navegador ${seconds(samples.audio.roundTripMs)} · transcripción ${seconds(p.transcription)} · privacidad+voces ${seconds(p.privacy_and_speaker_attribution)} · servidor ${seconds(p.total_audio_pipeline)}`);
     }
     if (samples.analysis) {
       const request = samples.analysis.request || {};
@@ -61,7 +56,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
 
   window.fetch = async (input, init = {}) => {
     const url = typeof input === 'string' ? input : String(input?.url || '');
-    const isAudio = TRANSCRIPTION_RE.test(url);
+    const isAudio = /\/api\/transcribe(?:$|[?#])/i.test(url);
     const isAnalysis = /\/api\/analyze(?:$|[?#])/i.test(url);
     if (!isAudio && !isAnalysis) return nativeFetch(input, init);
 
@@ -71,13 +66,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
 
     response.clone().json().then((payload) => {
       if (!response.ok || !payload) return;
-      if (isAudio) {
-        samples.audio = {
-          roundTripMs,
-          server: payload?.meta?.performance_ms || {},
-          realtime: Boolean(payload?.meta?.realtime_transcription),
-        };
-      }
+      if (isAudio) samples.audio = { roundTripMs, server: payload?.meta?.performance_ms || {} };
       if (isAnalysis) {
         samples.analysis = {
           roundTripMs,
@@ -99,7 +88,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
   });
 })();
 
-// Latencia percibida y privacidad: las vías batch y Realtime devuelven texto ya desidentificado
+// Latencia percibida y privacidad: /api/transcribe devuelve texto ya desidentificado
 // junto con una prueba criptográfica efímera ligada exactamente a ese texto. El navegador
 // conserva ambos solo en memoria. /api/analyze puede saltarse la segunda anonimización
 // únicamente cuando el servidor valida esa prueba. Cualquier edición cambia el texto y
@@ -110,7 +99,6 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
   const nativeFetch = window.fetch.bind(window);
   const prefetched = new Map();
   const privacyProofs = new Map();
-  const TRANSCRIPTION_RE = /\/api\/(?:transcribe|finalize-realtime-transcript)(?:$|[?#])/i;
   window.__CLINICAL_ANALYSIS_PREFETCH = prefetched;
 
   function bodyFromInit(init) {
@@ -163,7 +151,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
 
     const response = await nativeFetch(input, init);
 
-    if (method === 'POST' && response.ok && TRANSCRIPTION_RE.test(url)) {
+    if (method === 'POST' && response.ok && /\/api\/transcribe(?:$|[?#])/.test(url)) {
       response.clone().json().then((payload) => {
         const transcript = typeof payload?.transcript === 'string' ? payload.transcript.trim() : '';
         const proof = typeof payload?.privacy_proof === 'string' ? payload.privacy_proof : '';
