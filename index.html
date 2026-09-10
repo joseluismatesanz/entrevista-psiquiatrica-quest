@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#eaf4f5" />
+  <title>Salud Mental · Asistente clínico V0.5.6</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="organization-v055.css" />
+  <link rel="stylesheet" href="report-v056.css?v=20260909-4" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="brand-header">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 120 120" role="img">
+          <path d="M60 104C37 88 22 71 22 49c0-15 10-27 25-27 7 0 12 3 17 9 5-6 11-9 18-9 14 0 25 12 25 27 0 22-17 40-47 55Z" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M48 38c-9 4-13 12-10 20m23-29c-8 4-11 11-8 18m16-12c8 3 12 10 10 18M45 63c5-5 10-5 15 0m0 0c5-5 10-5 15 0M60 44v41" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="brand-copy">
+        <p class="eyebrow">PROTOTIPO CLÍNICO · V0.5.6</p>
+        <h1>Salud Mental</h1>
+        <p>Asistente de organización de entrevista psiquiátrica</p>
+      </div>
+      <div class="privacy-chip">● Sesión efímera</div>
+    </header>
+
+    <section class="privacy-banner">
+      <strong>Privacidad por diseño</strong>
+      <span>Sin historial clínico · sin persistencia local deliberada · nombres de personas enmascarados como XXXXXXXXXXX antes de generar documentos · fase de desarrollo: usar únicamente texto o audio ficticio/previamente anonimizado.</span>
+    </section>
+
+    <nav class="steps" aria-label="Flujo de trabajo">
+      <button class="step active" data-step="input">1. Entrevista</button>
+      <button class="step" data-step="review">2. Organización</button>
+      <button class="step" data-step="report">3. Informe</button>
+    </nav>
+
+    <section id="screen-input" class="screen active">
+      <div class="card recorder-card">
+        <div>
+          <p class="section-label">ENTRADA DESDE MÓVIL · PILOTO V0.5</p>
+          <h2>Entrevista clínica por audio</h2>
+          <p class="muted">Prueba de micrófono de hasta 2 minutos. El audio permanece en memoria solo hasta obtener la transcripción y no se almacena deliberadamente en la aplicación.</p>
+        </div>
+        <button id="recordButton" class="record-button" type="button" aria-pressed="false">
+          <span class="record-dot"></span>
+          <span id="recordButtonLabel">Iniciar entrevista</span>
+          <small id="recordButtonStatus">Máx. 2 min · audio ficticio</small>
+        </button>
+        <p id="recordingStatus" class="muted small recorder-status">Micrófono preparado para una prueba ficticia.</p>
+      </div>
+
+      <div id="speakerMappingCard" class="card speaker-card hidden">
+        <p class="section-label">ATRIBUCIÓN AUTOMÁTICA DE INTERLOCUTORES</p>
+        <h2>¿Quién aporta cada información?</h2>
+        <p class="muted">La diarización acústica es solo una pista. El sistema atribuye automáticamente los roles clínicos por el contenido y el contexto, y solo pide revisión si una fuente dudosa puede cambiar una decisión clínica.</p>
+        <div id="speakerMappingFields" class="speaker-mapping-grid"></div>
+        <div class="actions">
+          <button id="applySpeakerMapping" class="primary" type="button">Confirmar fuentes pendientes</button>
+        </div>
+        <p id="speakerMappingMessage" class="muted small"></p>
+      </div>
+
+      <div class="card">
+        <div class="row-between">
+          <div>
+            <p class="section-label">TRANSCRIPCIÓN DE PRUEBA</p>
+            <h2>Revisar o pegar entrevista completa</h2>
+          </div>
+          <div class="fixture-buttons" aria-label="Casos ficticios de regresión">
+            <button id="loadDemo" class="secondary" type="button">Ejemplo breve</button>
+            <button id="loadCase1" class="secondary" type="button">Caso 1 completo</button>
+            <button id="loadCase2" class="secondary" type="button">Caso 2 completo</button>
+            <button id="loadCase3" class="secondary" type="button">Caso 3 · 3 fuentes</button>
+          </div>
+        </div>
+        <textarea id="caseText" rows="18" spellcheck="false" placeholder="PSIQUIATRA: ...\nPACIENTE: ...\nMADRE: ...\nHERMANO: ..."></textarea>
+        <div class="analysis-principle">
+          <b>Prioridad del motor:</b> clasificar → discriminar relevancia → atribuir fuente → sintetizar → redactar. Nunca volcar la transcripción completa en «Enfermedad actual».
+        </div>
+        <p class="muted small">La atribución automática puede abstenerse si la fuente no está clara. Solo las ambigüedades clínicamente relevantes bloquean el análisis. Los casos completos de texto pueden tardar varios minutos.</p>
+        <div class="actions">
+          <button id="destroyInput" class="danger secondary-danger" type="button">Borrar sesión</button>
+          <button id="analyzeCase" class="primary" type="button">Organizar información clínica</button>
+        </div>
+        <p id="sessionMessage" class="muted small"></p>
+      </div>
+    </section>
+
+    <section id="screen-review" class="screen">
+      <div class="card">
+        <p class="section-label">MAPA DE CATEGORIZACIÓN</p>
+        <h2>Información relevante distribuida por apartados</h2>
+        <p class="muted">Aquí puedes comprobar, antes de generar el informe, que la información no se ha concentrado en un único bloque.</p>
+        <div id="routingGrid" class="routing-grid"></div>
+      </div>
+
+      <div class="review-grid">
+        <article class="card">
+          <p class="section-label">FUENTES</p>
+          <h2>Quién aporta información</h2>
+          <div id="sourcesList" class="tag-list"></div>
+        </article>
+        <article class="card">
+          <p class="section-label">DATOS NO EXPLORADOS</p>
+          <h2>No completar por inferencia</h2>
+          <ul id="missingList" class="clinical-list"></ul>
+        </article>
+        <article class="card warning-card">
+          <p class="section-label">DISCREPANCIAS</p>
+          <h2>Versiones que deben conservarse</h2>
+          <ul id="conflictList" class="clinical-list"></ul>
+        </article>
+        <article class="card alert-card">
+          <p class="section-label">SEGURIDAD</p>
+          <h2>Elementos que requieren revisión clínica</h2>
+          <ul id="alertList" class="clinical-list"></ul>
+        </article>
+      </div>
+      <div class="actions sticky-actions">
+        <button class="secondary" data-go="input">Volver a entrevista</button>
+        <button class="primary" data-go="report">Generar borrador de informe</button>
+      </div>
+    </section>
+
+    <section id="screen-report" class="screen">
+      <section id="reportPendingBanner" class="report-pending-banner hidden" aria-live="polite"></section>
+
+      <div class="card report-card">
+        <div class="row-between report-heading">
+          <div>
+            <p class="section-label">DOCUMENTO CLÍNICO PENDIENTE DE REVISIÓN</p>
+            <h2>Borrador de informe clínico</h2>
+          </div>
+          <span class="draft-badge">Pendiente de validación profesional</span>
+        </div>
+        <div id="reportEditor" class="report-editor" contenteditable="true" role="textbox" aria-label="Informe clínico editable"></div>
+      </div>
+
+      <div class="validation-card card">
+        <label class="checkline">
+          <input type="checkbox" id="validateCheck" />
+          <span>He revisado el contenido y asumo la validación clínica del informe.</span>
+        </label>
+        <div class="actions">
+          <button id="backToReview" class="secondary footer-back" data-go="review" aria-label="Volver a categorización" title="Volver a categorización">←</button>
+          <button id="copyReport" class="primary" disabled>Copiar</button>
+        </div>
+        <p class="muted small">El borrador no debe exportarse sin revisión profesional.</p>
+      </div>
+    </section>
+  </main>
+  <script src="config.js?v=20260910-prefetch-fastmed-1"></script>
+  <script src="fixture-loader.js"></script>
+  <script src="fixture-case3.js"></script>
+  <script src="semantic-role-ui.js"></script>
+  <script src="loader.js"></script>
+  <script src="organization-v055.js"></script>
+  <script src="report-v056.js?v=20260909-3"></script>
+  <script src="report-validation-v058.js?v=20260909-10"></script>
+</body>
+</html>
