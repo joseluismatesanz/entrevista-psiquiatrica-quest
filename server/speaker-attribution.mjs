@@ -71,6 +71,27 @@ const FILLER_WORDS = new Set([
   "pues", "bueno", "vale", "sí", "si", "no", "y", "ya", "eh", "mmm", "ajá", "aja",
 ]);
 
+// Anclajes deterministas de parentesco. Una relación explícita en el diálogo tiene
+// prioridad sobre etiquetas genéricas como caregiver/family y sobre una inferencia del modelo.
+// No se usa voz, sexo, edad ni biometría: solo texto conversacional explícito.
+const EXPLICIT_FAMILY_ROLE_RULES = [
+  {
+    role: "mother",
+    self: /\b(?:yo\s+)?soy\s+(?:su|la)\s+madre\b/i,
+    addressed: /\b(?:es\s+usted|usted\s+es)\s+(?:la|su)\s+madre\b|\busted\s+qu[eé]\s+es\s*[,;:]?\s*(?:la|su)?\s*madre\b/i,
+  },
+  {
+    role: "father",
+    self: /\b(?:yo\s+)?soy\s+(?:su|el)\s+padre\b/i,
+    addressed: /\b(?:es\s+usted|usted\s+es)\s+(?:el|su)\s+padre\b|\busted\s+qu[eé]\s+es\s*[,;:]?\s*(?:el|su)?\s*padre\b/i,
+  },
+  {
+    role: "sibling",
+    self: /\b(?:yo\s+)?soy\s+(?:su|el|la)\s+herman[oa]\b/i,
+    addressed: /\b(?:es\s+usted|usted\s+es)\s+(?:el|la|su)\s+herman[oa]\b|\busted\s+qu[eé]\s+es\s*[,;:]?\s*(?:el|la|su)?\s*herman[oa]\b/i,
+  },
+];
+
 function isSourceSensitive(text) {
   return SOURCE_SENSITIVE_PATTERNS.some((pattern) => pattern.test(String(text || "")));
 }
@@ -180,6 +201,8 @@ REGLAS CRÍTICAS:
 - psychiatrist: preguntas clínicas, exploración, síntesis/observaciones del clínico, propuestas y plan.
 - patient: habla en primera persona sobre sus propios síntomas, historia, consumo, tratamiento o experiencia.
 - mother/father/sibling/caregiver/family: información colateral sobre el paciente. Usa mother/father/etc. solo si el diálogo lo hace explícito; si solo consta que es un familiar, usa family.
+- Si el psiquiatra identifica explícitamente al siguiente interlocutor como madre/padre/hermano (p. ej. «¿usted es su madre?» o «¿y usted qué es, su madre?»), el turno de respuesta debe conservar ese parentesco; NUNCA lo rebajes a caregiver/family.
+- Si una persona dice explícitamente «soy su madre/padre/hermano», conserva ese parentesco y no lo sustituyas por caregiver/family.
 - nurse/police/security: solo cuando el contenido o contexto lo haga explícito.
 - unknown: cuando no pueda distinguirse razonablemente la fuente.
 - confidence=high solo con evidencia contextual clara; medium cuando es probable pero no inequívoco; low cuando es débil.
@@ -195,6 +218,28 @@ function extractParsed(response) {
     }
   }
   return null;
+}
+
+function explicitFamilyRoleFromOwnText(text, proposedRole) {
+  if (!["mother", "father", "sibling", "caregiver", "family", "other", "unknown"].includes(proposedRole)) return null;
+  const rule = EXPLICIT_FAMILY_ROLE_RULES.find((candidate) => candidate.self.test(String(text || "")));
+  return rule?.role || null;
+}
+
+function explicitFamilyRoleFromPriorClinicianTurn(segments, index, assignments) {
+  if (index <= 0) return null;
+  const previous = segments[index - 1];
+  const previousAssignment = assignments.get(previous.id);
+  if (previousAssignment?.role !== "psychiatrist") return null;
+  const rule = EXPLICIT_FAMILY_ROLE_RULES.find((candidate) => candidate.addressed.test(previous.text));
+  return rule?.role || null;
+}
+
+function anchoredFamilyRole(segments, index, assignments, proposedRole) {
+  const own = explicitFamilyRoleFromOwnText(segments[index]?.text, proposedRole);
+  if (own) return own;
+  if (proposedRole === "psychiatrist") return null;
+  return explicitFamilyRoleFromPriorClinicianTurn(segments, index, assignments);
 }
 
 async function resolveClient(options = {}) {
@@ -250,10 +295,14 @@ export async function attributeClinicalSpeakerRoles(inputSegments, options = {})
   if (!parsed) throw new Error("No se obtuvo una atribución estructurada de interlocutores.");
 
   const byId = new Map((parsed.assignments || []).map((item) => [String(item.segment_id), item]));
-  const attributedSegments = segments.map((segment) => {
+  let explicitFamilyRoleAnchors = 0;
+  const attributedSegments = segments.map((segment, index) => {
     const assignment = byId.get(segment.id) || { role: "unknown", confidence: "low" };
-    const role = ROLE_LABELS[assignment.role] ? assignment.role : "unknown";
-    const confidence = ["high", "medium", "low"].includes(assignment.confidence) ? assignment.confidence : "low";
+    const proposedRole = ROLE_LABELS[assignment.role] ? assignment.role : "unknown";
+    const anchoredRole = anchoredFamilyRole(segments, index, byId, proposedRole);
+    const role = anchoredRole || proposedRole;
+    const confidence = anchoredRole ? "high" : (["high", "medium", "low"].includes(assignment.confidence) ? assignment.confidence : "low");
+    if (anchoredRole && anchoredRole !== proposedRole) explicitFamilyRoleAnchors += 1;
     const sourceSensitive = isSourceSensitive(segment.text);
     const reviewRequired = sourceSensitive && (role === "unknown" || confidence !== "high");
     return {
@@ -263,6 +312,7 @@ export async function attributeClinicalSpeakerRoles(inputSegments, options = {})
       role_label: ROLE_LABELS[role],
       role_display: ROLE_DISPLAY[role],
       role_confidence: confidence,
+      role_anchor: anchoredRole ? "explicit_family_relationship" : "",
       source_sensitive: sourceSensitive,
       review_required: reviewRequired,
     };
@@ -295,6 +345,7 @@ export async function attributeClinicalSpeakerRoles(inputSegments, options = {})
       store: false,
       abstention_enabled: true,
       critical_review_count: reviewItems.length,
+      explicit_family_role_anchors: explicitFamilyRoleAnchors,
       deduplicated_overlap_segments: deduplication.removed,
       request_id: response?._request_id || "",
     },
