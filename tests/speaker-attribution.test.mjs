@@ -50,6 +50,44 @@ test("V0.5.4: una misma voz acústica puede contener Paciente y Madre sin revisi
   assert.equal(result.meta.abstention_enabled, true);
 });
 
+test("V0.5.6: un parentesco explícito MADRE prevalece aunque el clasificador proponga cuidadora", async () => {
+  const segments = [
+    { id: "s1", speaker: "A", text: "Y usted, ¿es su madre? ¿Qué piensa de cómo está estos días?" },
+    { id: "s2", speaker: "C", text: "Está siempre muy agobiada y desde hace una semana duerme peor." },
+  ];
+
+  const result = await attributeClinicalSpeakerRoles(segments, {
+    client: mockClient([
+      { segment_id: "s1", role: "psychiatrist", confidence: "high" },
+      { segment_id: "s2", role: "caregiver", confidence: "high" },
+    ]),
+  });
+
+  assert.match(result.transcript, /^MADRE: Está siempre muy agobiada/m);
+  assert.deepEqual(result.participants.map((item) => item.role), ["psychiatrist", "mother"]);
+  assert.equal(result.segments[1].role, "mother");
+  assert.equal(result.segments[1].role_anchor, "explicit_family_relationship");
+  assert.equal(result.meta.explicit_family_role_anchors, 1);
+  assert.equal(result.review_items.length, 0);
+});
+
+test("V0.5.6: una autoidentificación explícita como madre no puede degradarse a familiar genérico", async () => {
+  const segments = [
+    { id: "s1", speaker: "C", text: "Soy su madre. Llevo una semana notándola mucho más aislada." },
+  ];
+
+  const result = await attributeClinicalSpeakerRoles(segments, {
+    client: mockClient([
+      { segment_id: "s1", role: "family", confidence: "medium" },
+    ]),
+  });
+
+  assert.equal(result.segments[0].role, "mother");
+  assert.equal(result.segments[0].role_confidence, "high");
+  assert.match(result.transcript, /^MADRE: Soy su madre/m);
+  assert.deepEqual(result.participants.map((item) => item.role), ["mother"]);
+});
+
 test("V0.5.4: solo una fuente dudosa clínicamente sensible exige revisión", async () => {
   const segments = [
     { id: "s1", speaker: "A", text: "Buenos días." },
