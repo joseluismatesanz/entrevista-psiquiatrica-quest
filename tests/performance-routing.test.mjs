@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
 
-const [apiAnalyze, apiTranscribe, config] = await Promise.all([
+const [apiAnalyze, apiTranscribe, config, index] = await Promise.all([
   readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
   readFile(new URL("../api/transcribe.mjs", import.meta.url), "utf8"),
   readFile(new URL("../config.js", import.meta.url), "utf8"),
+  readFile(new URL("../index.html", import.meta.url), "utf8"),
 ]);
 
 test("rendimiento: audio combina anonimización y atribución en una sola llamada normal", () => {
@@ -28,7 +29,12 @@ test("rendimiento: prefetch solo reutiliza el análisis si la transcripción no 
   assert.match(config, /__CLINICAL_ANALYSIS_PREFETCH/);
   assert.match(config, /prefetched\.get\(transcript\)/);
   assert.match(config, /speaker_role_confirmation_required/);
-  assert.match(config, /No se persiste nada/);
+  assert.match(config, /privacyProofs\.get\(transcript\)/);
+  assert.match(config, /conserva ambos solo en memoria/);
+});
+
+test("rendimiento: el navegador fuerza una revisión fresca del cliente de privacidad", () => {
+  assert.match(index, /config\.js\?v=20260910-privacy-proof-1/);
 });
 
 test("privacidad combinada: conserva XXXXXXXXXXX y atribuye rol sin devolver nombre", async () => {
