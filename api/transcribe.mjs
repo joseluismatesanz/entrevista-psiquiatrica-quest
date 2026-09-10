@@ -1,6 +1,7 @@
 import { transcribeAudioPayload } from "../server/transcribe.mjs";
-import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
+import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
 import { redactPersonNamesInSegments } from "../server/person-name-redaction.mjs";
+import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
 
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -11,97 +12,76 @@ function setPrivacyHeaders(res) {
 
 export default async function handler(req, res) {
   setPrivacyHeaders(res);
-
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "method_not_allowed" });
   }
 
   const totalStartedAt = Date.now();
-
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-
     const transcriptionStartedAt = Date.now();
     const acoustic = await transcribeAudioPayload(body);
     const transcriptionMs = Date.now() - transcriptionStartedAt;
 
-    // Privacidad por diseño: antes de devolver o analizar cualquier texto procedente
-    // del audio, se sustituyen los nombres/apellidos de personas por XXXXXXXXXXX.
-    // Si esta capa falla, no se devuelve la transcripción nominal (fail closed).
-    const redactionStartedAt = Date.now();
-    const redaction = await redactPersonNamesInSegments(acoustic.segments);
-    const redactionMs = Date.now() - redactionStartedAt;
-
-    const safeAcoustic = {
-      ...acoustic,
-      transcript: redaction.transcript,
-      segments: redaction.segments,
-      meta: {
-        ...acoustic.meta,
-        person_name_redaction_enabled: true,
-        person_name_redaction_mask: redaction.meta.mask,
-        person_name_redaction_model: redaction.meta.model,
-        person_name_redaction_replacements: redaction.replacements,
-        person_name_redaction_store: false,
-        person_name_redaction_fail_closed: true,
-      },
-    };
-
+    // Vía normal: una sola llamada estructurada hace anonimización + atribución.
+    // Si esa llamada falla, se activa el camino anterior como fallback seguro.
+    const privatePassStartedAt = Date.now();
+    let processed;
+    let fallbackUsed = false;
     try {
-      const attributionStartedAt = Date.now();
-      const attributed = await attributeClinicalSpeakerRoles(safeAcoustic.segments);
-      const attributionMs = Date.now() - attributionStartedAt;
-
-      return res.status(200).json({
-        ...safeAcoustic,
-        acoustic_transcript: safeAcoustic.transcript,
+      processed = await redactAndAttributeSegments(acoustic.segments);
+    } catch {
+      fallbackUsed = true;
+      const redaction = await redactPersonNamesInSegments(acoustic.segments);
+      const attributed = await attributeClinicalSpeakerRoles(redaction.segments);
+      processed = {
         transcript: attributed.transcript,
         segments: attributed.segments,
         participants: attributed.participants,
         review_items: attributed.review_items,
-        attribution_meta: attributed.meta,
+        replacements: redaction.replacements,
         meta: {
-          ...safeAcoustic.meta,
+          model: `${redaction.meta.model}+${attributed.meta.role_model}`,
+          transport: attributed.meta.role_transport,
+          store: false,
+          mask: redaction.meta.mask,
+          fail_closed: true,
           automatic_role_attribution: true,
-          role_model: attributed.meta.role_model,
-          role_transport: attributed.meta.role_transport,
-          role_attribution_store: false,
-          critical_role_review_count: attributed.meta.critical_review_count,
-          speaker_role_confirmation_required: attributed.meta.critical_review_count > 0,
-          performance_ms: {
-            transcription: transcriptionMs,
-            person_name_redaction: redactionMs,
-            speaker_attribution: attributionMs,
-            total_audio_pipeline: Date.now() - totalStartedAt,
-          },
+          critical_review_count: attributed.meta.critical_review_count,
         },
-      });
-    } catch (attributionError) {
-      // La transcripción ya está desidentificada. Si falla la atribución de roles,
-      // se conserva únicamente esa versión en la respuesta efímera y se bloquea el análisis.
-      return res.status(200).json({
-        ...safeAcoustic,
-        acoustic_transcript: safeAcoustic.transcript,
-        participants: [],
-        review_items: [],
-        attribution_error: {
-          code: attributionError?.name || "SpeakerAttributionError",
-          message: "No se pudo atribuir automáticamente el rol clínico de los interlocutores.",
-        },
-        meta: {
-          ...safeAcoustic.meta,
-          automatic_role_attribution: false,
-          speaker_role_confirmation_required: true,
-          performance_ms: {
-            transcription: transcriptionMs,
-            person_name_redaction: redactionMs,
-            speaker_attribution: null,
-            total_audio_pipeline: Date.now() - totalStartedAt,
-          },
-        },
-      });
+      };
     }
+    const privatePassMs = Date.now() - privatePassStartedAt;
+
+    return res.status(200).json({
+      ...acoustic,
+      transcript: processed.transcript,
+      acoustic_transcript: processed.segments.map((s) => `HABLANTE ${s.acoustic_speaker || s.speaker}: ${s.text}`).join("\n"),
+      segments: processed.segments,
+      participants: processed.participants,
+      review_items: processed.review_items,
+      meta: {
+        ...acoustic.meta,
+        person_name_redaction_enabled: true,
+        person_name_redaction_mask: processed.meta.mask,
+        person_name_redaction_replacements: processed.replacements,
+        person_name_redaction_store: false,
+        person_name_redaction_fail_closed: true,
+        automatic_role_attribution: true,
+        role_model: processed.meta.model,
+        role_transport: processed.meta.transport,
+        role_attribution_store: false,
+        critical_role_review_count: processed.meta.critical_review_count,
+        speaker_role_confirmation_required: processed.meta.critical_review_count > 0,
+        combined_privacy_attribution: !fallbackUsed,
+        performance_ms: {
+          transcription: transcriptionMs,
+          privacy_and_speaker_attribution: privatePassMs,
+          total_audio_pipeline: Date.now() - totalStartedAt,
+        },
+      },
+    });
   } catch (error) {
     const status = error instanceof TypeError || error instanceof RangeError ? 400 : 502;
     return res.status(status).json({
