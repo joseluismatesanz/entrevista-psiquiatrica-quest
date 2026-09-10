@@ -77,18 +77,49 @@ const FILLER_WORDS = new Set([
 const EXPLICIT_FAMILY_ROLE_RULES = [
   {
     role: "mother",
-    self: /\b(?:yo\s+)?soy\s+(?:su|la)\s+madre\b/i,
-    addressed: /\b(?:es\s+usted|usted\s+es)\s+(?:la|su)\s+madre\b|\busted\s+qu[eé]\s+es\s*[,;:]?\s*(?:la|su)?\s*madre\b/i,
+    selfPhrases: ["soy su madre", "soy la madre"],
+    addressedPhrases: [
+      "usted es su madre",
+      "usted es la madre",
+      "es usted su madre",
+      "es usted la madre",
+      "usted que es su madre",
+      "usted que es la madre",
+      "usted es madre",
+      "es usted madre",
+    ],
   },
   {
     role: "father",
-    self: /\b(?:yo\s+)?soy\s+(?:su|el)\s+padre\b/i,
-    addressed: /\b(?:es\s+usted|usted\s+es)\s+(?:el|su)\s+padre\b|\busted\s+qu[eé]\s+es\s*[,;:]?\s*(?:el|su)?\s*padre\b/i,
+    selfPhrases: ["soy su padre", "soy el padre"],
+    addressedPhrases: [
+      "usted es su padre",
+      "usted es el padre",
+      "es usted su padre",
+      "es usted el padre",
+      "usted que es su padre",
+      "usted que es el padre",
+      "usted es padre",
+      "es usted padre",
+    ],
   },
   {
     role: "sibling",
-    self: /\b(?:yo\s+)?soy\s+(?:su|el|la)\s+herman[oa]\b/i,
-    addressed: /\b(?:es\s+usted|usted\s+es)\s+(?:el|la|su)\s+herman[oa]\b|\busted\s+qu[eé]\s+es\s*[,;:]?\s*(?:el|la|su)?\s*herman[oa]\b/i,
+    selfPhrases: ["soy su hermano", "soy el hermano", "soy su hermana", "soy la hermana"],
+    addressedPhrases: [
+      "usted es su hermano",
+      "usted es el hermano",
+      "es usted su hermano",
+      "es usted el hermano",
+      "usted que es su hermano",
+      "usted que es el hermano",
+      "usted es su hermana",
+      "usted es la hermana",
+      "es usted su hermana",
+      "es usted la hermana",
+      "usted que es su hermana",
+      "usted que es la hermana",
+    ],
   },
 ];
 
@@ -117,6 +148,15 @@ function normalizedWords(text) {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
+}
+
+function normalizedPhrase(text) {
+  return normalizedWords(text).join(" ");
+}
+
+function containsExplicitPhrase(text, phrases) {
+  const normalized = ` ${normalizedPhrase(text)} `;
+  return phrases.some((phrase) => normalized.includes(` ${phrase} `));
 }
 
 function endsWithWords(haystack, needle) {
@@ -222,7 +262,7 @@ function extractParsed(response) {
 
 function explicitFamilyRoleFromOwnText(text, proposedRole) {
   if (!["mother", "father", "sibling", "caregiver", "family", "other", "unknown"].includes(proposedRole)) return null;
-  const rule = EXPLICIT_FAMILY_ROLE_RULES.find((candidate) => candidate.self.test(String(text || "")));
+  const rule = EXPLICIT_FAMILY_ROLE_RULES.find((candidate) => containsExplicitPhrase(text, candidate.selfPhrases));
   return rule?.role || null;
 }
 
@@ -231,7 +271,7 @@ function explicitFamilyRoleFromPriorClinicianTurn(segments, index, assignments) 
   const previous = segments[index - 1];
   const previousAssignment = assignments.get(previous.id);
   if (previousAssignment?.role !== "psychiatrist") return null;
-  const rule = EXPLICIT_FAMILY_ROLE_RULES.find((candidate) => candidate.addressed.test(previous.text));
+  const rule = EXPLICIT_FAMILY_ROLE_RULES.find((candidate) => containsExplicitPhrase(previous.text, candidate.addressedPhrases));
   return rule?.role || null;
 }
 
