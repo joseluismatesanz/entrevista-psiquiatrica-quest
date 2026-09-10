@@ -157,9 +157,12 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
         const proof = typeof payload?.privacy_proof === 'string' ? payload.privacy_proof : '';
         if (transcript && proof) privacyProofs.set(transcript, proof);
 
-        if (!transcript || payload?.meta?.speaker_role_confirmation_required) return;
-        if (prefetched.has(transcript)) return;
+        if (!transcript || prefetched.has(transcript)) return;
 
+        // Análisis anticipado especulativo: comienza incluso si existe una fuente pendiente
+        // de revisión. Nunca se muestra antes de la revisión humana. Si el profesional corrige
+        // una voz o edita una palabra, la transcripción cambia y este resultado deja de coincidir,
+        // por lo que /api/analyze se ejecuta de nuevo con el texto corregido.
         const pending = nativeFetch(`${window.CLINICAL_API_URL}/api/analyze`, {
           method: 'POST',
           cache: 'no-store',
