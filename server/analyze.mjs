@@ -138,10 +138,6 @@ export async function analyzeTranscript(transcript, options = {}) {
   }
 
   const model = options.model || process.env.OPENAI_MODEL || defaultModel;
-  const reasoningEffort = options.reasoningEffort || "low";
-  const maxOutputTokens = Number.isFinite(Number(options.maxOutputTokens))
-    ? Math.max(3000, Number(options.maxOutputTokens))
-    : 16000;
   const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
 
   const modelStartedAt = Date.now();
@@ -149,8 +145,10 @@ export async function analyzeTranscript(transcript, options = {}) {
     model,
     store: false,
     background: false,
-    reasoning: { effort: reasoningEffort },
-    max_output_tokens: maxOutputTokens,
+    // La salida es extracción estructurada con múltiples guardas deterministas posteriores.
+    // Low reduce latencia manteniendo razonamiento explícito para el núcleo clínico.
+    reasoning: { effort: "low" },
+    max_output_tokens: 16000,
     input: [
       {
         role: "user",
@@ -192,22 +190,36 @@ export async function analyzeTranscript(transcript, options = {}) {
     medicationMeta = medicationResult.meta || medicationMeta;
   }
 
+  // Segunda capa determinista: usa la transcripción para corregir temporalidad farmacológica,
+  // sincroniza las tarjetas con las entidades verificadas y elimina pseudodiscrepancias
+  // subjetivo/objetivo que no representan versiones incompatibles.
   const postprocessResult = applyClinicalPostprocessing(assessment, transcript);
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
 
+  // INTERVENCIÓN conserva siempre la propuesta concreta + la respuesta. Una frase genérica
+  // como "acepta la propuesta" no es suficiente si no puede anclarse a una propuesta explícita
+  // del psiquiatra en la transcripción.
   const interventionGroundResult = groundInterventionToTranscript(assessment, transcript);
   assessment = interventionGroundResult.assessment;
   warnings.push(...interventionGroundResult.warnings);
 
+  // Si existe exploración psicopatológica sustantiva y la transcripción contiene una
+  // observación clínica explícita del psiquiatra, el apartado no puede quedar marcado
+  // como insuficiente por un simple desacople del modelo.
   const mseGroundResult = groundExplicitMseAssessment(assessment, transcript);
   assessment = mseGroundResult.assessment;
   warnings.push(...mseGroundResult.warnings);
 
+  // La identidad de PSQ Guardia nunca se acepta por inferencia ni por memoria del modelo.
+  // Solo puede conservarse si el profesional se identifica explícitamente en la transcripción.
   const psqGuardResult = groundPsqGuardiaToTranscript(assessment, transcript);
   assessment = psqGuardResult.assessment;
   warnings.push(...psqGuardResult.warnings);
 
+  // Última capa factual antes del informe: evita fusionar una negación inespecífica de
+  // "hacerse daño" con una negación formal de autolesiones, elimina escolarización inferida
+  // y conserva en el plan las ampliaciones diagnósticas expresadas por el psiquiatra.
   const reportGroundResult = groundReportContentToTranscript(assessment, transcript);
   assessment = reportGroundResult.assessment;
   warnings.push(...reportGroundResult.warnings);
@@ -223,8 +235,6 @@ export async function analyzeTranscript(transcript, options = {}) {
       model,
       transport,
       store: false,
-      reasoning_effort: reasoningEffort,
-      max_output_tokens: maxOutputTokens,
       structured_output_parser: parser,
       structured_output_attempts: attempts,
       request_id: response?._request_id || "",

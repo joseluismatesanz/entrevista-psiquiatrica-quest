@@ -2,28 +2,28 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [transcribeApi, analyzeApi, validationJs, combinedPrivacy, parallelPrivacy, redactionModule] = await Promise.all([
+const [transcribeApi, analyzeApi, validationJs, combinedPrivacy, redactionModule] = await Promise.all([
   readFile(new URL("../api/transcribe.mjs", import.meta.url), "utf8"),
   readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
   readFile(new URL("../report-validation-v058.js", import.meta.url), "utf8"),
   readFile(new URL("../server/privacy-attribution.mjs", import.meta.url), "utf8"),
-  readFile(new URL("../server/privacy-attribution-parallel.mjs", import.meta.url), "utf8"),
   readFile(new URL("../server/person-name-redaction.mjs", import.meta.url), "utf8"),
 ]);
 
-test("V0.5.6 privacidad: audio paralelo expone solo texto desidentificado y conserva fallback fail-closed", () => {
-  assert.match(transcribeApi, /redactAndAttributeSegmentsParallel\(acoustic\.segments\)/);
+test("V0.5.6 privacidad: el audio queda desidentificado antes de llegar al cliente y la vía rápida falla cerrado", () => {
   assert.match(transcribeApi, /redactAndAttributeSegments\(acoustic\.segments\)/);
-  assert.match(parallelPrivacy, /redactPersonNamesInSegments\(segments/);
-  assert.match(parallelPrivacy, /attributeClinicalSpeakerRoles\(segments/);
-  assert.match(parallelPrivacy, /Promise\.all/);
-  assert.match(parallelPrivacy, /fail_closed: true/);
+  assert.match(combinedPrivacy, /redacted_text/);
   assert.match(combinedPrivacy, /residual_person_name/);
+  assert.match(combinedPrivacy, /PERSON_NAME_MASK/);
   assert.match(redactionModule, /PERSON_NAME_MASK = "XXXXXXXXXXX"/);
+  assert.match(combinedPrivacy, /fail_closed: true/);
   assert.match(transcribeApi, /person_name_redaction_fail_closed: true/);
   assert.match(transcribeApi, /acoustic_transcript: processed\.segments/);
   assert.doesNotMatch(transcribeApi, /acoustic_transcript: acoustic\.transcript/);
   assert.match(transcribeApi, /createPrivacyProof\(processed\.transcript\)/);
+  // Si falla la llamada combinada, el fallback conserva la secuencia segura:
+  // primero redacta y solo después atribuye roles.
+  assert.match(transcribeApi, /redactPersonNamesInSegments\(acoustic\.segments\)[\s\S]*attributeClinicalSpeakerRoles\(redaction\.segments\)/);
 });
 
 test("V0.5.6 privacidad: cualquier texto sin prueba válida se desidentifica antes del motor clínico; una prueba válida solo evita duplicar el mismo paso", () => {

@@ -82,11 +82,8 @@ export default async function handler(req, res) {
 
     stage = "clinical_analysis";
     const fastRoute = useFastClinicalRoute(safeTranscript);
-    const clinicalOptions = fastRoute
-      ? { model: "gpt-5.6-luna", reasoningEffort: "none", maxOutputTokens: 8000 }
-      : { reasoningEffort: "low", maxOutputTokens: 16000 };
     const analysisStartedAt = Date.now();
-    const result = await analyzeTranscript(safeTranscript, clinicalOptions);
+    const result = await analyzeTranscript(safeTranscript, fastRoute ? { model: "gpt-5.6-luna" } : {});
     const clinicalAnalysisMs = Date.now() - analysisStartedAt;
 
     return res.status(200).json({

@@ -11,7 +11,7 @@ function mockClient(assignments) {
       async parse(params) {
         assert.equal(params.store, false);
         assert.equal(params.background, false);
-        assert.equal(params.reasoning.effort, "none");
+        assert.equal(params.reasoning.effort, "low");
         return {
           status: "completed",
           output_parsed: { assignments },

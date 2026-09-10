@@ -3,39 +3,25 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
 
-const [apiAnalyze, apiTranscribe, config, index, parallelPrivacy, speakerAttribution, serverAnalyze] = await Promise.all([
+const [apiAnalyze, apiTranscribe, config, index] = await Promise.all([
   readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
   readFile(new URL("../api/transcribe.mjs", import.meta.url), "utf8"),
   readFile(new URL("../config.js", import.meta.url), "utf8"),
   readFile(new URL("../index.html", import.meta.url), "utf8"),
-  readFile(new URL("../server/privacy-attribution-parallel.mjs", import.meta.url), "utf8"),
-  readFile(new URL("../server/speaker-attribution.mjs", import.meta.url), "utf8"),
-  readFile(new URL("../server/analyze.mjs", import.meta.url), "utf8"),
 ]);
 
-test("rendimiento: audio ejecuta anonimización y atribución en paralelo con fallback combinado", () => {
-  assert.match(apiTranscribe, /redactAndAttributeSegmentsParallel\(acoustic\.segments\)/);
-  assert.match(apiTranscribe, /redactAndAttributeSegments\(acoustic\.segments\)/);
-  assert.match(apiTranscribe, /parallel_privacy_attribution/);
-  assert.match(apiTranscribe, /combined_privacy_attribution_fallback/);
-  assert.match(parallelPrivacy, /Promise\.all\(\[redactionPromise, attributionPromise\]\)/);
-  assert.match(parallelPrivacy, /fail_closed: true/);
+test("rendimiento: audio combina anonimización y atribución en una sola llamada normal", () => {
+  assert.match(apiTranscribe, /redactAndAttributeSegments/);
+  assert.match(apiTranscribe, /combined_privacy_attribution/);
+  assert.match(apiTranscribe, /fallbackUsed/);
 });
 
-test("rendimiento: clasificación de voces mecánica usa Luna sin razonamiento", () => {
-  assert.match(speakerAttribution, /SPEAKER_ROLE_MODEL = "gpt-5\.6-luna"/);
-  assert.match(speakerAttribution, /reasoning: \{ effort: "none" \}/);
-});
-
-test("rendimiento: ruta rápida excluye señales complejas y usa Luna sin razonamiento", () => {
+test("rendimiento: ruta rápida excluye explícitamente señales clínicas complejas", () => {
   assert.match(apiAnalyze, /COMPLEX_CLINICAL_PATTERNS/);
   for (const token of ["suicid", "psicos", "agresi", "cannabis", "bipolar", "sertralina"]) {
     assert.match(apiAnalyze, new RegExp(token, "i"));
   }
-  assert.match(apiAnalyze, /model: "gpt-5\.6-luna", reasoningEffort: "none", maxOutputTokens: 8000/);
-  assert.match(apiAnalyze, /reasoningEffort: "low", maxOutputTokens: 16000/);
-  assert.match(serverAnalyze, /reasoning: \{ effort: reasoningEffort \}/);
-  assert.match(serverAnalyze, /max_output_tokens: maxOutputTokens/);
+  assert.match(apiAnalyze, /gpt-5\.6-luna/);
   assert.match(apiAnalyze, /adaptive_fast_route/);
 });
 
@@ -51,7 +37,7 @@ test("rendimiento: el navegador fuerza una revisión fresca del cliente de priva
   assert.match(index, /config\.js\?v=20260910-privacy-proof-1/);
 });
 
-test("privacidad combinada de respaldo: conserva XXXXXXXXXXX y atribuye rol sin devolver nombre", async () => {
+test("privacidad combinada: conserva XXXXXXXXXXX y atribuye rol sin devolver nombre", async () => {
   const client = {
     responses: {
       async parse(params) {
@@ -87,7 +73,7 @@ test("privacidad combinada de respaldo: conserva XXXXXXXXXXX y atribuye rol sin 
   assert.equal(result.meta.fail_closed, true);
 });
 
-test("privacidad combinada de respaldo: falla cerrado si queda un nombre residual", async () => {
+test("privacidad combinada: falla cerrado si queda un nombre residual", async () => {
   const client = {
     responses: {
       async parse() {

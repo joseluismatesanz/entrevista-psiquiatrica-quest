@@ -229,9 +229,8 @@ export async function attributeClinicalSpeakerRoles(inputSegments, options = {})
     model,
     store: false,
     background: false,
-    // Clasificación mecánica: no necesita tokens de razonamiento.
-    reasoning: { effort: "none" },
-    max_output_tokens: Math.max(1200, Math.min(8000, segments.length * 75)),
+    reasoning: { effort: "low" },
+    max_output_tokens: Math.max(1800, Math.min(12000, segments.length * 90)),
     instructions: clinicalRoleInstructions(),
     input: [{
       role: "user",
