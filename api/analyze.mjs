@@ -16,19 +16,30 @@ function safeErrorMessage(error) {
   return message.length > 500 ? `${message.slice(0, 500)}…` : message;
 }
 
-const COMPLEX_CLINICAL_PATTERNS = [
+// Señales que por sí mismas justifican la ruta clínica completa.
+// La mera presencia de un medicamento o una dosis NO entra aquí: CIMA y las guardas
+// farmacológicas posteriores siguen verificando esa información en ambas rutas.
+const HIGH_COMPLEXITY_PATTERNS = [
   /\b(?:suicid\w*|autoles\w*|autol[ií]tic\w*|matarse|morir|sobredosis|hacerse\s+daño)\b/i,
   /\b(?:alucin\w*|delir\w*|psicos\w*|paranoi\w*|persecut\w*|voces|ideas?\s+de\s+referencia)\b/i,
   /\b(?:heteroagres\w*|agresi[oó]n|violencia|contenci[oó]n|fuga|amenaz\w*)\b/i,
   /\b(?:cannabis|coca[ií]na|anfetamin\w*|speed|mdma|ketamina|alcohol|benzodiacepin\w*|drogas)\b/i,
   /\b(?:man[ií]a|maniforme|bipolar|esquizofren\w*)\b/i,
-  /\b(?:\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|ml|ui)\b|sertralina|risperidona|olanzapina|haloperidol|litio|lamotrigina|lorazepam)\b/i,
 ];
 
-function useFastClinicalRoute(transcript) {
+const MEDICATION_TOKEN_PATTERN = /\b(?:medicaci[oó]n|tratamiento|f[aá]rmaco\w*|\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|ml|ui)|sertralina|risperidona|olanzapina|haloperidol|litio|lamotrigina|lorazepam)\b/i;
+const MEDICATION_COMPLEXITY_ACTION_PATTERN = /\b(?:iniciar|introducir|suspender|retirar|aumentar|subir|reducir|bajar|cambiar|ajustar|titular|pautar|prescribir|duplicar|sobredosis|intoxicaci[oó]n|efectos?\s+adversos?|reacci[oó]n\s+adversa|alergia|ram|adherencia|abandona\w*|olvida\w*|incumpl\w*|no\s+(?:la\s+|lo\s+|las\s+|los\s+)?toma\w*|deja\w*\s+de\s+tomar)\b/i;
+
+function hasMedicationComplexity(text) {
+  return MEDICATION_TOKEN_PATTERN.test(text) && MEDICATION_COMPLEXITY_ACTION_PATTERN.test(text);
+}
+
+export function useFastClinicalRoute(transcript) {
   const text = String(transcript || "");
   if (text.length > 5000) return false;
-  return !COMPLEX_CLINICAL_PATTERNS.some((pattern) => pattern.test(text));
+  if (HIGH_COMPLEXITY_PATTERNS.some((pattern) => pattern.test(text))) return false;
+  if (hasMedicationComplexity(text)) return false;
+  return true;
 }
 
 export default async function handler(req, res) {
