@@ -44,7 +44,10 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
       const request = samples.analysis.request || {};
       const core = samples.analysis.core || {};
       const route = samples.analysis.fastRoute ? 'rápida' : 'clínica completa';
-      parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · anonimización ${seconds(request.person_name_redaction)} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}`);
+      const privacy = samples.analysis.proofVerified
+        ? `anonimización ${seconds(request.person_name_redaction)} (ya verificada)`
+        : `anonimización ${seconds(request.person_name_redaction)}`;
+      parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · ${privacy} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}`);
     }
 
     target.textContent = parts.join(' | ');
@@ -70,6 +73,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
           request: payload?.meta?.request_performance_ms || {},
           core: payload?.meta?.performance_ms || {},
           fastRoute: Boolean(payload?.meta?.adaptive_fast_route),
+          proofVerified: Boolean(payload?.meta?.privacy_proof_verified),
         };
       }
       render();
@@ -84,26 +88,42 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
   });
 })();
 
-// Latencia percibida: cuando /api/transcribe ya ha devuelto una transcripción
-// desidentificada y atribuida, empezamos /api/analyze mientras el profesional revisa
-// el texto. Si después pulsa «Organizar» sin modificarlo, se reutiliza exactamente
-// esa petición. Si modifica una sola palabra, la clave ya no coincide y se hace un
-// análisis nuevo. No se persiste nada: el mapa vive únicamente en memoria de esta página.
+// Latencia percibida y privacidad: /api/transcribe devuelve texto ya desidentificado
+// junto con una prueba criptográfica efímera ligada exactamente a ese texto. El navegador
+// conserva ambos solo en memoria. /api/analyze puede saltarse la segunda anonimización
+// únicamente cuando el servidor valida esa prueba. Cualquier edición cambia el texto y
+// obliga automáticamente a ejecutar de nuevo la anonimización completa.
 (() => {
   if (!window.CLINICAL_API_URL || typeof window.fetch !== 'function') return;
 
   const nativeFetch = window.fetch.bind(window);
   const prefetched = new Map();
+  const privacyProofs = new Map();
   window.__CLINICAL_ANALYSIS_PREFETCH = prefetched;
 
-  function transcriptFromInit(init) {
-    if (typeof init?.body !== 'string') return '';
+  function bodyFromInit(init) {
+    if (typeof init?.body !== 'string') return {};
     try {
       const parsed = JSON.parse(init.body);
-      return typeof parsed?.transcript === 'string' ? parsed.transcript.trim() : '';
+      return parsed && typeof parsed === 'object' ? parsed : {};
     } catch {
-      return '';
+      return {};
     }
+  }
+
+  function transcriptFromBody(body) {
+    return typeof body?.transcript === 'string' ? body.transcript.trim() : '';
+  }
+
+  function withPrivacyProof(init, transcript) {
+    const proof = privacyProofs.get(transcript);
+    if (!proof) return init;
+    const body = bodyFromInit(init);
+    if (!transcriptFromBody(body)) return init;
+    return {
+      ...init,
+      body: JSON.stringify({ ...body, privacy_proof: proof }),
+    };
   }
 
   function responseFromSnapshot(snapshot) {
@@ -119,12 +139,14 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
     const method = String(init?.method || 'GET').toUpperCase();
 
     if (method === 'POST' && /\/api\/analyze(?:$|[?#])/.test(url)) {
-      const transcript = transcriptFromInit(init);
+      const body = bodyFromInit(init);
+      const transcript = transcriptFromBody(body);
       const pending = transcript ? prefetched.get(transcript) : null;
       if (pending) {
         prefetched.delete(transcript);
         return responseFromSnapshot(await pending);
       }
+      if (transcript) init = withPrivacyProof(init, transcript);
     }
 
     const response = await nativeFetch(input, init);
@@ -132,6 +154,9 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
     if (method === 'POST' && response.ok && /\/api\/transcribe(?:$|[?#])/.test(url)) {
       response.clone().json().then((payload) => {
         const transcript = typeof payload?.transcript === 'string' ? payload.transcript.trim() : '';
+        const proof = typeof payload?.privacy_proof === 'string' ? payload.privacy_proof : '';
+        if (transcript && proof) privacyProofs.set(transcript, proof);
+
         if (!transcript || payload?.meta?.speaker_role_confirmation_required) return;
         if (prefetched.has(transcript)) return;
 
@@ -139,7 +164,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
           method: 'POST',
           cache: 'no-store',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript }),
+          body: JSON.stringify({ transcript, ...(proof ? { privacy_proof: proof } : {}) }),
         }).then(async (analysisResponse) => ({
           status: analysisResponse.status,
           statusText: analysisResponse.statusText,
@@ -158,4 +183,9 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
 
     return response;
   };
+
+  window.addEventListener('pagehide', () => {
+    prefetched.clear();
+    privacyProofs.clear();
+  });
 })();
