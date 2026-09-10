@@ -28,7 +28,7 @@ const HIGH_COMPLEXITY_PATTERNS = [
 ];
 
 const MEDICATION_TOKEN_PATTERN = /\b(?:medicaci[oó]n|tratamiento|f[aá]rmaco\w*|\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|ml|ui)|sertralina|risperidona|olanzapina|haloperidol|litio|lamotrigina|lorazepam)\b/i;
-const MEDICATION_COMPLEXITY_ACTION_PATTERN = /\b(?:iniciar|introducir|suspender|retirar|aumentar|subir|reducir|bajar|cambiar|ajustar|titular|pautar|prescribir|duplicar|sobredosis|intoxicaci[oó]n|efectos?\s+adversos?|reacci[oó]n\s+adversa|alergia|ram|adherencia|abandona\w*|olvida\w*|incumpl\w*|no\s+(?:la\s+|lo\s+|las\s+|los\s+)?toma\w*|deja\w*\s+de\s+tomar)\b/i;
+const MEDICATION_COMPLEXITY_ACTION_PATTERN = /\b(?:iniciar|introducir|suspender|retirar|aumentar|subir|reducir|bajar|cambiar|ajustar|titular|pautar|prescribir|duplicar|sobredosis|intoxicaci[oó]n|efectos?\s+adversos?|reacci[oó]n\s+adversa|alergia|ram|adherencia|abandona\w*|olvida\w*|incumpl\w*|no\s+(?:(?:la|lo|las|los)\s+)?tom[oa]\w*|no\s+estoy\s+tomando|deja\w*\s+de\s+tomar)\b/i;
 
 function hasMedicationComplexity(text) {
   return MEDICATION_TOKEN_PATTERN.test(text) && MEDICATION_COMPLEXITY_ACTION_PATTERN.test(text);
