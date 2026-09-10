@@ -68,10 +68,12 @@ test("Realtime: diagnóstico, prueba firmada y atribución semántica reconocen 
 });
 
 test("Realtime: los módulos se cargan antes del motor batch y con cache-busting", () => {
+  const controllerTag = '<script src="realtime-recorder-controller.js?v=20260910-realtime-1"></script>';
+  const loaderTag = '<script src="loader.js?v=20260910-realtime-1"></script>';
   assert.match(index, /config\.js\?v=20260910-realtime-1/);
   assert.match(index, /semantic-role-ui\.js\?v=20260910-realtime-1/);
   assert.match(index, /realtime-audio\.js\?v=20260910-realtime-1/);
-  assert.match(index, /realtime-recorder-controller\.js\?v=20260910-realtime-1/);
-  assert.match(index, /loader\.js\?v=20260910-realtime-1/);
-  assert.ok(index.indexOf("realtime-recorder-controller.js") < index.indexOf("loader.js"));
+  assert.ok(index.includes(controllerTag));
+  assert.ok(index.includes(loaderTag));
+  assert.ok(index.indexOf(controllerTag) < index.indexOf(loaderTag));
 });
