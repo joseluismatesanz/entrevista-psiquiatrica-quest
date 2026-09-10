@@ -2,6 +2,7 @@ import { transcribeAudioPayload } from "../server/transcribe.mjs";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
 import { redactPersonNamesInSegments } from "../server/person-name-redaction.mjs";
 import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
+import { createPrivacyProof } from "../server/privacy-proof.mjs";
 
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -54,6 +55,10 @@ export default async function handler(req, res) {
     }
     const privatePassMs = Date.now() - privatePassStartedAt;
 
+    // Prueba firmada efímera: permite a /api/analyze verificar que ESTA transcripción
+    // exacta ya fue desidentificada por el servidor. El token no contiene texto clínico.
+    const privacyProof = createPrivacyProof(processed.transcript);
+
     return res.status(200).json({
       ...acoustic,
       transcript: processed.transcript,
@@ -61,6 +66,7 @@ export default async function handler(req, res) {
       segments: processed.segments,
       participants: processed.participants,
       review_items: processed.review_items,
+      ...(privacyProof ? { privacy_proof: privacyProof } : {}),
       meta: {
         ...acoustic.meta,
         person_name_redaction_enabled: true,
@@ -75,6 +81,7 @@ export default async function handler(req, res) {
         critical_role_review_count: processed.meta.critical_review_count,
         speaker_role_confirmation_required: processed.meta.critical_review_count > 0,
         combined_privacy_attribution: !fallbackUsed,
+        signed_privacy_proof_issued: Boolean(privacyProof),
         performance_ms: {
           transcription: transcriptionMs,
           privacy_and_speaker_attribution: privatePassMs,
