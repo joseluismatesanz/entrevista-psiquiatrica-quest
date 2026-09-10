@@ -1,7 +1,6 @@
 import { transcribeAudioPayload } from "../server/transcribe.mjs";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
-import { redactPersonNamesInSegments } from "../server/person-name-redaction.mjs";
-import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
+import { redactAndAttributeSegmentsParallel } from "../server/privacy-attribution-parallel.mjs";
 import { createPrivacyProof } from "../server/privacy-proof.mjs";
 
 function setPrivacyHeaders(res) {
@@ -25,33 +24,17 @@ export default async function handler(req, res) {
     const acoustic = await transcribeAudioPayload(body);
     const transcriptionMs = Date.now() - transcriptionStartedAt;
 
-    // Vía normal: una sola llamada estructurada hace anonimización + atribución.
-    // Si esa llamada falla, se activa el camino anterior como fallback seguro.
+    // Vía normal optimizada: anonimización y atribución de interlocutores arrancan
+    // simultáneamente. Solo el texto de la rama anonimizada puede llegar al cliente.
+    // Si cualquiera falla, se usa el procesador combinado anterior como fallback seguro.
     const privatePassStartedAt = Date.now();
     let processed;
     let fallbackUsed = false;
     try {
-      processed = await redactAndAttributeSegments(acoustic.segments);
+      processed = await redactAndAttributeSegmentsParallel(acoustic.segments);
     } catch {
       fallbackUsed = true;
-      const redaction = await redactPersonNamesInSegments(acoustic.segments);
-      const attributed = await attributeClinicalSpeakerRoles(redaction.segments);
-      processed = {
-        transcript: attributed.transcript,
-        segments: attributed.segments,
-        participants: attributed.participants,
-        review_items: attributed.review_items,
-        replacements: redaction.replacements,
-        meta: {
-          model: `${redaction.meta.model}+${attributed.meta.role_model}`,
-          transport: attributed.meta.role_transport,
-          store: false,
-          mask: redaction.meta.mask,
-          fail_closed: true,
-          automatic_role_attribution: true,
-          critical_review_count: attributed.meta.critical_review_count,
-        },
-      };
+      processed = await redactAndAttributeSegments(acoustic.segments);
     }
     const privatePassMs = Date.now() - privatePassStartedAt;
 
@@ -80,10 +63,13 @@ export default async function handler(req, res) {
         role_attribution_store: false,
         critical_role_review_count: processed.meta.critical_review_count,
         speaker_role_confirmation_required: processed.meta.critical_review_count > 0,
-        combined_privacy_attribution: !fallbackUsed,
+        parallel_privacy_attribution: !fallbackUsed && Boolean(processed.meta.parallel_privacy_attribution),
+        combined_privacy_attribution_fallback: fallbackUsed,
         signed_privacy_proof_issued: Boolean(privacyProof),
         performance_ms: {
           transcription: transcriptionMs,
+          privacy_redaction: processed.meta.redaction_ms ?? null,
+          speaker_attribution: processed.meta.speaker_attribution_ms ?? null,
           privacy_and_speaker_attribution: privatePassMs,
           total_audio_pipeline: Date.now() - totalStartedAt,
         },
