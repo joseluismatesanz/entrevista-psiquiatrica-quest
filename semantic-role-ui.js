@@ -32,6 +32,8 @@
     unknown: "INTERLOCUTOR_NO_IDENTIFICADO",
   };
 
+  const TRANSCRIPTION_RESPONSE_RE = /\/api\/(?:transcribe|finalize-realtime-transcript)(?:$|[?#])/i;
+
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (char) => ({
       "&": "&amp;",
@@ -69,11 +71,15 @@
 
     const reviewItems = Array.isArray(payload.review_items) ? payload.review_items : [];
     pendingCriticalReview = reviewItems.length > 0;
+    const realtime = Boolean(payload?.meta?.realtime_transcription);
+    const sourceHint = realtime
+      ? "En transcripción en tiempo real no se usa identidad acústica: el rol clínico se atribuye por el contenido, el contexto y el orden de los turnos."
+      : "La letra acústica A/B/C es solo una pista. El rol clínico se atribuye por el contenido y el contexto de la conversación.";
 
     let html = `<div style="display:grid;gap:8px;margin-bottom:12px">
       <div><b>Fuentes detectadas automáticamente</b></div>
       <div class="tag-list">${participantSummary(payload)}</div>
-      <div class="muted small">La letra acústica A/B/C es solo una pista. El rol clínico se atribuye por el contenido y el contexto de la conversación.</div>
+      <div class="muted small">${escapeHtml(sourceHint)}</div>
     </div>`;
 
     if (reviewItems.length) {
@@ -82,7 +88,7 @@
         <p class="muted small" style="margin:5px 0 10px">Solo se muestran las ambigüedades que pueden cambiar riesgo, medicación, antecedentes, diagnóstico o plan.</p>
       </div>`;
       html += reviewItems.map((item) => `<label class="speaker-row">
-        <span><b>${escapeHtml(item.text)}</b><small>Voz acústica ${escapeHtml(item.acoustic_speaker)} · confianza ${escapeHtml(item.confidence)}</small></span>
+        <span><b>${escapeHtml(item.text)}</b><small>${realtime ? "Turno Realtime" : `Voz acústica ${escapeHtml(item.acoustic_speaker)}`} · confianza ${escapeHtml(item.confidence)}</small></span>
         <select data-critical-segment="${escapeHtml(item.segment_id)}">${roleOptions(item.suggested_role)}</select>
       </label>`).join("");
       applyButton.hidden = false;
@@ -134,7 +140,7 @@
     const target = args[0];
     const url = typeof target === "string" ? target : String(target?.url || "");
 
-    if (/\/api\/transcribe(?:$|[?#])/i.test(url) && response.ok) {
+    if (TRANSCRIPTION_RESPONSE_RE.test(url) && response.ok) {
       try {
         const payload = await response.clone().json();
         latestPayload = payload;
