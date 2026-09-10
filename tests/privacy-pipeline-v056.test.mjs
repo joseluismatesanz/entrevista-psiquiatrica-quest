@@ -2,18 +2,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [transcribeApi, analyzeApi, validationJs, combinedPrivacy] = await Promise.all([
+const [transcribeApi, analyzeApi, validationJs, combinedPrivacy, redactionModule] = await Promise.all([
   readFile(new URL("../api/transcribe.mjs", import.meta.url), "utf8"),
   readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
   readFile(new URL("../report-validation-v058.js", import.meta.url), "utf8"),
   readFile(new URL("../server/privacy-attribution.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../server/person-name-redaction.mjs", import.meta.url), "utf8"),
 ]);
 
 test("V0.5.6 privacidad: el audio queda desidentificado antes de llegar al cliente y la vía rápida falla cerrado", () => {
   assert.match(transcribeApi, /redactAndAttributeSegments\(acoustic\.segments\)/);
   assert.match(combinedPrivacy, /redacted_text/);
   assert.match(combinedPrivacy, /residual_person_name/);
-  assert.match(combinedPrivacy, /XXXXXXXXXXX/);
+  assert.match(combinedPrivacy, /PERSON_NAME_MASK/);
+  assert.match(redactionModule, /PERSON_NAME_MASK = "XXXXXXXXXXX"/);
   assert.match(combinedPrivacy, /fail_closed: true/);
   assert.match(transcribeApi, /person_name_redaction_fail_closed: true/);
   assert.match(transcribeApi, /acoustic_transcript: processed\.segments/);
