@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
+import { useFastClinicalRoute } from "../api/analyze.mjs";
 
 const [apiAnalyze, apiTranscribe, config, index] = await Promise.all([
   readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
@@ -16,25 +17,34 @@ test("rendimiento: audio combina anonimización y atribución en una sola llamad
   assert.match(apiTranscribe, /fallbackUsed/);
 });
 
-test("rendimiento: ruta rápida excluye explícitamente señales clínicas complejas", () => {
-  assert.match(apiAnalyze, /COMPLEX_CLINICAL_PATTERNS/);
-  for (const token of ["suicid", "psicos", "agresi", "cannabis", "bipolar", "sertralina"]) {
+test("rendimiento: ruta rápida excluye señales clínicas complejas, no una mención farmacológica simple", () => {
+  assert.match(apiAnalyze, /HIGH_COMPLEXITY_PATTERNS/);
+  for (const token of ["suicid", "psicos", "agresi", "cannabis", "bipolar"]) {
     assert.match(apiAnalyze, new RegExp(token, "i"));
   }
+  assert.match(apiAnalyze, /MEDICATION_COMPLEXITY_ACTION_PATTERN/);
   assert.match(apiAnalyze, /gpt-5\.6-luna/);
   assert.match(apiAnalyze, /adaptive_fast_route/);
+
+  assert.equal(useFastClinicalRoute("PACIENTE: Tomo lorazepam y sertralina."), true);
+  assert.equal(useFastClinicalRoute("PACIENTE: Tomo sertralina 50 mg por la mañana."), true);
+  assert.equal(useFastClinicalRoute("PSIQUIATRA: Vamos a subir sertralina de 50 mg a 100 mg."), false);
+  assert.equal(useFastClinicalRoute("PACIENTE: No tomo la sertralina desde hace una semana."), false);
+  assert.equal(useFastClinicalRoute("PACIENTE: Escucho voces que me hablan."), false);
 });
 
-test("rendimiento: prefetch solo reutiliza el análisis si la transcripción no cambia", () => {
+test("rendimiento: el prefetch especulativo se reutiliza solo si la transcripción no cambia", () => {
   assert.match(config, /__CLINICAL_ANALYSIS_PREFETCH/);
   assert.match(config, /prefetched\.get\(transcript\)/);
-  assert.match(config, /speaker_role_confirmation_required/);
   assert.match(config, /privacyProofs\.get\(transcript\)/);
+  assert.match(config, /Análisis anticipado especulativo/);
+  assert.doesNotMatch(config, /if \(!transcript \|\| payload\?\.meta\?\.speaker_role_confirmation_required\) return/);
+  assert.match(config, /Si el profesional corrige[\s\S]*la transcripción cambia/);
   assert.match(config, /conserva ambos solo en memoria/);
 });
 
 test("rendimiento: el navegador fuerza una revisión fresca del cliente de privacidad", () => {
-  assert.match(index, /config\.js\?v=20260910-privacy-proof-1/);
+  assert.match(index, /config\.js\?v=20260910-prefetch-fastmed-1/);
 });
 
 test("privacidad combinada: conserva XXXXXXXXXXX y atribuye rol sin devolver nombre", async () => {
