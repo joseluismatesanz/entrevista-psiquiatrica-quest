@@ -76,6 +76,10 @@
       <div class="muted small">La letra acústica A/B/C es solo una pista. El rol clínico se atribuye por el contenido y el contexto de la conversación.</div>
     </div>`;
 
+    if (payload?.meta?.long_interview) {
+      html += `<div class="analysis-principle" style="margin-bottom:10px"><b>Entrevista por bloques:</b> ${escapeHtml(payload.meta.block_count || 0)} bloques ya procesados y desidentificados. Las letras acústicas pueden reiniciarse entre bloques; aquí se revisan roles clínicos, no letras.</div>`;
+    }
+
     if (reviewItems.length) {
       html += `<div style="border-top:1px solid #d8e5e7;padding-top:12px">
         <b>${reviewItems.length} intervención${reviewItems.length === 1 ? "" : "es"} clínicamente relevante${reviewItems.length === 1 ? "" : "s"} necesita${reviewItems.length === 1 ? "" : "n"} confirmar la fuente</b>
@@ -128,6 +132,12 @@
     renderAutomaticAttribution(latestPayload);
   }
 
+  function acceptPayload(payload) {
+    latestPayload = payload;
+    window.__CLINICAL_ROLE_ATTRIBUTION = payload;
+    setTimeout(() => renderAutomaticAttribution(payload), 0);
+  }
+
   const nativeFetch = window.fetch.bind(window);
   window.fetch = async (...args) => {
     const response = await nativeFetch(...args);
@@ -137,15 +147,21 @@
     if (/\/api\/transcribe(?:$|[?#])/i.test(url) && response.ok) {
       try {
         const payload = await response.clone().json();
-        latestPayload = payload;
-        window.__CLINICAL_ROLE_ATTRIBUTION = payload;
-        setTimeout(() => renderAutomaticAttribution(payload), 0);
+        acceptPayload(payload);
       } catch {
         // La respuesta original sigue su curso; no se registra contenido clínico.
       }
     }
     return response;
   };
+
+  // V0.6: los bloques individuales no se muestran en este panel. El controlador de
+  // entrevista larga publica un único resultado agregado y ya desidentificado al finalizar.
+  window.addEventListener("clinical-long-attribution-ready", (event) => {
+    const payload = event?.detail;
+    if (!payload || !payload.meta?.long_interview) return;
+    acceptPayload(payload);
+  });
 
   document.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target.closest("#applySpeakerMapping") : null;
