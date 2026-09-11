@@ -168,7 +168,7 @@ test("V0.6: arquitectura larga usa bloques de 20 s, concurrencia acotada y acele
   assert.match(longController, /MAX_BUFFERED_BLOCKS/);
   assert.match(contextBridge, /safeBlocks\.get\(blockIndex - 1\)/);
   assert.match(index, /bloques de aproximadamente 20 segundos/);
-  assert.match(index, /20260911-20s-1/);
+  assert.match(index, /20260911-20s-2/);
   assert.match(loader, /transcribe\(\?:-block\)\?/);
   assert.match(vercel, /api\/extract-block-evidence\.mjs/);
   assert.match(health, /long_interview_blocks/);
