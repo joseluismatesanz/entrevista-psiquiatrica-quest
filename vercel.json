@@ -7,6 +7,9 @@
     },
     "api/transcribe.mjs": {
       "maxDuration": 300
+    },
+    "api/transcribe-block.mjs": {
+      "maxDuration": 300
     }
   },
   "headers": [
