@@ -58,6 +58,10 @@ function extractParsed(response) {
   return null;
 }
 
+function priorContext(options = {}) {
+  return String(options.previousSafeContext || "").trim().slice(-2400);
+}
+
 async function resolveClient(options = {}) {
   if (options.client) return { client: options.client, transport: "injected-test-client", model: options.model || PRIVACY_ATTRIBUTION_MODEL };
   const { default: OpenAI } = await import("openai");
@@ -87,6 +91,7 @@ ATRIBUCIÓN:
 - mother/father/sibling/caregiver/family solo si el contexto lo hace explícito.
 - Si el psiquiatra identifica explícitamente al siguiente interlocutor como madre/padre/hermano, conserva ese parentesco; nunca lo rebajes a caregiver/family.
 - Si una persona dice explícitamente "soy su madre/padre/hermano", conserva ese parentesco.
+- Si se aporta CONTEXTO PREVIO DESIDENTIFICADO, úsalo solo para mantener continuidad de interlocutores entre bloques. No lo copies, no lo resumas y no lo devuelvas: la salida debe contener exclusivamente los segmentos actuales.
 - nurse/police/security solo si es explícito; unknown si no puede saberse razonablemente.
 - confidence=high solo con evidencia contextual clara.
 - No diagnostiques ni resumas.
@@ -99,6 +104,8 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
   if (!segments.length) throw new TypeError("No hay segmentos para procesar.");
   const runtime = await resolveClient(options);
   const format = zodTextFormat(CombinedSchema, "privacy_attribution_v056");
+  const context = priorContext(options);
+  const inputText = `${context ? `CONTEXTO PREVIO DESIDENTIFICADO (solo referencia de continuidad):\n${context}\n\n` : ""}Segmentos JSON:\n${JSON.stringify(segments.map((s) => ({ segment_id: s.id, acoustic_speaker: s.speaker, text: s.text })))}`;
   const response = await runtime.client.responses.parse({
     model: runtime.model,
     store: false,
@@ -106,7 +113,7 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
     reasoning: { effort: "none" },
     max_output_tokens: Math.max(1200, Math.min(12000, segments.length * 170)),
     instructions: instructions(),
-    input: [{ role: "user", content: [{ type: "input_text", text: `Segmentos JSON:\n${JSON.stringify(segments.map((s) => ({ segment_id: s.id, acoustic_speaker: s.speaker, text: s.text })))}` }] }],
+    input: [{ role: "user", content: [{ type: "input_text", text: inputText }] }],
     text: { format },
   });
   if (response.status !== "completed") throw new Error(`Procesamiento privado incompleto: ${response.status}`);
@@ -174,6 +181,7 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
       automatic_role_attribution: true,
       critical_review_count: reviewItems.length,
       explicit_family_role_anchors: explicitFamilyRoleAnchors,
+      previous_safe_context_used: Boolean(context),
       deduplicated_overlap_segments: deduplication.removed,
       request_id: response?._request_id || "",
     },
