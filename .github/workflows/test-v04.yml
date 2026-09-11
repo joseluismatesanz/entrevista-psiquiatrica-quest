@@ -2,7 +2,7 @@ name: V0.4 clinical regression
 
 on:
   push:
-    branches: [v0.2-mobile-privacy]
+    branches: [v0.2-mobile-privacy, v0.6-long-interview]
   pull_request:
     branches: [main]
 
