@@ -10,8 +10,8 @@ const [transcribeApi, analyzeApi, validationJs, combinedPrivacy, redactionModule
   readFile(new URL("../server/person-name-redaction.mjs", import.meta.url), "utf8"),
 ]);
 
-test("V0.5.6 privacidad: el audio queda desidentificado antes de llegar al cliente y la vía rápida falla cerrado", () => {
-  assert.match(transcribeApi, /redactAndAttributeSegments\(acoustic\.segments\)/);
+test("privacidad: el audio queda desidentificado antes de llegar al cliente y la vía rápida falla cerrado", () => {
+  assert.match(transcribeApi, /redactAndAttributeSegments\(acoustic\.segments(?:,\s*\{\s*previousSafeContext\s*\})?\)/);
   assert.match(combinedPrivacy, /redacted_text/);
   assert.match(combinedPrivacy, /residual_person_name/);
   assert.match(combinedPrivacy, /PERSON_NAME_MASK/);
@@ -20,13 +20,13 @@ test("V0.5.6 privacidad: el audio queda desidentificado antes de llegar al clien
   assert.match(transcribeApi, /person_name_redaction_fail_closed: true/);
   assert.match(transcribeApi, /acoustic_transcript: processed\.segments/);
   assert.doesNotMatch(transcribeApi, /acoustic_transcript: acoustic\.transcript/);
-  assert.match(transcribeApi, /createPrivacyProof\(processed\.transcript\)/);
+  assert.match(transcribeApi, /createPrivacyProof\(processed\.transcript/);
   // Si falla la llamada combinada, el fallback conserva la secuencia segura:
   // primero redacta y solo después atribuye roles.
   assert.match(transcribeApi, /redactPersonNamesInSegments\(acoustic\.segments\)[\s\S]*attributeClinicalSpeakerRoles\(redaction\.segments\)/);
 });
 
-test("V0.5.6 privacidad: cualquier texto sin prueba válida se desidentifica antes del motor clínico; una prueba válida solo evita duplicar el mismo paso", () => {
+test("privacidad: cualquier texto sin prueba válida se desidentifica antes del motor clínico; una prueba válida solo evita duplicar el mismo paso", () => {
   assert.match(analyzeApi, /verifyPrivacyProof\(normalizedTranscript, body\.privacy_proof\)/);
   assert.match(analyzeApi, /if \(!privacyProofVerified\)/);
   assert.match(analyzeApi, /stage = "person_name_redaction"/);
