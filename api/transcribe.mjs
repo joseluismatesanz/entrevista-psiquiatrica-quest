@@ -2,13 +2,32 @@ import { transcribeAudioPayload } from "../server/transcribe.mjs";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
 import { redactPersonNamesInSegments } from "../server/person-name-redaction.mjs";
 import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
-import { createPrivacyProof } from "../server/privacy-proof.mjs";
+import {
+  createPrivacyProof,
+  verifyPrivacyProof,
+  LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+} from "../server/privacy-proof.mjs";
 
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
+}
+
+function verifiedPriorContext(body) {
+  if (body?.long_interview_block !== true) return "";
+  const context = typeof body?.previous_safe_context === "string"
+    ? body.previous_safe_context.trim()
+    : "";
+  const proof = typeof body?.previous_context_proof === "string"
+    ? body.previous_context_proof
+    : "";
+  if (!context || !proof || context.length > 100_000) return "";
+  const verified = verifyPrivacyProof(context, proof, {
+    maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+  });
+  return verified ? context.slice(-2400) : "";
 }
 
 export default async function handler(req, res) {
@@ -21,17 +40,22 @@ export default async function handler(req, res) {
   const totalStartedAt = Date.now();
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const longInterviewBlock = body.long_interview_block === true;
+    const previousSafeContext = verifiedPriorContext(body);
+
     const transcriptionStartedAt = Date.now();
     const acoustic = await transcribeAudioPayload(body);
     const transcriptionMs = Date.now() - transcriptionStartedAt;
 
     // Vía normal: una sola llamada estructurada hace anonimización + atribución.
-    // Si esa llamada falla, se activa el camino anterior como fallback seguro.
+    // En V0.6 puede recibir únicamente contexto previo ya desidentificado y firmado,
+    // para mantener continuidad de roles entre bloques. Si falla, se conserva el
+    // camino anterior como fallback seguro.
     const privatePassStartedAt = Date.now();
     let processed;
     let fallbackUsed = false;
     try {
-      processed = await redactAndAttributeSegments(acoustic.segments);
+      processed = await redactAndAttributeSegments(acoustic.segments, { previousSafeContext });
     } catch {
       fallbackUsed = true;
       const redaction = await redactPersonNamesInSegments(acoustic.segments);
@@ -50,14 +74,21 @@ export default async function handler(req, res) {
           fail_closed: true,
           automatic_role_attribution: true,
           critical_review_count: attributed.meta.critical_review_count,
+          previous_safe_context_used: false,
         },
       };
     }
     const privatePassMs = Date.now() - privatePassStartedAt;
 
     // Prueba firmada efímera: permite a /api/analyze verificar que ESTA transcripción
-    // exacta ya fue desidentificada por el servidor. El token no contiene texto clínico.
-    const privacyProof = createPrivacyProof(processed.transcript);
+    // exacta ya fue desidentificada por el servidor. Los bloques largos necesitan
+    // sobrevivir hasta el cierre de una sesión de 30 minutos; la vía normal conserva 10 min.
+    const privacyProof = longInterviewBlock
+      ? createPrivacyProof(processed.transcript, {
+          ttlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+          maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+        })
+      : createPrivacyProof(processed.transcript);
 
     return res.status(200).json({
       ...acoustic,
@@ -82,6 +113,12 @@ export default async function handler(req, res) {
         speaker_role_confirmation_required: processed.meta.critical_review_count > 0,
         combined_privacy_attribution: !fallbackUsed,
         signed_privacy_proof_issued: Boolean(privacyProof),
+        long_interview_block: longInterviewBlock,
+        previous_safe_context_verified: Boolean(previousSafeContext),
+        previous_safe_context_used: Boolean(processed.meta.previous_safe_context_used),
+        privacy_proof_ttl_seconds: longInterviewBlock
+          ? Math.round(LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS / 1000)
+          : 600,
         performance_ms: {
           transcription: transcriptionMs,
           privacy_and_speaker_attribution: privatePassMs,
