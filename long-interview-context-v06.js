@@ -3,6 +3,7 @@
   if (!baseUrl) return;
 
   let lastSafeBlock = null;
+  let finalizationStartedAt = 0;
   const inheritedFetch = window.fetch.bind(window);
 
   window.fetch = async (input, init = {}) => {
@@ -46,7 +47,33 @@
     return response;
   };
 
+  // Métrica exclusivamente temporal y efímera. No contiene ni persiste contenido clínico.
+  // Detecta cuándo la UI entra en «Cerrando entrevista…» y muestra cuánto tarda el cierre
+  // real tras pulsar Finalizar, que es distinto del tiempo acumulado del servidor.
+  const label = document.getElementById('recordButtonLabel');
+  if (label && typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(() => {
+      if (String(label.textContent || '').includes('Cerrando entrevista')) {
+        finalizationStartedAt = performance.now();
+      }
+    });
+    observer.observe(label, { childList: true, characterData: true, subtree: true });
+  }
+
+  window.addEventListener('clinical-long-attribution-ready', () => {
+    if (!finalizationStartedAt) return;
+    const elapsedMs = Math.max(0, performance.now() - finalizationStartedAt);
+    finalizationStartedAt = 0;
+    setTimeout(() => {
+      const status = document.getElementById('recordingStatus');
+      if (!status) return;
+      const suffix = ` Cierre tras Finalizar: ${(elapsedMs / 1000).toFixed(1)} s.`;
+      if (!status.textContent.includes('Cierre tras Finalizar:')) status.textContent += suffix;
+    }, 0);
+  });
+
   window.addEventListener('pagehide', () => {
     lastSafeBlock = null;
+    finalizationStartedAt = 0;
   });
 })();
