@@ -46,7 +46,45 @@ test("V0.5 audio: usa diarización, no devuelve audio y exige confirmación huma
   assert.match(result.transcript, /^HABLANTE B: Hola\./m);
   assert.equal(result.meta.persistent_audio_storage, false);
   assert.equal(result.meta.speaker_role_confirmation_required, true);
+  assert.equal(result.meta.chronological_segment_order_enforced, true);
   assert.equal("audio_base64" in result, false);
+});
+
+test("V0.6 audio: ordena los segmentos por timestamp aunque la diarización los devuelva desordenados", async () => {
+  const client = {
+    audio: {
+      transcriptions: {
+        async create() {
+          return {
+            duration: 12,
+            text: "Hola. Ahora mismo. Después.",
+            segments: [
+              { id: "seg-3", speaker: "B", start: 8, end: 10, text: "Después." },
+              { id: "seg-1", speaker: "A", start: 0, end: 2, text: "Hola." },
+              { id: "seg-2", speaker: "B", start: 4, end: 6, text: "Ahora mismo." },
+            ],
+          };
+        },
+      },
+    },
+  };
+
+  const result = await transcribeAudioPayload(
+    {
+      audio_base64: Buffer.from("fake-audio").toString("base64"),
+      mime_type: "audio/webm",
+    },
+    {
+      client,
+      fileFactory: async () => ({}),
+    }
+  );
+
+  assert.deepEqual(result.segments.map((segment) => segment.id), ["seg-1", "seg-2", "seg-3"]);
+  assert.equal(
+    result.transcript,
+    "HABLANTE A: Hola.\nHABLANTE B: Ahora mismo.\nHABLANTE B: Después."
+  );
 });
 
 test("V0.5 audio: rechaza audio que excede el límite preventivo del piloto", async () => {
