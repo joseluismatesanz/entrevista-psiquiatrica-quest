@@ -43,8 +43,17 @@ function normalizeSegments(response) {
       start: Number.isFinite(Number(segment?.start)) ? Number(segment.start) : 0,
       end: Number.isFinite(Number(segment?.end)) ? Number(segment.end) : 0,
       text: String(segment?.text || "").trim(),
+      source_order: index,
     }))
-    .filter((segment) => segment.text);
+    .filter((segment) => segment.text)
+    .sort((left, right) => {
+      const byStart = left.start - right.start;
+      if (byStart) return byStart;
+      const byEnd = left.end - right.end;
+      if (byEnd) return byEnd;
+      return left.source_order - right.source_order;
+    })
+    .map(({ source_order, ...segment }) => segment);
 
   if (segments.length === 0 && String(response?.text || "").trim()) {
     segments.push({
@@ -128,6 +137,7 @@ export async function transcribeAudioPayload(payload, options = {}) {
       audio_bytes: buffer.length,
       persistent_audio_storage: false,
       speaker_role_confirmation_required: true,
+      chronological_segment_order_enforced: true,
     },
   };
 }
