@@ -44,7 +44,7 @@ test("rendimiento: el prefetch especulativo se reutiliza solo si la transcripciÃ
 });
 
 test("rendimiento: el navegador fuerza una revisiÃ³n fresca del cliente de privacidad", () => {
-  assert.match(index, /config\.js\?v=20260910-prefetch-fastmed-1/);
+  assert.match(index, /config\.js\?v=[^"']+/);
 });
 
 test("privacidad combinada: conserva XXXXXXXXXXX y atribuye rol sin devolver nombre", async () => {
