@@ -10,6 +10,9 @@
     },
     "api/transcribe-block.mjs": {
       "maxDuration": 300
+    },
+    "api/extract-block-evidence.mjs": {
+      "maxDuration": 120
     }
   },
   "headers": [
