@@ -47,7 +47,10 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
       const privacy = samples.analysis.proofVerified
         ? `anonimización ${seconds(request.person_name_redaction)} (ya verificada)`
         : `anonimización ${seconds(request.person_name_redaction)}`;
-      parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · ${privacy} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}`);
+      const evidence = samples.analysis.evidenceVerified
+        ? ` · evidencia incremental sí (${samples.analysis.modelInputCharacters || '—'} caracteres al modelo)`
+        : ' · evidencia incremental no';
+      parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · ${privacy} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}${evidence}`);
     }
 
     target.textContent = parts.join(' | ');
@@ -74,6 +77,8 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
           core: payload?.meta?.performance_ms || {},
           fastRoute: Boolean(payload?.meta?.adaptive_fast_route),
           proofVerified: Boolean(payload?.meta?.privacy_proof_verified),
+          evidenceVerified: Boolean(payload?.meta?.long_interview_evidence_verified),
+          modelInputCharacters: Number(payload?.meta?.long_interview_model_input_characters) || 0,
         };
       }
       render();
@@ -159,10 +164,6 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
 
         if (!transcript || prefetched.has(transcript)) return;
 
-        // Análisis anticipado especulativo: comienza incluso si existe una fuente pendiente
-        // de revisión. Nunca se muestra antes de la revisión humana. Si el profesional corrige
-        // una voz o edita una palabra, la transcripción cambia y este resultado deja de coincidir,
-        // por lo que /api/analyze se ejecuta de nuevo con el texto corregido.
         const pending = nativeFetch(`${window.CLINICAL_API_URL}/api/analyze`, {
           method: 'POST',
           cache: 'no-store',
