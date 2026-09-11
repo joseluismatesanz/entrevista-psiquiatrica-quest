@@ -45,7 +45,6 @@ export function useFastClinicalRoute(transcript) {
 
 export function verifyLongInterviewBlocks(normalizedTranscript, rawBlocks, options = {}) {
   if (!Array.isArray(rawBlocks) || rawBlocks.length === 0) return { verified: false, count: 0, blocks: [] };
-  // Con bloques de 20 s, una entrevista de 30 min produce hasta 90 bloques.
   if (rawBlocks.length > 100) return { verified: false, count: rawBlocks.length, blocks: [] };
 
   const transcripts = [];
@@ -166,10 +165,12 @@ export default async function handler(req, res) {
 
     stage = "clinical_analysis";
     const fastRoute = useFastClinicalRoute(safeTranscript);
+    const fastMode = fastRoute && evidenceBundle.verified;
     const analysisStartedAt = Date.now();
     const result = await analyzeTranscript(safeTranscript, {
       ...(fastRoute ? { model: "gpt-5.6-luna" } : {}),
       ...(evidenceBundle.verified ? { modelTranscript: evidenceBundle.transcript } : {}),
+      ...(fastMode ? { fastMode: true } : {}),
     });
     const clinicalAnalysisMs = Date.now() - analysisStartedAt;
 
@@ -193,6 +194,7 @@ export default async function handler(req, res) {
         long_interview_model_input_compacted: evidenceBundle.verified,
         long_interview_model_input_characters: evidenceBundle.verified ? evidenceBundle.transcript.length : safeTranscript.length,
         adaptive_fast_route: fastRoute,
+        verified_fast_mode: fastMode,
         request_performance_ms: {
           person_name_redaction: redactionMs,
           clinical_analysis: clinicalAnalysisMs,
