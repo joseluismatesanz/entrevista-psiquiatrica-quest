@@ -1,7 +1,8 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 const PROOF_VERSION = "v1";
-const DEFAULT_TTL_MS = 10 * 60 * 1000;
+export const DEFAULT_PRIVACY_PROOF_TTL_MS = 10 * 60 * 1000;
+export const LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS = 45 * 60 * 1000;
 const MAX_CLOCK_SKEW_MS = 30 * 1000;
 
 function rootSecret(env = process.env) {
@@ -29,13 +30,23 @@ function macFor(transcript, expiresAt, key) {
   return createHmac("sha256", key).update(payload, "utf8").digest("base64url");
 }
 
+function allowedTtl(options = {}) {
+  return Number.isFinite(options.maxTtlMs)
+    ? Math.max(1_000, Number(options.maxTtlMs))
+    : DEFAULT_PRIVACY_PROOF_TTL_MS;
+}
+
 export function createPrivacyProof(transcript, options = {}) {
   const key = derivedKey(options.env || process.env);
   const text = normalizedTranscript(transcript);
   if (!key || !text) return "";
 
   const now = Number.isFinite(options.now) ? Number(options.now) : Date.now();
-  const ttlMs = Number.isFinite(options.ttlMs) ? Math.max(1_000, Number(options.ttlMs)) : DEFAULT_TTL_MS;
+  const maxTtlMs = allowedTtl(options);
+  const requestedTtlMs = Number.isFinite(options.ttlMs)
+    ? Math.max(1_000, Number(options.ttlMs))
+    : DEFAULT_PRIVACY_PROOF_TTL_MS;
+  const ttlMs = Math.min(requestedTtlMs, maxTtlMs);
   const expiresAt = now + ttlMs;
   const mac = macFor(text, expiresAt, key);
   return `${PROOF_VERSION}.${expiresAt}.${mac}`;
@@ -51,8 +62,9 @@ export function verifyPrivacyProof(transcript, token, options = {}) {
 
   const expiresAt = Number(expiresRaw);
   const now = Number.isFinite(options.now) ? Number(options.now) : Date.now();
+  const maxTtlMs = allowedTtl(options);
   if (!Number.isFinite(expiresAt) || expiresAt < now - MAX_CLOCK_SKEW_MS) return false;
-  if (expiresAt > now + DEFAULT_TTL_MS + MAX_CLOCK_SKEW_MS) return false;
+  if (expiresAt > now + maxTtlMs + MAX_CLOCK_SKEW_MS) return false;
 
   const expectedMac = macFor(text, expiresAt, key);
   const supplied = Buffer.from(suppliedMac, "utf8");
