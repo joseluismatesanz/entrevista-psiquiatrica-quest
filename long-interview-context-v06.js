@@ -2,7 +2,7 @@
   const baseUrl = String(window.CLINICAL_API_URL || '').replace(/\/+$/, '');
   if (!baseUrl) return;
 
-  let lastSafeBlock = null;
+  const safeBlocks = new Map();
   let finalizationStartedAt = 0;
   const inheritedFetch = window.fetch.bind(window);
 
@@ -17,15 +17,20 @@
         const body = JSON.parse(init.body);
         blockIndex = Number(body?.block_index);
 
-        if (blockIndex === 1) lastSafeBlock = null;
+        if (blockIndex === 1) safeBlocks.clear();
 
-        if (blockIndex > 1 && lastSafeBlock?.transcript && lastSafeBlock?.privacyProof) {
-          body.previous_safe_context = lastSafeBlock.transcript;
-          body.previous_context_proof = lastSafeBlock.privacyProof;
+        // Con procesamiento concurrente solo se aporta contexto si el bloque inmediatamente
+        // anterior YA terminó y está firmado. Nunca se usa un bloque antiguo como si fuera
+        // el precedente: si aún no está disponible, el servidor procesa sin contexto y
+        // conserva sus reglas fail-closed/revisión de fuentes.
+        const previous = safeBlocks.get(blockIndex - 1);
+        if (blockIndex > 1 && previous?.transcript && previous?.privacyProof) {
+          body.previous_safe_context = previous.transcript;
+          body.previous_context_proof = previous.privacyProof;
           requestInit = { ...init, body: JSON.stringify(body) };
         }
       } catch {
-        // The original request continues. The server will simply process without context.
+        // La petición original continúa; el servidor procesará el bloque sin contexto previo.
       }
     }
 
@@ -36,20 +41,18 @@
         const payload = await response.clone().json();
         const transcript = String(payload?.transcript || '').trim();
         const privacyProof = String(payload?.privacy_proof || '').trim();
-        if (transcript && privacyProof) {
-          lastSafeBlock = { transcript, privacyProof, blockIndex };
+        if (transcript && privacyProof && Number.isFinite(blockIndex)) {
+          safeBlocks.set(blockIndex, { transcript, privacyProof });
         }
       } catch {
-        // Never interfere with the actual response consumed by the recorder.
+        // Nunca interfiere con la respuesta consumida por el grabador.
       }
     }
 
     return response;
   };
 
-  // Métrica exclusivamente temporal y efímera. No contiene ni persiste contenido clínico.
-  // Detecta cuándo la UI entra en «Cerrando entrevista…» y muestra cuánto tarda el cierre
-  // real tras pulsar Finalizar, que es distinto del tiempo acumulado del servidor.
+  // Métrica exclusivamente temporal y efímera; no contiene contenido clínico.
   const label = document.getElementById('recordButtonLabel');
   if (label && typeof MutationObserver !== 'undefined') {
     const observer = new MutationObserver(() => {
@@ -66,14 +69,13 @@
     finalizationStartedAt = 0;
     setTimeout(() => {
       const status = document.getElementById('recordingStatus');
-      if (!status) return;
-      const suffix = ` Cierre tras Finalizar: ${(elapsedMs / 1000).toFixed(1)} s.`;
-      if (!status.textContent.includes('Cierre tras Finalizar:')) status.textContent += suffix;
+      if (!status || status.textContent.includes('Cierre tras Finalizar:')) return;
+      status.textContent += ` Cierre tras Finalizar: ${(elapsedMs / 1000).toFixed(1)} s.`;
     }, 0);
   });
 
   window.addEventListener('pagehide', () => {
-    lastSafeBlock = null;
+    safeBlocks.clear();
     finalizationStartedAt = 0;
   });
 })();
