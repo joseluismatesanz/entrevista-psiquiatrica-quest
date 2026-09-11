@@ -23,7 +23,6 @@ function extractRefusal(response) {
 
 function extractParsed(response) {
   if (response?.output_parsed) return response.output_parsed;
-
   for (const item of response.output || []) {
     if (item.type !== "message") continue;
     for (const content of item.content || []) {
@@ -42,9 +41,7 @@ function structuredOutputError(message, cause) {
 
 function isRetryableStructuredError(error) {
   if (!error) return false;
-  if (error.name === "StructuredOutputParseError" || error.name === "SyntaxError" || error.name === "ZodError") {
-    return true;
-  }
+  if (error.name === "StructuredOutputParseError" || error.name === "SyntaxError" || error.name === "ZodError") return true;
   return /json|parse|parsed|structured output|schema/i.test(String(error.message || ""));
 }
 
@@ -53,12 +50,9 @@ async function invokeStructured(client, params) {
     const response = await client.responses.parse(params);
     return { response, parsed: extractParsed(response), parser: "responses.parse+zod" };
   }
-
-  // Compatibilidad exclusiva con clientes simulados de regresión.
   if (typeof client.responses?.create === "function") {
     const response = await client.responses.create(params);
     if (!response.output_text) return { response, parsed: null, parser: "test-create-fallback" };
-
     try {
       const parsed = ClinicalAssessmentSchema.parse(JSON.parse(response.output_text));
       return { response, parsed, parser: "test-create-fallback" };
@@ -66,40 +60,31 @@ async function invokeStructured(client, params) {
       throw structuredOutputError("El cliente de prueba devolvió una salida estructurada inválida.", cause);
     }
   }
-
   throw new TypeError("El cliente de modelo no expone Responses API.");
 }
 
 async function requestParsedAssessment(client, baseParams) {
   let lastError;
-
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const { response, parsed, parser } = await invokeStructured(client, {
         ...baseParams,
-        instructions:
-          attempt === 1
-            ? SYSTEM_PROMPT
-            : `${SYSTEM_PROMPT}\n\nREINTENTO TÉCNICO: devuelve únicamente una salida que cumpla exactamente el esquema estructurado. No añadas texto fuera de los campos del esquema.`,
+        instructions: attempt === 1
+          ? SYSTEM_PROMPT
+          : `${SYSTEM_PROMPT}\n\nREINTENTO TÉCNICO: devuelve únicamente una salida que cumpla exactamente el esquema estructurado. No añadas texto fuera de los campos del esquema.`,
       });
-
       const refusal = extractRefusal(response);
       if (refusal) {
         const error = new Error(refusal);
         error.name = "ModelRefusalError";
         throw error;
       }
-
       if (response.status !== "completed") {
         const error = new Error(`Respuesta incompleta del modelo: ${response.status}`);
         error.name = "IncompleteModelResponseError";
         throw error;
       }
-
-      if (!parsed) {
-        throw structuredOutputError("El modelo no devolvió una salida estructurada validable.");
-      }
-
+      if (!parsed) throw structuredOutputError("El modelo no devolvió una salida estructurada validable.");
       return { parsed, response, attempts: attempt, parser };
     } catch (error) {
       lastError = error;
@@ -107,7 +92,6 @@ async function requestParsedAssessment(client, baseParams) {
       throw error;
     }
   }
-
   throw lastError || structuredOutputError("No se pudo obtener una salida estructurada válida.");
 }
 
@@ -117,6 +101,10 @@ export async function analyzeTranscript(transcript, options = {}) {
     throw new TypeError("La transcripción debe contener texto suficiente para analizar.");
   }
 
+  const modelTranscript = typeof options.modelTranscript === "string" && options.modelTranscript.trim().length >= 20
+    ? options.modelTranscript.trim()
+    : transcript.trim();
+
   let client = options.client;
   let transport = client ? "injected-test-client" : "";
   let defaultModel = "gpt-5.6";
@@ -124,15 +112,8 @@ export async function analyzeTranscript(transcript, options = {}) {
   if (!client) {
     const { default: OpenAI } = await import("openai");
     const auth = await resolveModelAuth();
-
-    if (!auth) {
-      throw new Error("No hay credenciales de modelo configuradas.");
-    }
-
-    client = new OpenAI({
-      apiKey: auth.apiKey,
-      ...(auth.baseURL ? { baseURL: auth.baseURL } : {}),
-    });
+    if (!auth) throw new Error("No hay credenciales de modelo configuradas.");
+    client = new OpenAI({ apiKey: auth.apiKey, ...(auth.baseURL ? { baseURL: auth.baseURL } : {}) });
     transport = auth.transport;
     defaultModel = auth.defaultModel;
   }
@@ -145,24 +126,19 @@ export async function analyzeTranscript(transcript, options = {}) {
     model,
     store: false,
     background: false,
-    // La salida es extracción estructurada con múltiples guardas deterministas posteriores.
-    // Low reduce latencia manteniendo razonamiento explícito para el núcleo clínico.
     reasoning: { effort: "low" },
     max_output_tokens: 16000,
-    input: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text:
-              "Genera el borrador clínico estructurado en JSON según el esquema. " +
-              "Trabaja únicamente con la siguiente entrevista ficticia o previamente anonimizada:\n\n" +
-              transcript.trim(),
-          },
-        ],
-      },
-    ],
+    input: [{
+      role: "user",
+      content: [{
+        type: "input_text",
+        text:
+          "Genera el borrador clínico estructurado en JSON según el esquema. " +
+          "Trabaja únicamente con la siguiente evidencia procedente de una entrevista ficticia o previamente anonimizada. " +
+          "La evidencia puede ser una selección conservadora de líneas exactas; no infieras que lo omitido fue negado o explorado:\n\n" +
+          modelTranscript,
+      }],
+    }],
     text: { format: textFormat },
   });
   const modelMs = Date.now() - modelStartedAt;
@@ -176,8 +152,6 @@ export async function analyzeTranscript(transcript, options = {}) {
     medication_verification_source: "not_run",
   };
 
-  // En producción se contrasta cada nombre farmacológico con CIMA (AEMPS).
-  // En pruebas con cliente inyectado no se toca la red salvo que se aporte un verificador explícito.
   const shouldVerifyMedications = !options.client || typeof options.medicationVerifier === "function";
   let medicationMs = 0;
   if (shouldVerifyMedications) {
@@ -190,36 +164,24 @@ export async function analyzeTranscript(transcript, options = {}) {
     medicationMeta = medicationResult.meta || medicationMeta;
   }
 
-  // Segunda capa determinista: usa la transcripción para corregir temporalidad farmacológica,
-  // sincroniza las tarjetas con las entidades verificadas y elimina pseudodiscrepancias
-  // subjetivo/objetivo que no representan versiones incompatibles.
+  // Las guardas deterministas SIEMPRE usan la transcripción completa desidentificada,
+  // aunque el modelo haya recibido una selección clínica compacta.
   const postprocessResult = applyClinicalPostprocessing(assessment, transcript);
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
 
-  // INTERVENCIÓN conserva siempre la propuesta concreta + la respuesta. Una frase genérica
-  // como "acepta la propuesta" no es suficiente si no puede anclarse a una propuesta explícita
-  // del psiquiatra en la transcripción.
   const interventionGroundResult = groundInterventionToTranscript(assessment, transcript);
   assessment = interventionGroundResult.assessment;
   warnings.push(...interventionGroundResult.warnings);
 
-  // Si existe exploración psicopatológica sustantiva y la transcripción contiene una
-  // observación clínica explícita del psiquiatra, el apartado no puede quedar marcado
-  // como insuficiente por un simple desacople del modelo.
   const mseGroundResult = groundExplicitMseAssessment(assessment, transcript);
   assessment = mseGroundResult.assessment;
   warnings.push(...mseGroundResult.warnings);
 
-  // La identidad de PSQ Guardia nunca se acepta por inferencia ni por memoria del modelo.
-  // Solo puede conservarse si el profesional se identifica explícitamente en la transcripción.
   const psqGuardResult = groundPsqGuardiaToTranscript(assessment, transcript);
   assessment = psqGuardResult.assessment;
   warnings.push(...psqGuardResult.warnings);
 
-  // Última capa factual antes del informe: evita fusionar una negación inespecífica de
-  // "hacerse daño" con una negación formal de autolesiones, elimina escolarización inferida
-  // y conserva en el plan las ampliaciones diagnósticas expresadas por el psiquiatra.
   const reportGroundResult = groundReportContentToTranscript(assessment, transcript);
   assessment = reportGroundResult.assessment;
   warnings.push(...reportGroundResult.warnings);
@@ -244,6 +206,9 @@ export async function analyzeTranscript(transcript, options = {}) {
       mse_explicit_observation_grounded: true,
       psq_guardia_transcript_grounded: true,
       report_content_transcript_grounded: true,
+      model_input_compacted: modelTranscript !== transcript.trim(),
+      model_input_characters: modelTranscript.length,
+      grounding_transcript_characters: transcript.trim().length,
       performance_ms: {
         structured_clinical_model: modelMs,
         medication_verification: medicationMs,
