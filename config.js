@@ -164,6 +164,9 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
 
         if (!transcript || prefetched.has(transcript)) return;
 
+        // Análisis anticipado especulativo: se reutiliza solo para esta transcripción exacta.
+        // Si el profesional corrige una voz o edita una palabra, la transcripción cambia y
+        // el resultado anticipado deja de coincidir; el análisis se ejecuta de nuevo.
         const pending = nativeFetch(`${window.CLINICAL_API_URL}/api/analyze`, {
           method: 'POST',
           cache: 'no-store',
