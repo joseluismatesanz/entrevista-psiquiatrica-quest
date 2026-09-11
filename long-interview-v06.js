@@ -2,8 +2,10 @@
   const baseUrl = String(window.CLINICAL_API_URL || '').replace(/\/+$/, '');
   if (!baseUrl || typeof MediaRecorder === 'undefined') return;
 
-  const BLOCK_SECONDS = 60;
+  const BLOCK_SECONDS = 20;
   const MAX_SESSION_SECONDS = 30 * 60;
+  const MAX_CONCURRENT_BLOCKS = 2;
+  const MAX_BUFFERED_BLOCKS = 8;
   const MAX_BLOCK_BYTES = 3_000_000;
   const MIN_BLOCK_BYTES = 1200;
 
@@ -17,17 +19,20 @@
     recorderParts: [],
     mimeType: '',
     startedAt: 0,
-    blockStartedAt: 0,
     blockIndex: 0,
     processedBlocks: [],
     pendingBlocks: 0,
-    queue: Promise.resolve(),
+    inFlightBlocks: 0,
+    taskQueue: [],
+    taskPromises: [],
     rotationPromise: null,
     blockTimer: null,
     uiTimer: null,
     maxTimer: null,
     finalTranscript: '',
     analysisPrefetchStarted: false,
+    finalizationStartedAt: 0,
+    peakPendingBlocks: 0,
   };
 
   function formatClock(seconds) {
@@ -76,9 +81,18 @@
     window.__LONG_INTERVIEW_TRANSCRIPT = '';
   }
 
+  function drainQueuedTasks() {
+    while (state.taskQueue.length) {
+      const task = state.taskQueue.shift();
+      task?.resolve?.({ ok: false, skipped: true });
+      state.pendingBlocks = Math.max(0, state.pendingBlocks - 1);
+    }
+  }
+
   function resetState({ keepText = false } = {}) {
     clearTimers();
     stopTracks();
+    drainQueuedTasks();
     state.active = false;
     state.finishing = false;
     state.failed = false;
@@ -86,14 +100,17 @@
     state.recorderParts = [];
     state.mimeType = '';
     state.startedAt = 0;
-    state.blockStartedAt = 0;
     state.blockIndex = 0;
     state.processedBlocks = [];
     state.pendingBlocks = 0;
-    state.queue = Promise.resolve();
+    state.inFlightBlocks = 0;
+    state.taskQueue = [];
+    state.taskPromises = [];
     state.rotationPromise = null;
     state.finalTranscript = '';
     state.analysisPrefetchStarted = false;
+    state.finalizationStartedAt = 0;
+    state.peakPendingBlocks = 0;
     invalidateVerifiedBlocks();
     if (!keepText && $('caseText')) $('caseText').value = '';
   }
@@ -116,7 +133,7 @@
       detail.textContent = 'Procesando últimos bloques';
     } else {
       label.textContent = 'Iniciar entrevista';
-      detail.textContent = 'Máx. 30 min · procesamiento por bloques';
+      detail.textContent = 'Máx. 30 min · bloques de 20 s';
     }
   }
 
@@ -129,28 +146,25 @@
     const status = $('recordingStatus');
     if (detail) detail.textContent = `${formatClock(elapsed)} / ${formatClock(MAX_SESSION_SECONDS)}`;
     if (status) {
-      status.textContent = `Grabando · ${safe} bloque${safe === 1 ? '' : 's'} seguro${safe === 1 ? '' : 's'} · ${pending ? `${pending} procesando` : 'sin cola pendiente'}. El audio de cada bloque se descarta al quedar desidentificado.`;
+      const processing = state.inFlightBlocks;
+      const waiting = Math.max(0, pending - processing);
+      status.textContent = `Grabando · ${safe} bloque${safe === 1 ? '' : 's'} seguro${safe === 1 ? '' : 's'} · ${processing} procesando${waiting ? ` · ${waiting} en cola` : ''}. El audio de cada bloque se descarta al quedar desidentificado.`;
     }
   }
 
   function makeRecorder() {
-    let recorder;
     try {
-      recorder = new MediaRecorder(state.stream, {
+      return new MediaRecorder(state.stream, {
         ...(state.mimeType ? { mimeType: state.mimeType } : {}),
         audioBitsPerSecond: 64_000,
       });
     } catch {
-      recorder = new MediaRecorder(state.stream, state.mimeType ? { mimeType: state.mimeType } : undefined);
+      return new MediaRecorder(state.stream, state.mimeType ? { mimeType: state.mimeType } : undefined);
     }
-    return recorder;
   }
 
   async function fetchBlock(blob, index, attempt = 1) {
-    if (blob.size > MAX_BLOCK_BYTES) {
-      throw new Error(`El bloque ${index} supera el tamaño permitido.`);
-    }
-
+    if (blob.size > MAX_BLOCK_BYTES) throw new Error(`El bloque ${index} supera el tamaño permitido.`);
     const audioBase64 = await blobToBase64(blob);
     const response = await fetch(`${baseUrl}/api/transcribe-block`, {
       method: 'POST',
@@ -203,27 +217,57 @@
     };
   }
 
-  function enqueueBlock(blob, index) {
-    if (!blob || blob.size < MIN_BLOCK_BYTES) return;
-    state.pendingBlocks += 1;
-    updateRecordingUi();
+  function markBlockFailure(index, error) {
+    if (state.failed) return;
+    state.failed = true;
+    drainQueuedTasks();
+    console.error('Long-interview block failed without logging clinical content.', error);
+    const message = $('sessionMessage');
+    if (message) message.textContent = `No se pudo asegurar el bloque ${index}: ${error.message}. La entrevista se detendrá y no se generará ningún documento incompleto.`;
+    if (state.active) setTimeout(() => finishLongRecording(), 0);
+  }
 
-    state.queue = state.queue.then(async () => {
-      try {
-        const payload = await fetchBlock(blob, index);
-        state.processedBlocks.push(prefixedBlock(payload, index));
-        state.processedBlocks.sort((a, b) => a.index - b.index);
-      } catch (error) {
-        state.failed = true;
-        console.error('Long-interview block failed without logging clinical content.', error);
-        const message = $('sessionMessage');
-        if (message) message.textContent = `No se pudo asegurar el bloque ${index}: ${error.message}. La entrevista se detendrá y no se generará ningún documento incompleto.`;
-        if (state.active) setTimeout(() => finishLongRecording(), 0);
-      } finally {
-        state.pendingBlocks = Math.max(0, state.pendingBlocks - 1);
-        updateRecordingUi();
-      }
-    });
+  function pumpBlockQueue() {
+    while (!state.failed && state.inFlightBlocks < MAX_CONCURRENT_BLOCKS && state.taskQueue.length) {
+      const task = state.taskQueue.shift();
+      state.inFlightBlocks += 1;
+      updateRecordingUi();
+
+      (async () => {
+        try {
+          const payload = await fetchBlock(task.blob, task.index);
+          state.processedBlocks.push(prefixedBlock(payload, task.index));
+          state.processedBlocks.sort((a, b) => a.index - b.index);
+          task.resolve({ ok: true });
+        } catch (error) {
+          task.resolve({ ok: false });
+          markBlockFailure(task.index, error);
+        } finally {
+          state.inFlightBlocks = Math.max(0, state.inFlightBlocks - 1);
+          state.pendingBlocks = Math.max(0, state.pendingBlocks - 1);
+          updateRecordingUi();
+          pumpBlockQueue();
+        }
+      })();
+    }
+  }
+
+  function enqueueBlock(blob, index) {
+    if (!blob || blob.size < MIN_BLOCK_BYTES) return null;
+    if (state.pendingBlocks >= MAX_BUFFERED_BLOCKS) {
+      markBlockFailure(index, new Error('La cola de procesamiento no puede seguir el ritmo de la entrevista.'));
+      return null;
+    }
+
+    let resolveTask;
+    const promise = new Promise((resolve) => { resolveTask = resolve; });
+    state.taskPromises.push(promise);
+    state.taskQueue.push({ blob, index, resolve: resolveTask });
+    state.pendingBlocks += 1;
+    state.peakPendingBlocks = Math.max(state.peakPendingBlocks, state.pendingBlocks);
+    updateRecordingUi();
+    pumpBlockQueue();
+    return promise;
   }
 
   function startBlockRecorder() {
@@ -232,7 +276,6 @@
     const parts = [];
     state.recorder = recorder;
     state.recorderParts = parts;
-    state.blockStartedAt = Date.now();
 
     recorder.addEventListener('dataavailable', (event) => {
       if (event.data?.size) parts.push(event.data);
@@ -252,9 +295,7 @@
       }
       const type = recorder.mimeType || state.mimeType || parts[0]?.type || 'audio/webm';
       recorder.addEventListener('error', () => reject(new Error('Falló el cierre de un bloque de audio.')), { once: true });
-      recorder.addEventListener('stop', () => {
-        resolve(new Blob(parts, { type }));
-      }, { once: true });
+      recorder.addEventListener('stop', () => resolve(new Blob(parts, { type })), { once: true });
       try {
         recorder.stop();
       } catch (error) {
@@ -310,7 +351,6 @@
     const cache = window.__CLINICAL_ANALYSIS_PREFETCH;
     if (!(cache instanceof Map) || !transcript || cache.has(transcript)) return;
     state.analysisPrefetchStarted = true;
-
     const pending = fetch(`${baseUrl}/api/analyze`, {
       method: 'POST',
       cache: 'no-store',
@@ -321,7 +361,6 @@
       statusText: response.statusText,
       payload: await response.json().catch(() => ({})),
     })).catch(() => null);
-
     cache.set(transcript, pending.then((snapshot) => snapshot || {
       status: 503,
       statusText: 'Long-interview prefetch failed',
@@ -334,7 +373,7 @@
     if (!aggregate.transcript) throw new Error('No se obtuvo texto clínico de los bloques procesados.');
 
     state.finalTranscript = aggregate.transcript;
-    const verifiedBlocks = state.processedBlocks
+    const verifiedBlocks = [...state.processedBlocks]
       .sort((a, b) => a.index - b.index)
       .map((block) => ({ transcript: block.transcript, privacy_proof: block.privacy_proof }));
 
@@ -346,8 +385,9 @@
     startSpeculativeAnalysis(aggregate.transcript);
 
     const totalAudioMs = state.processedBlocks.reduce((sum, block) => sum + Number(block.performance_ms?.total_audio_pipeline || 0), 0);
+    const closeMs = state.finalizationStartedAt ? Math.max(0, performance.now() - state.finalizationStartedAt) : 0;
     const status = $('recordingStatus');
-    if (status) status.textContent = `Entrevista cerrada · ${state.processedBlocks.length} bloque${state.processedBlocks.length === 1 ? '' : 's'} desidentificado${state.processedBlocks.length === 1 ? '' : 's'} · audio descartado. Procesamiento acumulado del servidor: ${(totalAudioMs / 1000).toFixed(1)} s, realizado durante la entrevista.`;
+    if (status) status.textContent = `Entrevista cerrada · ${state.processedBlocks.length} bloques desidentificados · audio descartado. Procesamiento acumulado del servidor: ${(totalAudioMs / 1000).toFixed(1)} s, realizado durante la entrevista. Cierre tras Finalizar: ${(closeMs / 1000).toFixed(1)} s. Pico de cola: ${state.peakPendingBlocks}.`;
     const message = $('sessionMessage');
     if (message) message.textContent = 'Transcripción larga desidentificada lista. Revisa únicamente las fuentes críticas señaladas antes de organizar.';
   }
@@ -356,9 +396,10 @@
     if (state.finishing) return;
     state.finishing = true;
     state.active = false;
+    state.finalizationStartedAt = performance.now();
     clearTimers();
     setButton('processing');
-    if ($('recordingStatus')) $('recordingStatus').textContent = 'Cerrando el último bloque y esperando solo la cola pendiente…';
+    if ($('recordingStatus')) $('recordingStatus').textContent = 'Cerrando el último bloque y esperando solo el procesamiento pendiente…';
 
     try {
       if (state.rotationPromise) await state.rotationPromise;
@@ -372,7 +413,7 @@
         if (blob) enqueueBlock(blob, index);
       }
       stopTracks();
-      await state.queue;
+      await Promise.all(state.taskPromises);
 
       if (state.failed) {
         invalidateVerifiedBlocks();
@@ -426,9 +467,6 @@
     }
   }
 
-  // Inject verified block proofs into the existing analysis request only when the visible
-  // transcript is byte-for-byte the aggregate created from those blocks. Any manual edit
-  // automatically disables this shortcut and /api/analyze performs full redaction again.
   const inheritedFetch = window.fetch.bind(window);
   window.fetch = async (input, init = {}) => {
     const url = typeof input === 'string' ? input : String(input?.url || '');
@@ -443,7 +481,7 @@
           init = { ...init, body: JSON.stringify({ ...body, verified_blocks: blocks }) };
         }
       } catch {
-        // Request continues unchanged and the backend will fail closed if needed.
+        // El backend volverá a aplicar desidentificación completa si el atajo no es verificable.
       }
     }
     return inheritedFetch(input, init);
@@ -471,12 +509,11 @@
 
   window.addEventListener('pagehide', () => resetState({ keepText: false }));
 
-  // V0.6 copy and visual state. The stable V0.5 branch is not touched.
   const recorderCard = document.querySelector('.recorder-card');
   const sectionLabel = recorderCard?.querySelector('.section-label');
   const description = recorderCard?.querySelector('.muted');
   if (sectionLabel) sectionLabel.textContent = 'ENTRADA DESDE MÓVIL · PILOTO V0.6';
-  if (description) description.textContent = 'Entrevista larga de prueba, hasta 30 minutos. El navegador rota bloques de aproximadamente 60 segundos; cada bloque se diariza, desidentifica y descarta de memoria mientras la entrevista continúa.';
+  if (description) description.textContent = 'Entrevista larga de prueba, hasta 30 minutos. El navegador rota bloques de aproximadamente 20 segundos y procesa hasta dos a la vez; cada bloque se diariza, desidentifica y descarta de memoria mientras la entrevista continúa.';
   setButton('idle');
-  if ($('recordingStatus')) $('recordingStatus').textContent = 'Micrófono preparado para entrevista ficticia larga por bloques.';
+  if ($('recordingStatus')) $('recordingStatus').textContent = 'Micrófono preparado para entrevista ficticia larga por bloques de 20 s.';
 })();
