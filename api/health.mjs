@@ -17,17 +17,15 @@ export default async function handler(req, res) {
   }
 
   let auth = null;
-  try {
-    auth = await resolveModelAuth();
-  } catch {
-    auth = null;
-  }
+  try { auth = await resolveModelAuth(); } catch { auth = null; }
 
   let clinicalEngineLoadable = false;
   let clinicalEngineProbe = "not_checked";
   let speakerAttributionLoadable = false;
   let medicationVerificationLoadable = false;
   let clinicalPostprocessLoadable = false;
+  let blockEvidenceLoadable = false;
+
   try {
     const module = await import("../server/analyze.mjs");
     clinicalEngineLoadable = typeof module.analyzeTranscript === "function";
@@ -40,23 +38,22 @@ export default async function handler(req, res) {
   try {
     const module = await import("../server/speaker-attribution.mjs");
     speakerAttributionLoadable = typeof module.attributeClinicalSpeakerRoles === "function";
-  } catch {
-    speakerAttributionLoadable = false;
-  }
+  } catch { speakerAttributionLoadable = false; }
 
   try {
     const module = await import("../server/medication-verification.mjs");
     medicationVerificationLoadable = typeof module.verifyAssessmentMedications === "function";
-  } catch {
-    medicationVerificationLoadable = false;
-  }
+  } catch { medicationVerificationLoadable = false; }
 
   try {
     const module = await import("../server/clinical-postprocess.mjs");
     clinicalPostprocessLoadable = typeof module.applyClinicalPostprocessing === "function";
-  } catch {
-    clinicalPostprocessLoadable = false;
-  }
+  } catch { clinicalPostprocessLoadable = false; }
+
+  try {
+    const module = await import("../server/clinical-block-filter.mjs");
+    blockEvidenceLoadable = typeof module.filterClinicalBlockTranscript === "function";
+  } catch { blockEvidenceLoadable = false; }
 
   return res.status(200).json({
     ok: true,
@@ -66,9 +63,13 @@ export default async function handler(req, res) {
     transcription_enabled: true,
     transcription_model: AUDIO_TRANSCRIPTION_MODEL,
     max_audio_seconds: 1800,
-    audio_block_seconds: 60,
+    audio_block_seconds: 20,
+    max_concurrent_audio_blocks: 2,
     incremental_audio_processing: true,
+    incremental_clinical_evidence: true,
+    incremental_clinical_evidence_loadable: blockEvidenceLoadable,
     signed_block_privacy_proofs: true,
+    signed_clinical_evidence: true,
     automatic_role_attribution_enabled: true,
     role_attribution_abstention_enabled: true,
     critical_only_role_review: true,
