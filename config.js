@@ -50,7 +50,10 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
       const evidence = samples.analysis.evidenceVerified
         ? ` · evidencia incremental sí (${samples.analysis.modelInputCharacters || '—'} caracteres al modelo)`
         : ' · evidencia incremental no';
-      parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · ${privacy} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}${evidence}`);
+      const compact = samples.analysis.verifiedFastMode
+        ? ' · cierre compacto sí'
+        : ' · cierre compacto no';
+      parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · ${privacy} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}${evidence}${compact}`);
     }
 
     target.textContent = parts.join(' | ');
@@ -79,6 +82,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
           proofVerified: Boolean(payload?.meta?.privacy_proof_verified),
           evidenceVerified: Boolean(payload?.meta?.long_interview_evidence_verified),
           modelInputCharacters: Number(payload?.meta?.long_interview_model_input_characters) || 0,
+          verifiedFastMode: Boolean(payload?.meta?.verified_fast_mode),
         };
       }
       render();
