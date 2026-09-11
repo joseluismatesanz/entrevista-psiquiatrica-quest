@@ -1,5 +1,6 @@
 import { zodTextFormat } from "openai/helpers/zod";
 import { SYSTEM_PROMPT } from "./prompt.mjs";
+import { FAST_SYSTEM_PROMPT } from "./fast-prompt.mjs";
 import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
 import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
@@ -63,15 +64,15 @@ async function invokeStructured(client, params) {
   throw new TypeError("El cliente de modelo no expone Responses API.");
 }
 
-async function requestParsedAssessment(client, baseParams) {
+async function requestParsedAssessment(client, baseParams, instructionPrompt = SYSTEM_PROMPT) {
   let lastError;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const { response, parsed, parser } = await invokeStructured(client, {
         ...baseParams,
         instructions: attempt === 1
-          ? SYSTEM_PROMPT
-          : `${SYSTEM_PROMPT}\n\nREINTENTO TÉCNICO: devuelve únicamente una salida que cumpla exactamente el esquema estructurado. No añadas texto fuera de los campos del esquema.`,
+          ? instructionPrompt
+          : `${instructionPrompt}\n\nREINTENTO TÉCNICO: devuelve únicamente una salida que cumpla exactamente el esquema estructurado. No añadas texto fuera de los campos del esquema.`,
       });
       const refusal = extractRefusal(response);
       if (refusal) {
@@ -104,6 +105,7 @@ export async function analyzeTranscript(transcript, options = {}) {
   const modelTranscript = typeof options.modelTranscript === "string" && options.modelTranscript.trim().length >= 20
     ? options.modelTranscript.trim()
     : transcript.trim();
+  const fastMode = options.fastMode === true;
 
   let client = options.client;
   let transport = client ? "injected-test-client" : "";
@@ -120,14 +122,17 @@ export async function analyzeTranscript(transcript, options = {}) {
 
   const model = options.model || process.env.OPENAI_MODEL || defaultModel;
   const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
+  const instructionPrompt = fastMode ? FAST_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  const reasoningEffort = fastMode ? "none" : "low";
+  const maxOutputTokens = fastMode ? 10000 : 16000;
 
   const modelStartedAt = Date.now();
   const { parsed, response, attempts, parser } = await requestParsedAssessment(client, {
     model,
     store: false,
     background: false,
-    reasoning: { effort: "low" },
-    max_output_tokens: 16000,
+    reasoning: { effort: reasoningEffort },
+    max_output_tokens: maxOutputTokens,
     input: [{
       role: "user",
       content: [{
@@ -140,7 +145,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       }],
     }],
     text: { format: textFormat },
-  });
+  }, instructionPrompt);
   const modelMs = Date.now() - modelStartedAt;
 
   const deterministicStartedAt = Date.now();
@@ -209,6 +214,9 @@ export async function analyzeTranscript(transcript, options = {}) {
       model_input_compacted: modelTranscript !== transcript.trim(),
       model_input_characters: modelTranscript.length,
       grounding_transcript_characters: transcript.trim().length,
+      fast_mode: fastMode,
+      reasoning_effort: reasoningEffort,
+      max_output_tokens: maxOutputTokens,
       performance_ms: {
         structured_clinical_model: modelMs,
         medication_verification: medicationMs,
