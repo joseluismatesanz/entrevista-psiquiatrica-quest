@@ -47,9 +47,9 @@ test("V0.5.6 informe: assets de pantalla 3 están conectados", () => {
   assert.match(reportCss, /report-pending-banner/);
 });
 
-test("V0.5.6: versión y health están sincronizados", () => {
-  assert.match(indexHtml, /V0\.5\.6/);
-  assert.match(packageJson, /"version": "0\.5\.6"/);
-  assert.match(healthApi, /version: "0\.5\.6"/);
+test("informe: versión visible, package y health están sincronizados", () => {
+  assert.match(indexHtml, /PROTOTIPO CLÍNICO · V0\.6/);
+  assert.match(packageJson, /"version": "0\.6\.0"/);
+  assert.match(healthApi, /version: "0\.6\.0"/);
   assert.match(healthApi, /report_draft_pending_summary_enabled: true/);
 });
