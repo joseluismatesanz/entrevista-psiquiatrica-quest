@@ -1,4 +1,7 @@
-import { verifyPrivacyProof } from "../server/privacy-proof.mjs";
+import {
+  verifyPrivacyProof,
+  LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+} from "../server/privacy-proof.mjs";
 
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -42,11 +45,12 @@ export function useFastClinicalRoute(transcript) {
   return true;
 }
 
-function verifyLongInterviewBlocks(normalizedTranscript, rawBlocks) {
+export function verifyLongInterviewBlocks(normalizedTranscript, rawBlocks, options = {}) {
   if (!Array.isArray(rawBlocks) || rawBlocks.length === 0) {
     return { verified: false, count: 0 };
   }
-  if (rawBlocks.length > 60) {
+  // 30 bloques esperados + margen para un último bloque corto y rotaciones excepcionales.
+  if (rawBlocks.length > 40) {
     return { verified: false, count: rawBlocks.length };
   }
 
@@ -57,7 +61,10 @@ function verifyLongInterviewBlocks(normalizedTranscript, rawBlocks) {
     if (!blockTranscript || blockTranscript.length > 100_000 || !proof) {
       return { verified: false, count: rawBlocks.length };
     }
-    if (!verifyPrivacyProof(blockTranscript, proof)) {
+    if (!verifyPrivacyProof(blockTranscript, proof, {
+      ...options,
+      maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+    })) {
       return { verified: false, count: rawBlocks.length };
     }
     transcripts.push(blockTranscript);
