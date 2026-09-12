@@ -31,6 +31,21 @@ const conflict = z.object({
   topic: z.string(),
   accounts: z.array(z.object({ source_id: z.string(), statement: z.string() }).strict()).min(2),
 }).strict();
+const diagnosticJudgment = z.object({
+  primary_diagnosis: z.string(),
+  cie10_code: z.string(),
+  dsm5_code: z.string(),
+  provisional: z.boolean(),
+  differential: z.array(z.string()),
+  basis_summary: z.string(),
+  requires_clinician_validation: z.literal(true),
+}).strict();
+const safetyItem = z.object({
+  topic: z.string(),
+  evidence: z.string(),
+  source_ids: z.array(z.string()),
+  needs_clinician_review: z.literal(true),
+}).strict();
 
 export const HistoryClinicalSchema = z.object({
   sources: z.array(source),
@@ -50,6 +65,7 @@ export const HistoryClinicalSchema = z.object({
   conflicts: z.array(conflict),
 }).strict();
 
+// Esquema V0.6 original de dos ramas. Se conserva para compatibilidad/regresiones.
 export const CurrentClinicalSchema = z.object({
   sources: z.array(source),
   sections: z.object({
@@ -61,23 +77,36 @@ export const CurrentClinicalSchema = z.object({
     tratamiento_actual: section,
   }).strict(),
   medications_current: z.array(medication),
-  diagnostic_judgment: z.object({
-    primary_diagnosis: z.string(),
-    cie10_code: z.string(),
-    dsm5_code: z.string(),
-    provisional: z.boolean(),
-    differential: z.array(z.string()),
-    basis_summary: z.string(),
-    requires_clinician_validation: z.literal(true),
+  diagnostic_judgment: diagnosticJudgment,
+  missing_or_not_explored: z.array(missingItem),
+  conflicts: z.array(conflict),
+  safety_review: z.array(safetyItem),
+}).strict();
+
+// V0.6.1: la rama pesada de episodio actual se divide en dos salidas más pequeñas.
+export const AcuteClinicalSchema = z.object({
+  sources: z.array(source),
+  sections: z.object({
+    enfermedad_actual: section,
+    intervencion: section,
+    exploracion_psicopatologica: section,
   }).strict(),
   missing_or_not_explored: z.array(missingItem),
   conflicts: z.array(conflict),
-  safety_review: z.array(z.object({
-    topic: z.string(),
-    evidence: z.string(),
-    source_ids: z.array(z.string()),
-    needs_clinician_review: z.literal(true),
-  }).strict()),
+  safety_review: z.array(safetyItem),
+}).strict();
+
+export const PlanClinicalSchema = z.object({
+  sources: z.array(source),
+  sections: z.object({
+    orientacion_diagnostica: section,
+    plan_terapeutico: section,
+    tratamiento_actual: section,
+  }).strict(),
+  medications_current: z.array(medication),
+  diagnostic_judgment: diagnosticJudgment,
+  missing_or_not_explored: z.array(missingItem),
+  conflicts: z.array(conflict),
 }).strict();
 
 export const HISTORY_PROMPT = `
@@ -98,6 +127,7 @@ Devuelve exactamente el esquema solicitado.
 - La evidencia puede ser una selección conservadora de líneas exactas: lo omitido NO equivale a negado ni explorado.
 `;
 
+// Prompt original conservado para compatibilidad/regresiones del camino de dos ramas.
 export const CURRENT_PROMPT = `
 Eres un asistente de documentación clínica psiquiátrica. Extrae SOLO episodio actual, exploración, seguridad, juicio clínico y plan a partir de evidencia ya desidentificada. Es un BORRADOR para validación obligatoria por psiquiatra. No inventes ni completes por inferencia.
 
@@ -113,6 +143,35 @@ Devuelve exactamente el esquema solicitado.
 - missing_or_not_explored: solo ausencias con posible impacto clínico real.
 - conflicts: conserva versiones incompatibles sin resolverlas sin base.
 - safety_review: solo hechos que realmente requieren revisión clínica, con fuentes.
+- Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.
+- La evidencia puede ser una selección conservadora de líneas exactas: lo omitido NO equivale a negado ni explorado.
+`;
+
+export const ACUTE_PROMPT = `
+Eres un asistente de documentación clínica psiquiátrica. Extrae SOLO el episodio actual, la intervención, la exploración psicopatológica y la seguridad a partir de evidencia ya desidentificada. Es un BORRADOR para validación obligatoria por psiquiatra. No inventes ni completes por inferencia.
+
+Devuelve exactamente el esquema solicitado.
+- ENFERMEDAD ACTUAL: narrativa sintética del episodio, evolución, síntomas, precipitantes y versiones relevantes; no vuelques antecedentes estables.
+- INTERVENCIÓN: solo propuesta explícita del psiquiatra + aceptación/rechazo cuando conste.
+- EXPLORACIÓN PSICOPATOLÓGICA: únicamente estado actual observado o explorado directamente. Ausencia de datos no equivale a normalidad.
+- RIESGO/SEGURIDAD: NSSI no es automáticamente intento suicida; conserva ideación, conducta preparatoria, heteroagresividad y discrepancias de fuentes exactamente como consten.
+- missing_or_not_explored: solo ausencias con impacto clínico real en este episodio.
+- conflicts: conserva versiones incompatibles sin resolverlas sin base.
+- safety_review: solo hechos que realmente requieren revisión clínica, con fuentes.
+- Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.
+- La evidencia puede ser una selección conservadora de líneas exactas: lo omitido NO equivale a negado ni explorado.
+`;
+
+export const PLAN_PROMPT = `
+Eres un asistente de documentación clínica psiquiátrica. Extrae SOLO juicio diagnóstico, plan terapéutico y tratamiento actual a partir de evidencia ya desidentificada. Es un BORRADOR para validación obligatoria por psiquiatra. No inventes ni completes por inferencia.
+
+Devuelve exactamente el esquema solicitado.
+- ORIENTACIÓN DIAGNÓSTICA: solo diagnóstico de trabajo si hay criterios suficientes. Si faltan duración, síndrome, impacto funcional, sustancias/causas médicas u otros datos esenciales, deja diagnóstico y códigos vacíos y marca insufficient; no uses categorías no especificadas para rellenar.
+- PLAN TERAPÉUTICO: ingreso/no ingreso, unidad, cambios farmacológicos, pruebas, seguimiento, seguridad y medidas no farmacológicas solo cuando estén sustentados.
+- TRATAMIENTO ACTUAL: medicación final tras la valoración. Separa medicación habitual de tratamiento final y dosis puntual administered_once.
+- MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Conserva marcas/nombres cuando no exista equivalencia inequívoca.
+- missing_or_not_explored: solo ausencias que puedan cambiar diagnóstico, tratamiento o seguimiento.
+- conflicts: conserva versiones incompatibles sin resolverlas sin base.
 - Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.
 - La evidencia puede ser una selección conservadora de líneas exactas: lo omitido NO equivale a negado ni explorado.
 `;
@@ -198,12 +257,12 @@ function dedupeByJson(values) {
   });
 }
 
-export function mergeParallelClinicalAssessment(history, current) {
+function mergeTwoBranchAssessment(history, current) {
   const { sources, remaps } = buildSourceRegistry([history, current]);
   const hMap = remaps.get(history) || new Map();
   const cMap = remaps.get(current) || new Map();
 
-  const assessment = {
+  return ClinicalAssessmentSchema.parse({
     sources,
     sections: {
       motivo_consulta: remapSection(history.sections.motivo_consulta, hMap),
@@ -240,7 +299,56 @@ export function mergeParallelClinicalAssessment(history, current) {
       source_ids: remapIds(item.source_ids, cMap),
     })),
     validation: { is_draft: true, clinician_validation_required: true },
-  };
+  });
+}
 
-  return ClinicalAssessmentSchema.parse(assessment);
+export function mergeParallelClinicalAssessment(history, acuteOrCurrent, plan = null) {
+  if (!plan) return mergeTwoBranchAssessment(history, acuteOrCurrent);
+
+  const acute = acuteOrCurrent;
+  const { sources, remaps } = buildSourceRegistry([history, acute, plan]);
+  const hMap = remaps.get(history) || new Map();
+  const aMap = remaps.get(acute) || new Map();
+  const pMap = remaps.get(plan) || new Map();
+
+  return ClinicalAssessmentSchema.parse({
+    sources,
+    sections: {
+      motivo_consulta: remapSection(history.sections.motivo_consulta, hMap),
+      psq_guardia: remapSection(history.sections.psq_guardia, hMap),
+      alergias_ram: remapSection(history.sections.alergias_ram, hMap),
+      antecedentes_somaticos: remapSection(history.sections.antecedentes_somaticos, hMap),
+      antecedentes_salud_mental: remapSection(history.sections.antecedentes_salud_mental, hMap),
+      antecedentes_familiares_psiquiatricos: remapSection(history.sections.antecedentes_familiares_psiquiatricos, hMap),
+      situacion_sociofamiliar: remapSection(history.sections.situacion_sociofamiliar, hMap),
+      habitos_toxicos: remapSection(history.sections.habitos_toxicos, hMap),
+      tratamiento_habitual: remapSection(history.sections.tratamiento_habitual, hMap),
+      enfermedad_actual: remapSection(acute.sections.enfermedad_actual, aMap),
+      intervencion: remapSection(acute.sections.intervencion, aMap),
+      exploracion_psicopatologica: remapSection(acute.sections.exploracion_psicopatologica, aMap),
+      orientacion_diagnostica: remapSection(plan.sections.orientacion_diagnostica, pMap),
+      plan_terapeutico: remapSection(plan.sections.plan_terapeutico, pMap),
+      tratamiento_actual: remapSection(plan.sections.tratamiento_actual, pMap),
+    },
+    medications: {
+      habitual: (history.medications_habitual || []).map((item) => remapMedication(item, hMap)),
+      current: (plan.medications_current || []).map((item) => remapMedication(item, pMap)),
+    },
+    diagnostic_judgment: plan.diagnostic_judgment,
+    missing_or_not_explored: dedupeByJson([
+      ...(history.missing_or_not_explored || []),
+      ...(acute.missing_or_not_explored || []),
+      ...(plan.missing_or_not_explored || []),
+    ]),
+    conflicts: dedupeByJson([
+      ...remapConflicts(history.conflicts, hMap),
+      ...remapConflicts(acute.conflicts, aMap),
+      ...remapConflicts(plan.conflicts, pMap),
+    ]),
+    safety_review: (acute.safety_review || []).map((item) => ({
+      ...item,
+      source_ids: remapIds(item.source_ids, aMap),
+    })),
+    validation: { is_draft: true, clinician_validation_required: true },
+  });
 }
