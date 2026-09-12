@@ -166,11 +166,13 @@ export default async function handler(req, res) {
     stage = "clinical_analysis";
     const fastRoute = useFastClinicalRoute(safeTranscript);
     const fastMode = fastRoute && evidenceBundle.verified;
+    const parallelFullMode = !fastRoute && evidenceBundle.verified;
     const analysisStartedAt = Date.now();
     const result = await analyzeTranscript(safeTranscript, {
       ...(fastRoute ? { model: "gpt-5.6-luna" } : {}),
       ...(evidenceBundle.verified ? { modelTranscript: evidenceBundle.transcript } : {}),
       ...(fastMode ? { fastMode: true } : {}),
+      ...(parallelFullMode ? { parallelMode: true } : {}),
     });
     const clinicalAnalysisMs = Date.now() - analysisStartedAt;
 
@@ -195,6 +197,7 @@ export default async function handler(req, res) {
         long_interview_model_input_characters: evidenceBundle.verified ? evidenceBundle.transcript.length : safeTranscript.length,
         adaptive_fast_route: fastRoute,
         verified_fast_mode: fastMode,
+        parallel_full_close: parallelFullMode,
         request_performance_ms: {
           person_name_redaction: redactionMs,
           clinical_analysis: clinicalAnalysisMs,
