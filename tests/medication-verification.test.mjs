@@ -27,23 +27,32 @@ function baseAssessment(rawName) {
   };
 }
 
-test("V0.6 medicamentos: sertralina se verifica primero como principio activo aunque el listado CIMA no incluya pactivos", async () => {
-  const fetchFn = async (url) => {
-    if (url.includes("/medicamento?nregistro=65997")) {
+function activeIngredientFetch({ query, nregistro, officialName, ingredient }) {
+  return async (url) => {
+    if (url.includes(`/medicamento?nregistro=${nregistro}`)) {
       return response({
-        nregistro: "65997",
-        nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG",
-        principiosActivos: [{ nombre: "SERTRALINA HIDROCLORURO" }],
+        nregistro,
+        nombre: officialName,
+        principiosActivos: [{ nombre: ingredient }],
       });
     }
-    if (url.includes("practiv1=Sertralina")) {
-      return response({ resultados: [{ nregistro: "65997", nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
+    if (url.includes(`practiv1=${encodeURIComponent(query)}`)) {
+      return response({ resultados: [{ nregistro, nombre: officialName }] });
     }
-    if (url.includes("nombre=Sertralina")) {
-      return response({ resultados: [{ nregistro: "65997", nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
+    if (url.includes(`nombre=${encodeURIComponent(query)}`)) {
+      return response({ resultados: [{ nregistro, nombre: officialName }] });
     }
     return response({ resultados: [] });
   };
+}
+
+test("V0.6 medicamentos: sertralina se verifica primero como principio activo aunque el listado CIMA no incluya pactivos", async () => {
+  const fetchFn = activeIngredientFetch({
+    query: "Sertralina",
+    nregistro: "65997",
+    officialName: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG",
+    ingredient: "SERTRALINA HIDROCLORURO",
+  });
 
   const result = await verifyAssessmentMedications(baseAssessment("Sertralina"), { fetchFn });
   const med = result.assessment.medications.habitual[0];
@@ -56,6 +65,21 @@ test("V0.6 medicamentos: sertralina se verifica primero como principio activo au
   assert.equal(med.medication_verification.formulation_inferred, false);
   assert.equal(result.assessment.safety_review.length, 0);
   assert.equal(result.meta.medication_active_ingredient_lookup_precedes_product_lookup, true);
+});
+
+test("V0.6 medicamentos: mirtazapina bien transcrita sigue verificándose literalmente", async () => {
+  const fetchFn = activeIngredientFetch({
+    query: "Mirtazapina",
+    nregistro: "77777",
+    officialName: "MIRTAZAPINA 15 MG COMPRIMIDOS EFG",
+    ingredient: "MIRTAZAPINA",
+  });
+  const result = await verifyAssessmentMedications(baseAssessment("Mirtazapina"), { fetchFn });
+  const med = result.assessment.medications.habitual[0];
+  assert.equal(med.display_name, "Mirtazapina");
+  assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.medicationAliasApplied, false);
+  assert.equal(result.assessment.safety_review.length, 0);
 });
 
 test("V0.6 medicamentos: nombre comercial real se asocia al principio activo sin ocultar la marca", async () => {
@@ -84,20 +108,13 @@ test("V0.6 medicamentos: nombre comercial real se asocia al principio activo sin
 
 test("V0.6 medicamentos: Cetralina usa alias validado Sertralina antes de CIMA", async () => {
   const seen = [];
-  const fetchFn = async (url) => {
-    seen.push(url);
-    if (url.includes("/medicamento?nregistro=65997")) {
-      return response({
-        nregistro: "65997",
-        nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG",
-        principiosActivos: [{ nombre: "SERTRALINA HIDROCLORURO" }],
-      });
-    }
-    if (url.includes("practiv1=Sertralina")) {
-      return response({ resultados: [{ nregistro: "65997", nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
-    }
-    return response({ resultados: [] });
-  };
+  const baseFetch = activeIngredientFetch({
+    query: "Sertralina",
+    nregistro: "65997",
+    officialName: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG",
+    ingredient: "SERTRALINA HIDROCLORURO",
+  });
+  const fetchFn = async (url) => { seen.push(url); return baseFetch(url); };
 
   const result = await verifyAssessmentMedications(baseAssessment("Cetralina"), { fetchFn });
   const med = result.assessment.medications.habitual[0];
@@ -106,11 +123,57 @@ test("V0.6 medicamentos: Cetralina usa alias validado Sertralina antes de CIMA",
   assert.equal(med.medication_verification.status, "confirmed");
   assert.equal(med.medication_verification.medicationAliasApplied, true);
   assert.equal(med.medication_verification.medicationAliasId, "cetralina_to_sertralina");
+  assert.equal(med.medication_verification.medicationCorrectionType, "validated_alias");
   assert.equal(med.medication_verification.queriedName, "Sertralina");
   assert.ok(seen.some((url) => url.includes("practiv1=Sertralina")));
   assert.ok(seen.every((url) => !url.includes("practiv1=Cetralina")));
   assert.equal(result.assessment.safety_review.length, 0);
   assert.equal(result.meta.medication_validated_alias_correction, true);
+  assert.equal(result.meta.medication_free_fuzzy_autocorrection, false);
+});
+
+test("V0.6 medicamentos: variante conocida de mirtazapina se normaliza antes de CIMA", async () => {
+  const seen = [];
+  const baseFetch = activeIngredientFetch({
+    query: "Mirtazapina",
+    nregistro: "77777",
+    officialName: "MIRTAZAPINA 15 MG COMPRIMIDOS EFG",
+    ingredient: "MIRTAZAPINA",
+  });
+  const fetchFn = async (url) => { seen.push(url); return baseFetch(url); };
+
+  const result = await verifyAssessmentMedications(baseAssessment("Mirtacepina"), { fetchFn });
+  const med = result.assessment.medications.habitual[0];
+  assert.equal(med.display_name, "Mirtazapina");
+  assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.medicationCorrectionType, "validated_alias");
+  assert.equal(med.medication_verification.queriedName, "Mirtazapina");
+  assert.ok(seen.some((url) => url.includes("practiv1=Mirtazapina")));
+  assert.equal(result.assessment.safety_review.length, 0);
+});
+
+test("V0.6 medicamentos: aproximación única de alta confianza se confirma en CIMA pero exige revisión", async () => {
+  const seen = [];
+  const baseFetch = activeIngredientFetch({
+    query: "Mirtazapina",
+    nregistro: "77777",
+    officialName: "MIRTAZAPINA 15 MG COMPRIMIDOS EFG",
+    ingredient: "MIRTAZAPINA",
+  });
+  const fetchFn = async (url) => { seen.push(url); return baseFetch(url); };
+
+  const result = await verifyAssessmentMedications(baseAssessment("Mirtazipina"), { fetchFn });
+  const med = result.assessment.medications.habitual[0];
+  assert.equal(med.display_name, "Mirtazapina");
+  assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.medicationHighConfidenceCandidate, true);
+  assert.equal(med.medication_verification.medicationCorrectionType, "high_confidence_fuzzy");
+  assert.equal(med.medication_verification.queriedName, "Mirtazapina");
+  assert.ok(seen.some((url) => url.includes("practiv1=Mirtazapina")));
+  assert.equal(result.assessment.safety_review.length, 1);
+  assert.equal(result.assessment.safety_review[0].topic, "medicacion_recuperada_por_similitud");
+  assert.match(result.assessment.safety_review[0].evidence, /confirmar visualmente/i);
+  assert.equal(result.meta.medication_high_confidence_candidate_recovery, true);
   assert.equal(result.meta.medication_free_fuzzy_autocorrection, false);
 });
 
