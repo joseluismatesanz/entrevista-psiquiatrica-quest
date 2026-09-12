@@ -27,7 +27,7 @@ function baseAssessment(rawName) {
   };
 }
 
-test("V0.5.4 medicamentos: sertralina se verifica primero como principio activo aunque el listado CIMA no incluya pactivos", async () => {
+test("V0.6 medicamentos: sertralina se verifica primero como principio activo aunque el listado CIMA no incluya pactivos", async () => {
   const fetchFn = async (url) => {
     if (url.includes("/medicamento?nregistro=65997")) {
       return response({
@@ -37,12 +37,7 @@ test("V0.5.4 medicamentos: sertralina se verifica primero como principio activo 
       });
     }
     if (url.includes("practiv1=Sertralina")) {
-      return response({
-        resultados: [{
-          nregistro: "65997",
-          nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG",
-        }],
-      });
+      return response({ resultados: [{ nregistro: "65997", nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
     }
     if (url.includes("nombre=Sertralina")) {
       return response({ resultados: [{ nregistro: "65997", nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
@@ -63,7 +58,7 @@ test("V0.5.4 medicamentos: sertralina se verifica primero como principio activo 
   assert.equal(result.meta.medication_active_ingredient_lookup_precedes_product_lookup, true);
 });
 
-test("V0.5.4 medicamentos: nombre comercial real se asocia al principio activo sin ocultar la marca", async () => {
+test("V0.6 medicamentos: nombre comercial real se asocia al principio activo sin ocultar la marca", async () => {
   const fetchFn = async (url) => {
     if (url.includes("/medicamento?nregistro=60000")) {
       return response({
@@ -72,12 +67,8 @@ test("V0.5.4 medicamentos: nombre comercial real se asocia al principio activo s
         principiosActivos: [{ nombre: "RISPERIDONA" }],
       });
     }
-    if (url.includes("practiv1=Risperdal")) {
-      return response({ resultados: [] });
-    }
-    if (url.includes("nombre=Risperdal")) {
-      return response({ resultados: [{ nregistro: "60000", nombre: "RISPERDAL 1 MG COMPRIMIDOS" }] });
-    }
+    if (url.includes("practiv1=Risperdal")) return response({ resultados: [] });
+    if (url.includes("nombre=Risperdal")) return response({ resultados: [{ nregistro: "60000", nombre: "RISPERDAL 1 MG COMPRIMIDOS" }] });
     return response({ resultados: [] });
   };
 
@@ -91,22 +82,75 @@ test("V0.5.4 medicamentos: nombre comercial real se asocia al principio activo s
   assert.equal(med.route, "oral");
 });
 
-test("V0.5.4 medicamentos: Cetralina no se autocorrige por similitud", async () => {
-  const fetchFn = async () => response({ resultados: [] });
+test("V0.6 medicamentos: Cetralina usa alias validado Sertralina antes de CIMA", async () => {
+  const seen = [];
+  const fetchFn = async (url) => {
+    seen.push(url);
+    if (url.includes("/medicamento?nregistro=65997")) {
+      return response({
+        nregistro: "65997",
+        nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG",
+        principiosActivos: [{ nombre: "SERTRALINA HIDROCLORURO" }],
+      });
+    }
+    if (url.includes("practiv1=Sertralina")) {
+      return response({ resultados: [{ nregistro: "65997", nombre: "SERTRALINA CUVE 50 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
+    }
+    return response({ resultados: [] });
+  };
+
   const result = await verifyAssessmentMedications(baseAssessment("Cetralina"), { fetchFn });
   const med = result.assessment.medications.habitual[0];
-  assert.equal(med.display_name, "Cetralina (no encontrada correspondencia en CIMA)");
-  assert.equal(med.active_ingredient_known, false);
-  assert.equal(med.medication_verification.status, "not_found");
-  assert.equal(result.assessment.safety_review.length, 1);
-  assert.match(result.assessment.safety_review[0].evidence, /Cetralina/);
-  assert.equal(result.meta.medication_similarity_autocorrection, false);
+  assert.equal(med.display_name, "Sertralina");
+  assert.equal(med.active_ingredient_known, true);
+  assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.medicationAliasApplied, true);
+  assert.equal(med.medication_verification.medicationAliasId, "cetralina_to_sertralina");
+  assert.equal(med.medication_verification.queriedName, "Sertralina");
+  assert.ok(seen.some((url) => url.includes("practiv1=Sertralina")));
+  assert.ok(seen.every((url) => !url.includes("practiv1=Cetralina")));
+  assert.equal(result.assessment.safety_review.length, 0);
+  assert.equal(result.meta.medication_validated_alias_correction, true);
+  assert.equal(result.meta.medication_free_fuzzy_autocorrection, false);
 });
 
-test("V0.5.4 medicamentos: caída de CIMA no se presenta como medicamento inexistente", async () => {
+test("V0.6 medicamentos: Ribotril usa alias validado Rivotril y CIMA confirma clonazepam", async () => {
+  const seen = [];
+  const fetchFn = async (url) => {
+    seen.push(url);
+    if (url.includes("/medicamento?nregistro=55555")) {
+      return response({
+        nregistro: "55555",
+        nombre: "RIVOTRIL 0,5 MG COMPRIMIDOS",
+        principiosActivos: [{ nombre: "CLONAZEPAM" }],
+      });
+    }
+    if (url.includes("practiv1=Rivotril")) return response({ resultados: [] });
+    if (url.includes("nombre=Rivotril")) {
+      return response({ resultados: [{ nregistro: "55555", nombre: "RIVOTRIL 0,5 MG COMPRIMIDOS" }] });
+    }
+    return response({ resultados: [] });
+  };
+
+  const result = await verifyAssessmentMedications(baseAssessment("Ribotril"), { fetchFn });
+  const med = result.assessment.medications.habitual[0];
+  assert.equal(med.display_name, "Clonazepam (Rivotril)");
+  assert.equal(med.active_ingredient_known, true);
+  assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.medicationAliasApplied, true);
+  assert.equal(med.medication_verification.medicationAliasId, "ribotril_to_rivotril");
+  assert.equal(med.medication_verification.queriedName, "Rivotril");
+  assert.ok(seen.some((url) => url.includes("nombre=Rivotril")));
+  assert.ok(seen.every((url) => !url.includes("nombre=Ribotril")));
+  assert.equal(result.assessment.safety_review.length, 0);
+});
+
+test("V0.6 medicamentos: caída de CIMA no se presenta como medicamento inexistente", async () => {
   const fetchFn = async () => { throw new Error("network down"); };
   const verification = await verifyMedicationName("Cetralina", { fetchFn, timeoutMs: 50 });
   assert.equal(verification.status, "unavailable");
+  assert.equal(verification.queriedName, "Sertralina");
+  assert.equal(verification.medicationAliasApplied, true);
 
   const result = await verifyAssessmentMedications(baseAssessment("Cetralina"), { fetchFn, timeoutMs: 50 });
   const med = result.assessment.medications.habitual[0];
