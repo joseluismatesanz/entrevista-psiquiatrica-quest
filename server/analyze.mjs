@@ -116,6 +116,40 @@ function modelInput(text) {
   }];
 }
 
+async function runSingleClinicalModel(client, model, modelTranscript, { fastMode = false } = {}) {
+  const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
+  const instructionPrompt = fastMode ? FAST_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  const reasoningEffort = fastMode ? "none" : "low";
+  const maxOutputTokens = fastMode ? 10000 : 16000;
+  const startedAt = Date.now();
+  const result = await requestParsedAssessment(client, {
+    model,
+    store: false,
+    background: false,
+    reasoning: { effort: reasoningEffort },
+    max_output_tokens: maxOutputTokens,
+    input: [{
+      role: "user",
+      content: [{
+        type: "input_text",
+        text:
+          "Genera el borrador clínico estructurado en JSON según el esquema. " +
+          "Trabaja únicamente con la siguiente evidencia procedente de una entrevista ficticia o previamente anonimizada. " +
+          "La evidencia puede ser una selección conservadora de líneas exactas; no infieras que lo omitido fue negado o explorado:\n\n" +
+          modelTranscript,
+      }],
+    }],
+    text: { format: textFormat },
+  }, instructionPrompt, ClinicalAssessmentSchema);
+  return {
+    ...result,
+    elapsedMs: Date.now() - startedAt,
+    reasoningEffort,
+    maxOutputTokens,
+    requestIds: [result.response?._request_id].filter(Boolean),
+  };
+}
+
 async function runParallelClinicalModel(client, model, modelTranscript) {
   const startedAt = Date.now();
   const historyFormat = zodTextFormat(HistoryClinicalSchema, "psychiatric_history_context_v06");
@@ -150,7 +184,6 @@ async function runParallelClinicalModel(client, model, modelTranscript) {
 
   return {
     parsed: mergeParallelClinicalAssessment(history.parsed, current.parsed),
-    response: null,
     attempts: Math.max(history.attempts, current.attempts),
     parser: `parallel:${history.parser}+${current.parser}`,
     elapsedMs: Date.now() - startedAt,
@@ -172,7 +205,7 @@ export async function analyzeTranscript(transcript, options = {}) {
     ? options.modelTranscript.trim()
     : transcript.trim();
   const fastMode = options.fastMode === true;
-  const parallelMode = options.parallelMode === true && !fastMode;
+  const requestedParallelMode = options.parallelMode === true && !fastMode;
 
   let client = options.client;
   let transport = client ? "injected-test-client" : "";
@@ -188,60 +221,56 @@ export async function analyzeTranscript(transcript, options = {}) {
   }
 
   const model = options.model || process.env.OPENAI_MODEL || defaultModel;
-  const instructionPrompt = fastMode ? FAST_SYSTEM_PROMPT : SYSTEM_PROMPT;
-  const reasoningEffort = fastMode ? "none" : "low";
-  const maxOutputTokens = fastMode ? 10000 : 16000;
-
   let parsed;
-  let response = null;
   let attempts = 1;
   let parser = "";
   let requestIds = [];
   let modelMs = 0;
   let branchPerformance = {};
+  let parallelMode = false;
+  let parallelFallbackUsed = false;
+  let reasoningEffort = fastMode ? "none" : "low";
+  let maxOutputTokens = fastMode ? 10000 : 16000;
 
-  if (parallelMode) {
-    const parallel = await runParallelClinicalModel(client, model, modelTranscript);
-    parsed = parallel.parsed;
-    attempts = parallel.attempts;
-    parser = parallel.parser;
-    requestIds = parallel.requestIds;
-    modelMs = parallel.elapsedMs;
-    branchPerformance = parallel.branchPerformance;
+  if (requestedParallelMode) {
+    try {
+      const parallel = await runParallelClinicalModel(client, model, modelTranscript);
+      parsed = parallel.parsed;
+      attempts = parallel.attempts;
+      parser = parallel.parser;
+      requestIds = parallel.requestIds;
+      modelMs = parallel.elapsedMs;
+      branchPerformance = parallel.branchPerformance;
+      parallelMode = true;
+      maxOutputTokens = 10000;
+    } catch {
+      // Fallback seguro: una rama o la fusión no deben dejar la Organización inutilizable.
+      parallelFallbackUsed = true;
+      const single = await runSingleClinicalModel(client, model, modelTranscript, { fastMode: false });
+      parsed = single.parsed;
+      attempts = single.attempts;
+      parser = `parallel-fallback:${single.parser}`;
+      requestIds = single.requestIds;
+      modelMs = single.elapsedMs;
+      reasoningEffort = single.reasoningEffort;
+      maxOutputTokens = single.maxOutputTokens;
+    }
   } else {
-    const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
-    const modelStartedAt = Date.now();
-    const result = await requestParsedAssessment(client, {
-      model,
-      store: false,
-      background: false,
-      reasoning: { effort: reasoningEffort },
-      max_output_tokens: maxOutputTokens,
-      input: [{
-        role: "user",
-        content: [{
-          type: "input_text",
-          text:
-            "Genera el borrador clínico estructurado en JSON según el esquema. " +
-            "Trabaja únicamente con la siguiente evidencia procedente de una entrevista ficticia o previamente anonimizada. " +
-            "La evidencia puede ser una selección conservadora de líneas exactas; no infieras que lo omitido fue negado o explorado:\n\n" +
-            modelTranscript,
-        }],
-      }],
-      text: { format: textFormat },
-    }, instructionPrompt, ClinicalAssessmentSchema);
-    modelMs = Date.now() - modelStartedAt;
-    parsed = result.parsed;
-    response = result.response;
-    attempts = result.attempts;
-    parser = result.parser;
-    requestIds = [response?._request_id].filter(Boolean);
+    const single = await runSingleClinicalModel(client, model, modelTranscript, { fastMode });
+    parsed = single.parsed;
+    attempts = single.attempts;
+    parser = single.parser;
+    requestIds = single.requestIds;
+    modelMs = single.elapsedMs;
+    reasoningEffort = single.reasoningEffort;
+    maxOutputTokens = single.maxOutputTokens;
   }
 
   const deterministicStartedAt = Date.now();
   const invariantResult = applyClinicalInvariants(parsed);
   let assessment = invariantResult.assessment;
   const warnings = [...invariantResult.warnings];
+  if (parallelFallbackUsed) warnings.push("parallel_full_route_fallback_used");
   let medicationMeta = {
     medication_verification_enabled: false,
     medication_verification_source: "not_run",
@@ -306,8 +335,9 @@ export async function analyzeTranscript(transcript, options = {}) {
       grounding_transcript_characters: transcript.trim().length,
       fast_mode: fastMode,
       parallel_full_route: parallelMode,
+      parallel_full_fallback_used: parallelFallbackUsed,
       reasoning_effort: reasoningEffort,
-      max_output_tokens: parallelMode ? 10000 : maxOutputTokens,
+      max_output_tokens: maxOutputTokens,
       performance_ms: {
         structured_clinical_model: modelMs,
         ...branchPerformance,
