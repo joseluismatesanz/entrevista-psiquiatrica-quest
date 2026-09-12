@@ -8,6 +8,8 @@ import {
   LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
 } from "../server/privacy-proof.mjs";
 
+export const SILENT_LONG_INTERVIEW_BLOCK = "SISTEMA: [BLOQUE_SILENCIOSO]";
+
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
   res.setHeader("Pragma", "no-cache");
@@ -49,15 +51,22 @@ export default async function handler(req, res) {
     });
     const transcriptionMs = Date.now() - transcriptionStartedAt;
 
-    // Un bloque largo puede contener únicamente una pausa clínica. Eso no es un fallo
-    // de privacidad ni de diarización: se marca como silencioso y el cliente lo omite.
+    // Una pausa clínica dentro de una entrevista larga es un bloque válido sin contenido.
+    // Se firma una marca técnica para que el controlador estable pueda transportarlo de
+    // forma verificable; una capa de navegador la elimina antes de mostrar/analizar texto.
     if (longInterviewBlock && acoustic.segments.length === 0) {
+      const silentProof = createPrivacyProof(SILENT_LONG_INTERVIEW_BLOCK, {
+        ttlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+        maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+      });
+      if (!silentProof) throw new Error("No se pudo firmar el bloque silencioso de la entrevista larga.");
       return res.status(200).json({
         ...acoustic,
-        transcript: "",
+        transcript: SILENT_LONG_INTERVIEW_BLOCK,
         acoustic_transcript: "",
         participants: [],
         review_items: [],
+        privacy_proof: silentProof,
         meta: {
           ...acoustic.meta,
           long_interview_block: true,
@@ -67,9 +76,10 @@ export default async function handler(req, res) {
           person_name_redaction_store: false,
           person_name_redaction_fail_closed: true,
           automatic_role_attribution: true,
-          signed_privacy_proof_issued: false,
+          signed_privacy_proof_issued: true,
           previous_safe_context_verified: Boolean(previousSafeContext),
           previous_safe_context_used: false,
+          privacy_proof_ttl_seconds: Math.round(LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS / 1000),
           performance_ms: {
             transcription: transcriptionMs,
             privacy_and_speaker_attribution: 0,
@@ -112,9 +122,6 @@ export default async function handler(req, res) {
     }
     const privatePassMs = Date.now() - privatePassStartedAt;
 
-    // Prueba firmada efímera: permite a /api/analyze verificar que ESTA transcripción
-    // exacta ya fue desidentificada por el servidor. Los bloques largos necesitan
-    // sobrevivir hasta el cierre de una sesión de 30 minutos; la vía normal conserva 10 min.
     const privacyProof = longInterviewBlock
       ? createPrivacyProof(processed.transcript, {
           ttlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
