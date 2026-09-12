@@ -121,6 +121,26 @@ export async function transcribeAudioPayload(payload, options = {}) {
   const medicationNormalization = normalizeMedicationAsrSegments(rawSegments);
   const segments = medicationNormalization.segments;
   if (segments.length === 0) {
+    if (options.allowEmptySegments === true) {
+      return {
+        transcript: "",
+        segments: [],
+        speakers: [],
+        meta: {
+          model: AUDIO_TRANSCRIPTION_MODEL,
+          transport,
+          duration_seconds: Number.isFinite(Number(response?.duration)) ? Number(response.duration) : null,
+          audio_bytes: buffer.length,
+          persistent_audio_storage: false,
+          speaker_role_confirmation_required: false,
+          chronological_segment_order_enforced: true,
+          medication_asr_normalization_enabled: true,
+          medication_asr_normalization_replacements: 0,
+          medication_asr_normalization_aliases: [],
+          silent_audio_block: true,
+        },
+      };
+    }
     const error = new Error("La transcripción no devolvió segmentos de voz.");
     error.name = "EmptyTranscriptionError";
     throw error;
@@ -144,6 +164,7 @@ export async function transcribeAudioPayload(payload, options = {}) {
       medication_asr_normalization_enabled: true,
       medication_asr_normalization_replacements: medicationNormalization.replacements,
       medication_asr_normalization_aliases: medicationNormalization.applied_aliases,
+      silent_audio_block: false,
     },
   };
 }
