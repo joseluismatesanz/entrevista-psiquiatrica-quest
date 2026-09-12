@@ -1,6 +1,7 @@
 import { verifyPrivacyProof, LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS } from "../server/privacy-proof.mjs";
 import { filterClinicalBlockTranscript } from "../server/clinical-block-filter.mjs";
 import { createClinicalEvidenceProof } from "../server/clinical-evidence-proof.mjs";
+import { SILENT_LONG_INTERVIEW_BLOCK } from "./transcribe.mjs";
 
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -32,6 +33,23 @@ export default async function handler(req, res) {
     });
     if (!verified) {
       return res.status(400).json({ error: "unverified_private_block", message: "El bloque no dispone de una prueba de privacidad válida." });
+    }
+
+    if (transcript === SILENT_LONG_INTERVIEW_BLOCK) {
+      const evidenceProof = createClinicalEvidenceProof(blockIndex, transcript, transcript);
+      if (!evidenceProof) throw new Error("No se pudo firmar la evidencia del bloque silencioso.");
+      return res.status(200).json({
+        block_index: blockIndex,
+        clinical_transcript: transcript,
+        evidence_proof: evidenceProof,
+        meta: {
+          source_privacy_proof_verified: true,
+          evidence_signed: true,
+          silent_block: true,
+          model_call_skipped: true,
+          performance_ms: { clinical_filter: 0, total: Date.now() - startedAt },
+        },
+      });
     }
 
     const filterStartedAt = Date.now();
