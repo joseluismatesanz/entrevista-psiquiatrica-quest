@@ -87,6 +87,41 @@ test("V0.6 audio: ordena los segmentos por timestamp aunque la diarización los 
   );
 });
 
+test("V0.6 audio: corrige el alias ASR cetralina antes de privacidad y atribución", async () => {
+  const client = {
+    audio: {
+      transcriptions: {
+        async create() {
+          return {
+            duration: 5,
+            text: "Tomo Cetralina 50 mg.",
+            segments: [
+              { id: "seg-1", speaker: "B", start: 0, end: 4, text: "Tomo Cetralina 50 mg." },
+            ],
+          };
+        },
+      },
+    },
+  };
+
+  const result = await transcribeAudioPayload(
+    {
+      audio_base64: Buffer.from("fake-audio").toString("base64"),
+      mime_type: "audio/webm",
+    },
+    {
+      client,
+      fileFactory: async () => ({}),
+    }
+  );
+
+  assert.equal(result.segments[0].text, "Tomo Sertralina 50 mg.");
+  assert.match(result.transcript, /Sertralina 50 mg/);
+  assert.doesNotMatch(result.transcript, /Cetralina/);
+  assert.equal(result.meta.medication_asr_normalization_replacements, 1);
+  assert.deepEqual(result.meta.medication_asr_normalization_aliases, ["cetralina_to_sertralina"]);
+});
+
 test("V0.5 audio: rechaza audio que excede el límite preventivo del piloto", async () => {
   const oversized = Buffer.alloc(AUDIO_PILOT_MAX_BYTES + 1, 1).toString("base64");
   await assert.rejects(
