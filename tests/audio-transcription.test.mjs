@@ -70,33 +70,25 @@ test("V0.6 audio: ordena los segmentos por timestamp aunque la diarización los 
   };
 
   const result = await transcribeAudioPayload(
-    {
-      audio_base64: Buffer.from("fake-audio").toString("base64"),
-      mime_type: "audio/webm",
-    },
-    {
-      client,
-      fileFactory: async () => ({}),
-    }
+    { audio_base64: Buffer.from("fake-audio").toString("base64"), mime_type: "audio/webm" },
+    { client, fileFactory: async () => ({}) }
   );
 
   assert.deepEqual(result.segments.map((segment) => segment.id), ["seg-1", "seg-2", "seg-3"]);
-  assert.equal(
-    result.transcript,
-    "HABLANTE A: Hola.\nHABLANTE B: Ahora mismo.\nHABLANTE B: Después."
-  );
+  assert.equal(result.transcript, "HABLANTE A: Hola.\nHABLANTE B: Ahora mismo.\nHABLANTE B: Después.");
 });
 
-test("V0.6 audio: corrige el alias ASR cetralina antes de privacidad y atribución", async () => {
+test("V0.6 audio: corrige alias farmacológicos validados antes de privacidad y atribución", async () => {
   const client = {
     audio: {
       transcriptions: {
         async create() {
           return {
-            duration: 5,
-            text: "Tomo Cetralina 50 mg.",
+            duration: 8,
+            text: "Tomo Cetralina y Ribotril.",
             segments: [
               { id: "seg-1", speaker: "B", start: 0, end: 4, text: "Tomo Cetralina 50 mg." },
+              { id: "seg-2", speaker: "B", start: 4.1, end: 7, text: "Y Ribotril 0,5 mg por la noche." },
             ],
           };
         },
@@ -105,21 +97,17 @@ test("V0.6 audio: corrige el alias ASR cetralina antes de privacidad y atribuci�
   };
 
   const result = await transcribeAudioPayload(
-    {
-      audio_base64: Buffer.from("fake-audio").toString("base64"),
-      mime_type: "audio/webm",
-    },
-    {
-      client,
-      fileFactory: async () => ({}),
-    }
+    { audio_base64: Buffer.from("fake-audio").toString("base64"), mime_type: "audio/webm" },
+    { client, fileFactory: async () => ({}) }
   );
 
   assert.equal(result.segments[0].text, "Tomo Sertralina 50 mg.");
+  assert.equal(result.segments[1].text, "Y Rivotril 0,5 mg por la noche.");
   assert.match(result.transcript, /Sertralina 50 mg/);
-  assert.doesNotMatch(result.transcript, /Cetralina/);
-  assert.equal(result.meta.medication_asr_normalization_replacements, 1);
-  assert.deepEqual(result.meta.medication_asr_normalization_aliases, ["cetralina_to_sertralina"]);
+  assert.match(result.transcript, /Rivotril 0,5 mg/);
+  assert.doesNotMatch(result.transcript, /Cetralina|Ribotril/);
+  assert.equal(result.meta.medication_asr_normalization_replacements, 2);
+  assert.deepEqual(result.meta.medication_asr_normalization_aliases, ["cetralina_to_sertralina", "ribotril_to_rivotril"]);
 });
 
 test("V0.5 audio: rechaza audio que excede el límite preventivo del piloto", async () => {
