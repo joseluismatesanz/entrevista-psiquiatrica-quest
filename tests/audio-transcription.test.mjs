@@ -119,7 +119,7 @@ test("V0.5 audio: rechaza audio que excede el límite preventivo del piloto", as
   const oversized = Buffer.alloc(AUDIO_PILOT_MAX_BYTES + 1, 1).toString("base64");
   await assert.rejects(
     () => transcribeAudioPayload({ audio_base64: oversized, mime_type: "audio/webm" }, {
-      client: { audio: { transcriptions: { create: async () => ({}) } },
+      client: { audio: { transcriptions: { create: async () => ({}) } } },
       fileFactory: async () => ({}),
     }),
     /supera el tamaño máximo/
