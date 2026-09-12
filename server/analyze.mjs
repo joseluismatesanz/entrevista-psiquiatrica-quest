@@ -4,9 +4,11 @@ import { FAST_SYSTEM_PROMPT } from "./fast-prompt.mjs";
 import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
 import {
   HistoryClinicalSchema,
-  CurrentClinicalSchema,
+  AcuteClinicalSchema,
+  PlanClinicalSchema,
   HISTORY_PROMPT,
-  CURRENT_PROMPT,
+  ACUTE_PROMPT,
+  PLAN_PROMPT,
   mergeParallelClinicalAssessment,
 } from "./parallel-clinical-analysis.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
@@ -152,8 +154,9 @@ async function runSingleClinicalModel(client, model, modelTranscript, { fastMode
 
 async function runParallelClinicalModel(client, model, modelTranscript) {
   const startedAt = Date.now();
-  const historyFormat = zodTextFormat(HistoryClinicalSchema, "psychiatric_history_context_v06");
-  const currentFormat = zodTextFormat(CurrentClinicalSchema, "psychiatric_current_risk_v06");
+  const historyFormat = zodTextFormat(HistoryClinicalSchema, "psychiatric_history_context_v061");
+  const acuteFormat = zodTextFormat(AcuteClinicalSchema, "psychiatric_acute_mse_risk_v061");
+  const planFormat = zodTextFormat(PlanClinicalSchema, "psychiatric_diagnosis_plan_v061");
 
   const timed = async (fn) => {
     const branchStartedAt = Date.now();
@@ -161,13 +164,13 @@ async function runParallelClinicalModel(client, model, modelTranscript) {
     return { ...result, elapsedMs: Date.now() - branchStartedAt };
   };
 
-  const [history, current] = await Promise.all([
+  const [history, acute, plan] = await Promise.all([
     timed(() => requestParsedAssessment(client, {
       model,
       store: false,
       background: false,
       reasoning: { effort: "low" },
-      max_output_tokens: 8000,
+      max_output_tokens: 7000,
       input: modelInput(modelTranscript),
       text: { format: historyFormat },
     }, HISTORY_PROMPT, HistoryClinicalSchema)),
@@ -176,22 +179,32 @@ async function runParallelClinicalModel(client, model, modelTranscript) {
       store: false,
       background: false,
       reasoning: { effort: "low" },
-      max_output_tokens: 10000,
+      max_output_tokens: 7000,
       input: modelInput(modelTranscript),
-      text: { format: currentFormat },
-    }, CURRENT_PROMPT, CurrentClinicalSchema)),
+      text: { format: acuteFormat },
+    }, ACUTE_PROMPT, AcuteClinicalSchema)),
+    timed(() => requestParsedAssessment(client, {
+      model,
+      store: false,
+      background: false,
+      reasoning: { effort: "low" },
+      max_output_tokens: 7000,
+      input: modelInput(modelTranscript),
+      text: { format: planFormat },
+    }, PLAN_PROMPT, PlanClinicalSchema)),
   ]);
 
   return {
-    parsed: mergeParallelClinicalAssessment(history.parsed, current.parsed),
-    attempts: Math.max(history.attempts, current.attempts),
-    parser: `parallel:${history.parser}+${current.parser}`,
+    parsed: mergeParallelClinicalAssessment(history.parsed, acute.parsed, plan.parsed),
+    attempts: Math.max(history.attempts, acute.attempts, plan.attempts),
+    parser: `parallel3:${history.parser}+${acute.parser}+${plan.parser}`,
     elapsedMs: Date.now() - startedAt,
     branchPerformance: {
       parallel_history_model: history.elapsedMs,
-      parallel_current_model: current.elapsedMs,
+      parallel_acute_model: acute.elapsedMs,
+      parallel_plan_model: plan.elapsedMs,
     },
-    requestIds: [history.response?._request_id, current.response?._request_id].filter(Boolean),
+    requestIds: [history.response?._request_id, acute.response?._request_id, plan.response?._request_id].filter(Boolean),
   };
 }
 
@@ -242,14 +255,14 @@ export async function analyzeTranscript(transcript, options = {}) {
       modelMs = parallel.elapsedMs;
       branchPerformance = parallel.branchPerformance;
       parallelMode = true;
-      maxOutputTokens = 10000;
+      maxOutputTokens = 7000;
     } catch {
-      // Fallback seguro: una rama o la fusión no deben dejar la Organización inutilizable.
+      // Fallback seguro: cualquier rama o la fusión pueden fallar sin inutilizar Organización.
       parallelFallbackUsed = true;
       const single = await runSingleClinicalModel(client, model, modelTranscript, { fastMode: false });
       parsed = single.parsed;
       attempts = single.attempts;
-      parser = `parallel-fallback:${single.parser}`;
+      parser = `parallel3-fallback:${single.parser}`;
       requestIds = single.requestIds;
       modelMs = single.elapsedMs;
       reasoningEffort = single.reasoningEffort;
@@ -336,6 +349,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       fast_mode: fastMode,
       parallel_full_route: parallelMode,
       parallel_full_fallback_used: parallelFallbackUsed,
+      parallel_branch_count: parallelMode ? 3 : 0,
       reasoning_effort: reasoningEffort,
       max_output_tokens: maxOutputTokens,
       performance_ms: {
