@@ -44,8 +44,40 @@ export default async function handler(req, res) {
     const previousSafeContext = verifiedPriorContext(body);
 
     const transcriptionStartedAt = Date.now();
-    const acoustic = await transcribeAudioPayload(body);
+    const acoustic = await transcribeAudioPayload(body, {
+      allowEmptySegments: longInterviewBlock,
+    });
     const transcriptionMs = Date.now() - transcriptionStartedAt;
+
+    // Un bloque largo puede contener únicamente una pausa clínica. Eso no es un fallo
+    // de privacidad ni de diarización: se marca como silencioso y el cliente lo omite.
+    if (longInterviewBlock && acoustic.segments.length === 0) {
+      return res.status(200).json({
+        ...acoustic,
+        transcript: "",
+        acoustic_transcript: "",
+        participants: [],
+        review_items: [],
+        meta: {
+          ...acoustic.meta,
+          long_interview_block: true,
+          silent_block: true,
+          person_name_redaction_enabled: true,
+          person_name_redaction_replacements: 0,
+          person_name_redaction_store: false,
+          person_name_redaction_fail_closed: true,
+          automatic_role_attribution: true,
+          signed_privacy_proof_issued: false,
+          previous_safe_context_verified: Boolean(previousSafeContext),
+          previous_safe_context_used: false,
+          performance_ms: {
+            transcription: transcriptionMs,
+            privacy_and_speaker_attribution: 0,
+            total_audio_pipeline: Date.now() - totalStartedAt,
+          },
+        },
+      });
+    }
 
     // Vía normal: una sola llamada estructurada hace anonimización + atribución.
     // En V0.6 puede recibir únicamente contexto previo ya desidentificado y firmado,
@@ -100,6 +132,7 @@ export default async function handler(req, res) {
       ...(privacyProof ? { privacy_proof: privacyProof } : {}),
       meta: {
         ...acoustic.meta,
+        silent_block: false,
         person_name_redaction_enabled: true,
         person_name_redaction_mask: processed.meta.mask,
         person_name_redaction_replacements: processed.replacements,
