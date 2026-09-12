@@ -46,6 +46,7 @@ export const MEDICATION_NAME_ALIASES = [
     source: "mirta zapina",
     canonical: "mirtazapina",
     pattern: /\bmirta\s+zapina\b/giu,
+    lookup: false,
   },
   {
     id: "loracepam_to_lorazepam",
@@ -154,6 +155,7 @@ export function resolveKnownMedicationAlias(value) {
   if (!normalized) return { original, canonical: original, aliasId: "", corrected: false, correctionType: "none" };
 
   for (const alias of MEDICATION_NAME_ALIASES) {
+    if (alias.lookup === false) continue;
     if (normalized === normalizeMedicationToken(alias.source)) {
       return {
         original,
