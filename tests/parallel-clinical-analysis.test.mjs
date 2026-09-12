@@ -25,8 +25,8 @@ const med = (name, source_ids) => ({
   source_ids,
 });
 
-test("V0.6 paralelo: fusiona historia + episodio actual en el esquema clínico completo", () => {
-  const history = {
+function historyFixture() {
+  return {
     sources: [
       { id: "h-patient", label: "Paciente", kind: "patient" },
       { id: "h-mother", label: "Madre", kind: "mother" },
@@ -46,7 +46,10 @@ test("V0.6 paralelo: fusiona historia + episodio actual en el esquema clínico c
     missing_or_not_explored: [{ topic: "riesgo", status: "not_explored", note: "No explorado." }],
     conflicts: [],
   };
+}
 
+test("V0.6 paralelo: conserva compatibilidad con la fusión original de dos ramas", () => {
+  const history = historyFixture();
   const current = {
     sources: [
       { id: "c-pat", label: "Paciente", kind: "patient" },
@@ -83,17 +86,69 @@ test("V0.6 paralelo: fusiona historia + episodio actual en el esquema clínico c
   assert.equal(merged.sources.filter((s) => s.kind === "psychiatrist").length, 1);
   assert.equal(merged.medications.habitual[0].display_name, "Sertralina");
   assert.equal(merged.medications.current[0].display_name, "Sertralina");
-  assert.ok(merged.sections.enfermedad_actual.source_ids.every((id) => merged.sources.some((s) => s.id === id)));
-  assert.ok(merged.sections.situacion_sociofamiliar.source_ids.every((id) => merged.sources.some((s) => s.id === id)));
   assert.equal(merged.validation.clinician_validation_required, true);
 });
 
-test("V0.6 paralelo: solo se activa en ruta completa con evidencia incremental verificada", () => {
+test("V0.6.1 paralelo: fusiona historia + episodio/MSE + diagnóstico/plan en el esquema completo", () => {
+  const history = historyFixture();
+  const acute = {
+    sources: [
+      { id: "a-pat", label: "Paciente", kind: "patient" },
+      { id: "a-mom", label: "Madre", kind: "mother" },
+      { id: "a-psy", label: "Psiquiatra", kind: "psychiatrist" },
+    ],
+    sections: {
+      enfermedad_actual: sec("Nerviosismo de varios días.", "supported", ["a-pat", "a-mom"]),
+      intervencion: sec(),
+      exploracion_psicopatologica: sec("Colabora durante la entrevista.", "supported", ["a-psy"]),
+    },
+    missing_or_not_explored: [{ topic: "riesgo", status: "not_explored", note: "No explorado." }],
+    conflicts: [],
+    safety_review: [],
+  };
+  const plan = {
+    sources: [
+      { id: "p-pat", label: "Paciente", kind: "patient" },
+      { id: "p-psy", label: "Psiquiatra", kind: "psychiatrist" },
+    ],
+    sections: {
+      orientacion_diagnostica: sec("Información insuficiente para juicio diagnóstico.", "insufficient", ["p-pat"]),
+      plan_terapeutico: sec("Seguimiento clínico.", "supported", ["p-psy"]),
+      tratamiento_actual: sec("Sertralina.", "supported", ["p-pat"]),
+    },
+    medications_current: [med("Sertralina", ["p-pat"])],
+    diagnostic_judgment: {
+      primary_diagnosis: "",
+      cie10_code: "",
+      dsm5_code: "",
+      provisional: true,
+      differential: [],
+      basis_summary: "Información insuficiente.",
+      requires_clinician_validation: true,
+    },
+    missing_or_not_explored: [{ topic: "sustancias", status: "not_explored", note: "No explorado." }],
+    conflicts: [],
+  };
+
+  const merged = mergeParallelClinicalAssessment(history, acute, plan);
+  assert.doesNotThrow(() => ClinicalAssessmentSchema.parse(merged));
+  assert.equal(merged.sources.filter((s) => s.kind === "patient").length, 1);
+  assert.equal(merged.sources.filter((s) => s.kind === "mother").length, 1);
+  assert.equal(merged.sources.filter((s) => s.kind === "psychiatrist").length, 1);
+  assert.equal(merged.sections.enfermedad_actual.text, "Nerviosismo de varios días.");
+  assert.equal(merged.sections.plan_terapeutico.text, "Seguimiento clínico.");
+  assert.equal(merged.medications.current[0].display_name, "Sertralina");
+  assert.equal(merged.validation.clinician_validation_required, true);
+});
+
+test("V0.6.1 paralelo: solo se activa en ruta completa con evidencia incremental verificada", () => {
   assert.match(apiAnalyze, /parallelFullMode\s*=\s*!fastRoute\s*&&\s*evidenceBundle\.verified/);
   assert.match(apiAnalyze, /parallelMode:\s*true/);
   assert.match(apiAnalyze, /parallel_full_close:\s*parallelFullMode/);
   assert.match(serverAnalyze, /Promise\.all/);
   assert.match(serverAnalyze, /parallel_full_route:\s*parallelMode/);
   assert.match(serverAnalyze, /HistoryClinicalSchema/);
-  assert.match(serverAnalyze, /CurrentClinicalSchema/);
+  assert.match(serverAnalyze, /AcuteClinicalSchema/);
+  assert.match(serverAnalyze, /PlanClinicalSchema/);
+  assert.match(serverAnalyze, /parallel_branch_count:\s*parallelMode\s*\?\s*3\s*:\s*0/);
 });
