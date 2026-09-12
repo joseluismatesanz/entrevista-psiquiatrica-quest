@@ -19,6 +19,25 @@ test("ASR farmacológico: corrige ribotril a rivotril sin fuzzy libre", () => {
   assert.deepEqual(result.applied_aliases, ["ribotril_to_rivotril"]);
 });
 
+test("ASR farmacológico: recupera variantes observadas de mirtazapina", () => {
+  for (const heard of ["Mirtacepina", "Mirtazepina", "Mertazapina", "Mirtrazapina"]) {
+    const result = normalizeMedicationAsrText(`Tomo ${heard} 15 mg por la noche.`);
+    assert.equal(result.text, "Tomo Mirtazapina 15 mg por la noche.");
+    assert.equal(result.replacements, 1);
+  }
+});
+
+test("ASR farmacológico: permite aproximación única de alta confianza solo en contexto farmacológico", () => {
+  const medicationContext = normalizeMedicationAsrText("Tomo mirtazipina 15 mg por la noche.");
+  assert.equal(medicationContext.text, "Tomo mirtazapina 15 mg por la noche.");
+  assert.equal(medicationContext.replacements, 1);
+  assert.ok(medicationContext.applied_aliases.some((id) => id.startsWith("fuzzy_")));
+
+  const noMedicationContext = normalizeMedicationAsrText("La palabra mirtazipina aparece en un texto de prueba.");
+  assert.equal(noMedicationContext.text, "La palabra mirtazipina aparece en un texto de prueba.");
+  assert.equal(noMedicationContext.replacements, 0);
+});
+
 test("ASR farmacológico: conserva mayúscula inicial y no altera palabras distintas", () => {
   assert.equal(normalizeMedicationAsrText("Cetralina").text, "Sertralina");
   assert.equal(normalizeMedicationAsrText("Ribotril").text, "Rivotril");
@@ -29,11 +48,15 @@ test("ASR farmacológico: normaliza segmentos conservando identidad y timestamps
   const result = normalizeMedicationAsrSegments([
     { id: "s1", speaker: "A", start: 0, end: 1, text: "Cetralina 50 mg." },
     { id: "s2", speaker: "B", start: 1, end: 2, text: "Ribotril 0,5 mg." },
+    { id: "s3", speaker: "B", start: 2, end: 3, text: "Mirtacepina 15 mg por la noche." },
   ]);
   assert.equal(result.segments[0].text, "Sertralina 50 mg.");
   assert.equal(result.segments[0].id, "s1");
   assert.equal(result.segments[0].start, 0);
   assert.equal(result.segments[1].text, "Rivotril 0,5 mg.");
-  assert.equal(result.replacements, 2);
-  assert.deepEqual(result.applied_aliases, ["cetralina_to_sertralina", "ribotril_to_rivotril"]);
+  assert.equal(result.segments[2].text, "Mirtazapina 15 mg por la noche.");
+  assert.equal(result.replacements, 3);
+  assert.ok(result.applied_aliases.includes("cetralina_to_sertralina"));
+  assert.ok(result.applied_aliases.includes("ribotril_to_rivotril"));
+  assert.ok(result.applied_aliases.includes("mirtacepina_to_mirtazapina"));
 });
