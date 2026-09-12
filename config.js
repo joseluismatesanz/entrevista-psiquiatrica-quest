@@ -53,9 +53,14 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
       const compact = samples.analysis.verifiedFastMode
         ? ' · cierre compacto sí'
         : ' · cierre compacto no';
-      const parallel = samples.analysis.parallelFull
-        ? ` · cierre paralelo sí (historia ${seconds(core.parallel_history_model)} · episodio actual ${seconds(core.parallel_current_model)})`
-        : ' · cierre paralelo no';
+      let parallel = ' · cierre paralelo no';
+      if (samples.analysis.parallelFull) {
+        if (Number.isFinite(Number(core.parallel_acute_model)) || Number.isFinite(Number(core.parallel_plan_model))) {
+          parallel = ` · cierre paralelo sí (historia ${seconds(core.parallel_history_model)} · episodio/MSE ${seconds(core.parallel_acute_model)} · diagnóstico/plan ${seconds(core.parallel_plan_model)})`;
+        } else {
+          parallel = ` · cierre paralelo sí (historia ${seconds(core.parallel_history_model)} · episodio actual ${seconds(core.parallel_current_model)})`;
+        }
+      }
       parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · ${privacy} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}${evidence}${compact}${parallel}`);
     }
 
