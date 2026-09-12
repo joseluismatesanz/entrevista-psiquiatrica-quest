@@ -53,7 +53,10 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
       const compact = samples.analysis.verifiedFastMode
         ? ' · cierre compacto sí'
         : ' · cierre compacto no';
-      parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · ${privacy} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}${evidence}${compact}`);
+      const parallel = samples.analysis.parallelFull
+        ? ` · cierre paralelo sí (historia ${seconds(core.parallel_history_model)} · episodio actual ${seconds(core.parallel_current_model)})`
+        : ' · cierre paralelo no';
+      parts.push(`Organización navegador ${seconds(samples.analysis.roundTripMs)} · ${privacy} · modelo clínico ${seconds(core.structured_clinical_model || request.clinical_analysis)} · CIMA ${seconds(core.medication_verification)} · postproceso ${seconds(core.deterministic_postprocessing)} · servidor ${seconds(request.total_request)} · ruta ${route}${evidence}${compact}${parallel}`);
     }
 
     target.textContent = parts.join(' | ');
@@ -83,6 +86,7 @@ window.CLINICAL_API_URL = window.location.hostname.endsWith(".vercel.app")
           evidenceVerified: Boolean(payload?.meta?.long_interview_evidence_verified),
           modelInputCharacters: Number(payload?.meta?.long_interview_model_input_characters) || 0,
           verifiedFastMode: Boolean(payload?.meta?.verified_fast_mode),
+          parallelFull: Boolean(payload?.meta?.parallel_full_close || payload?.meta?.parallel_full_route),
         };
       }
       render();
