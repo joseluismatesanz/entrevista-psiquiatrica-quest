@@ -2,6 +2,13 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { SYSTEM_PROMPT } from "./prompt.mjs";
 import { FAST_SYSTEM_PROMPT } from "./fast-prompt.mjs";
 import { ClinicalAssessmentSchema } from "./clinical-schema.mjs";
+import {
+  HistoryClinicalSchema,
+  CurrentClinicalSchema,
+  HISTORY_PROMPT,
+  CURRENT_PROMPT,
+  mergeParallelClinicalAssessment,
+} from "./parallel-clinical-analysis.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
 import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
 import { groundInterventionToTranscript } from "./intervention-grounding.mjs";
@@ -46,7 +53,7 @@ function isRetryableStructuredError(error) {
   return /json|parse|parsed|structured output|schema/i.test(String(error.message || ""));
 }
 
-async function invokeStructured(client, params) {
+async function invokeStructured(client, params, schema = ClinicalAssessmentSchema) {
   if (typeof client.responses?.parse === "function") {
     const response = await client.responses.parse(params);
     return { response, parsed: extractParsed(response), parser: "responses.parse+zod" };
@@ -55,7 +62,7 @@ async function invokeStructured(client, params) {
     const response = await client.responses.create(params);
     if (!response.output_text) return { response, parsed: null, parser: "test-create-fallback" };
     try {
-      const parsed = ClinicalAssessmentSchema.parse(JSON.parse(response.output_text));
+      const parsed = schema.parse(JSON.parse(response.output_text));
       return { response, parsed, parser: "test-create-fallback" };
     } catch (cause) {
       throw structuredOutputError("El cliente de prueba devolvió una salida estructurada inválida.", cause);
@@ -64,7 +71,7 @@ async function invokeStructured(client, params) {
   throw new TypeError("El cliente de modelo no expone Responses API.");
 }
 
-async function requestParsedAssessment(client, baseParams, instructionPrompt = SYSTEM_PROMPT) {
+async function requestParsedAssessment(client, baseParams, instructionPrompt = SYSTEM_PROMPT, schema = ClinicalAssessmentSchema) {
   let lastError;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -73,7 +80,7 @@ async function requestParsedAssessment(client, baseParams, instructionPrompt = S
         instructions: attempt === 1
           ? instructionPrompt
           : `${instructionPrompt}\n\nREINTENTO TÉCNICO: devuelve únicamente una salida que cumpla exactamente el esquema estructurado. No añadas texto fuera de los campos del esquema.`,
-      });
+      }, schema);
       const refusal = extractRefusal(response);
       if (refusal) {
         const error = new Error(refusal);
@@ -96,6 +103,65 @@ async function requestParsedAssessment(client, baseParams, instructionPrompt = S
   throw lastError || structuredOutputError("No se pudo obtener una salida estructurada válida.");
 }
 
+function modelInput(text) {
+  return [{
+    role: "user",
+    content: [{
+      type: "input_text",
+      text:
+        "Trabaja únicamente con la siguiente evidencia procedente de una entrevista ficticia o previamente anonimizada. " +
+        "La evidencia puede ser una selección conservadora de líneas exactas; no infieras que lo omitido fue negado o explorado:\n\n" +
+        text,
+    }],
+  }];
+}
+
+async function runParallelClinicalModel(client, model, modelTranscript) {
+  const startedAt = Date.now();
+  const historyFormat = zodTextFormat(HistoryClinicalSchema, "psychiatric_history_context_v06");
+  const currentFormat = zodTextFormat(CurrentClinicalSchema, "psychiatric_current_risk_v06");
+
+  const timed = async (fn) => {
+    const branchStartedAt = Date.now();
+    const result = await fn();
+    return { ...result, elapsedMs: Date.now() - branchStartedAt };
+  };
+
+  const [history, current] = await Promise.all([
+    timed(() => requestParsedAssessment(client, {
+      model,
+      store: false,
+      background: false,
+      reasoning: { effort: "low" },
+      max_output_tokens: 8000,
+      input: modelInput(modelTranscript),
+      text: { format: historyFormat },
+    }, HISTORY_PROMPT, HistoryClinicalSchema)),
+    timed(() => requestParsedAssessment(client, {
+      model,
+      store: false,
+      background: false,
+      reasoning: { effort: "low" },
+      max_output_tokens: 10000,
+      input: modelInput(modelTranscript),
+      text: { format: currentFormat },
+    }, CURRENT_PROMPT, CurrentClinicalSchema)),
+  ]);
+
+  return {
+    parsed: mergeParallelClinicalAssessment(history.parsed, current.parsed),
+    response: null,
+    attempts: Math.max(history.attempts, current.attempts),
+    parser: `parallel:${history.parser}+${current.parser}`,
+    elapsedMs: Date.now() - startedAt,
+    branchPerformance: {
+      parallel_history_model: history.elapsedMs,
+      parallel_current_model: current.elapsedMs,
+    },
+    requestIds: [history.response?._request_id, current.response?._request_id].filter(Boolean),
+  };
+}
+
 export async function analyzeTranscript(transcript, options = {}) {
   const totalStartedAt = Date.now();
   if (typeof transcript !== "string" || transcript.trim().length < 20) {
@@ -106,6 +172,7 @@ export async function analyzeTranscript(transcript, options = {}) {
     ? options.modelTranscript.trim()
     : transcript.trim();
   const fastMode = options.fastMode === true;
+  const parallelMode = options.parallelMode === true && !fastMode;
 
   let client = options.client;
   let transport = client ? "injected-test-client" : "";
@@ -121,32 +188,55 @@ export async function analyzeTranscript(transcript, options = {}) {
   }
 
   const model = options.model || process.env.OPENAI_MODEL || defaultModel;
-  const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
   const instructionPrompt = fastMode ? FAST_SYSTEM_PROMPT : SYSTEM_PROMPT;
   const reasoningEffort = fastMode ? "none" : "low";
   const maxOutputTokens = fastMode ? 10000 : 16000;
 
-  const modelStartedAt = Date.now();
-  const { parsed, response, attempts, parser } = await requestParsedAssessment(client, {
-    model,
-    store: false,
-    background: false,
-    reasoning: { effort: reasoningEffort },
-    max_output_tokens: maxOutputTokens,
-    input: [{
-      role: "user",
-      content: [{
-        type: "input_text",
-        text:
-          "Genera el borrador clínico estructurado en JSON según el esquema. " +
-          "Trabaja únicamente con la siguiente evidencia procedente de una entrevista ficticia o previamente anonimizada. " +
-          "La evidencia puede ser una selección conservadora de líneas exactas; no infieras que lo omitido fue negado o explorado:\n\n" +
-          modelTranscript,
+  let parsed;
+  let response = null;
+  let attempts = 1;
+  let parser = "";
+  let requestIds = [];
+  let modelMs = 0;
+  let branchPerformance = {};
+
+  if (parallelMode) {
+    const parallel = await runParallelClinicalModel(client, model, modelTranscript);
+    parsed = parallel.parsed;
+    attempts = parallel.attempts;
+    parser = parallel.parser;
+    requestIds = parallel.requestIds;
+    modelMs = parallel.elapsedMs;
+    branchPerformance = parallel.branchPerformance;
+  } else {
+    const textFormat = zodTextFormat(ClinicalAssessmentSchema, "psychiatric_assessment_v04");
+    const modelStartedAt = Date.now();
+    const result = await requestParsedAssessment(client, {
+      model,
+      store: false,
+      background: false,
+      reasoning: { effort: reasoningEffort },
+      max_output_tokens: maxOutputTokens,
+      input: [{
+        role: "user",
+        content: [{
+          type: "input_text",
+          text:
+            "Genera el borrador clínico estructurado en JSON según el esquema. " +
+            "Trabaja únicamente con la siguiente evidencia procedente de una entrevista ficticia o previamente anonimizada. " +
+            "La evidencia puede ser una selección conservadora de líneas exactas; no infieras que lo omitido fue negado o explorado:\n\n" +
+            modelTranscript,
+        }],
       }],
-    }],
-    text: { format: textFormat },
-  }, instructionPrompt);
-  const modelMs = Date.now() - modelStartedAt;
+      text: { format: textFormat },
+    }, instructionPrompt, ClinicalAssessmentSchema);
+    modelMs = Date.now() - modelStartedAt;
+    parsed = result.parsed;
+    response = result.response;
+    attempts = result.attempts;
+    parser = result.parser;
+    requestIds = [response?._request_id].filter(Boolean);
+  }
 
   const deterministicStartedAt = Date.now();
   const invariantResult = applyClinicalInvariants(parsed);
@@ -170,7 +260,7 @@ export async function analyzeTranscript(transcript, options = {}) {
   }
 
   // Las guardas deterministas SIEMPRE usan la transcripción completa desidentificada,
-  // aunque el modelo haya recibido una selección clínica compacta.
+  // aunque el modelo haya recibido evidencia compacta o se haya dividido en ramas paralelas.
   const postprocessResult = applyClinicalPostprocessing(assessment, transcript);
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
@@ -204,7 +294,7 @@ export async function analyzeTranscript(transcript, options = {}) {
       store: false,
       structured_output_parser: parser,
       structured_output_attempts: attempts,
-      request_id: response?._request_id || "",
+      request_id: requestIds.join(","),
       warnings,
       invariant_violations: violations,
       intervention_transcript_grounded: true,
@@ -215,10 +305,12 @@ export async function analyzeTranscript(transcript, options = {}) {
       model_input_characters: modelTranscript.length,
       grounding_transcript_characters: transcript.trim().length,
       fast_mode: fastMode,
+      parallel_full_route: parallelMode,
       reasoning_effort: reasoningEffort,
-      max_output_tokens: maxOutputTokens,
+      max_output_tokens: parallelMode ? 10000 : maxOutputTokens,
       performance_ms: {
         structured_clinical_model: modelMs,
+        ...branchPerformance,
         medication_verification: medicationMs,
         deterministic_postprocessing: deterministicOnlyMs,
         total_analysis: Date.now() - totalStartedAt,
