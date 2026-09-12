@@ -64,7 +64,7 @@ function clientCapturing(target) {
 
 const transcript = "PSIQUIATRA: ¿Qué le ocurre? PACIENTE: Estoy nervioso y desde hace unos días duermo mal.";
 
-test("V0.6 rendimiento: el modo rápido verificado usa prompt compacto y reasoning none", async () => {
+test("V0.6 rendimiento: el modo rápido verificado conserva prompt compacto y reasoning none como fallback", async () => {
   const captured = [];
   const result = await analyzeTranscript(transcript, {
     client: clientCapturing(captured),
@@ -96,9 +96,22 @@ test("V0.6 seguridad: la ruta clínica normal conserva prompt completo y reasoni
   assert.equal(result.meta.reasoning_effort, "low");
 });
 
-test("V0.6 seguridad: API solo activa fastMode con ruta rápida y evidencia incremental verificada", async () => {
+test("V0.6 seguridad: API solo activa el paralelo rápido con ruta rápida y evidencia verificada, con fallback compacto", async () => {
   const apiAnalyze = await readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8");
+  const fastParallel = await readFile(new URL("../server/fast-parallel-analysis.mjs", import.meta.url), "utf8");
+
   assert.match(apiAnalyze, /const fastMode = fastRoute && evidenceBundle\.verified/);
-  assert.match(apiAnalyze, /\.\.\.\(fastMode \? \{ fastMode: true \} : \{\}\)/);
+  assert.match(apiAnalyze, /analyzeFastParallelTranscript/);
+  assert.match(apiAnalyze, /fast_parallel_close: fastParallelClose/);
+  assert.match(apiAnalyze, /fast_parallel_fallback_used: fastParallelFallbackUsed/);
+  assert.match(apiAnalyze, /fastMode:\s*true/);
   assert.match(apiAnalyze, /verified_fast_mode: fastMode/);
+
+  assert.match(fastParallel, /Promise\.all/);
+  assert.match(fastParallel, /HistoryClinicalSchema/);
+  assert.match(fastParallel, /CurrentClinicalSchema/);
+  assert.match(fastParallel, /reasoning:\s*\{ effort: "none" \}/);
+  assert.match(fastParallel, /mergeParallelClinicalAssessment\(history\.parsed, current\.parsed\)/);
+  assert.match(fastParallel, /collectClinicalInvariantViolations/);
+  assert.match(fastParallel, /groundReportContentToTranscript/);
 });
