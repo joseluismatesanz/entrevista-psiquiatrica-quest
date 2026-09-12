@@ -117,9 +117,19 @@ Devuelve exactamente el esquema solicitado.
 - La evidencia puede ser una selección conservadora de líneas exactas: lo omitido NO equivale a negado ni explorado.
 `;
 
+const SINGULAR_CLINICAL_SOURCE_KINDS = new Set([
+  "patient", "psychiatrist", "mother", "father", "clinician_observation", "ehr",
+]);
+
 function sourceKey(source) {
-  const label = String(source?.label || "").trim().toLocaleLowerCase("es");
-  return `${String(source?.kind || "other")}|${label}`;
+  const kind = String(source?.kind || "other");
+  if (SINGULAR_CLINICAL_SOURCE_KINDS.has(kind)) return kind;
+  const label = String(source?.label || "")
+    .replace(/X{3,}/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("es");
+  return `${kind}|${label}`;
 }
 
 function canonicalPrefix(kind) {
