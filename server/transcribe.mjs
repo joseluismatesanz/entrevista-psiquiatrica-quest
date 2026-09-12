@@ -1,4 +1,5 @@
 import { resolveModelAuth } from "./model-auth.mjs";
+import { normalizeMedicationAsrSegments } from "./medication-asr-normalization.mjs";
 
 export const AUDIO_PILOT_MAX_BYTES = 3_000_000;
 export const AUDIO_TRANSCRIPTION_MODEL = "gpt-4o-transcribe-diarize";
@@ -116,7 +117,9 @@ export async function transcribeAudioPayload(payload, options = {}) {
     chunking_strategy: "auto",
   });
 
-  const segments = normalizeSegments(response);
+  const rawSegments = normalizeSegments(response);
+  const medicationNormalization = normalizeMedicationAsrSegments(rawSegments);
+  const segments = medicationNormalization.segments;
   if (segments.length === 0) {
     const error = new Error("La transcripción no devolvió segmentos de voz.");
     error.name = "EmptyTranscriptionError";
@@ -138,6 +141,9 @@ export async function transcribeAudioPayload(payload, options = {}) {
       persistent_audio_storage: false,
       speaker_role_confirmation_required: true,
       chronological_segment_order_enforced: true,
+      medication_asr_normalization_enabled: true,
+      medication_asr_normalization_replacements: medicationNormalization.replacements,
+      medication_asr_normalization_aliases: medicationNormalization.applied_aliases,
     },
   };
 }
