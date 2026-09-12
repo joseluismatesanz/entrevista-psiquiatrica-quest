@@ -1,3 +1,5 @@
+import { resolveKnownMedicationAlias } from "./medication-name-aliases.mjs";
+
 const CIMA_BASE_URL = "https://cima.aemps.es/cima/rest";
 const DEFAULT_TIMEOUT_MS = 4500;
 const MAX_ACTIVE_CANDIDATE_DETAILS = 6;
@@ -48,8 +50,8 @@ function ingredientContainsExactToken(ingredient, wanted) {
   return normalize(ingredient).split(/\s+/).includes(wanted);
 }
 
-function activeIngredientMatch(rawName, item) {
-  const wanted = normalize(rawName);
+function activeIngredientMatch(queryName, item) {
+  const wanted = normalize(queryName);
   if (!wanted) return null;
   const ingredients = ingredientNames(item);
   const normalizedIngredients = ingredients.map(normalize);
@@ -63,8 +65,8 @@ function activeIngredientMatch(rawName, item) {
   return null;
 }
 
-function productNameMatches(rawName, item) {
-  const wanted = normalize(rawName);
+function productNameMatches(queryName, item) {
+  const wanted = normalize(queryName);
   const officialName = normalize(item?.nombre);
   return Boolean(wanted && (officialName === wanted || officialName.startsWith(`${wanted} `)));
 }
@@ -97,10 +99,10 @@ async function withMedicationDetail(item, fetchFn, timeoutMs) {
   }
 }
 
-function confirmedResult(rawName, detail, matchType, fallbackItem = detail) {
+function confirmedResult(queryName, detail, matchType, fallbackItem = detail) {
   return {
     status: "confirmed",
-    rawName,
+    rawName: queryName,
     source: "AEMPS CIMA",
     matchType,
     officialName: clean(detail?.nombre || fallbackItem?.nombre),
@@ -114,30 +116,37 @@ function confirmedResult(rawName, detail, matchType, fallbackItem = detail) {
   };
 }
 
-async function findExactActiveIngredient(rawName, items, fetchFn, timeoutMs) {
+async function findExactActiveIngredient(queryName, items, fetchFn, timeoutMs) {
   const limited = items.slice(0, MAX_ACTIVE_CANDIDATE_DETAILS);
-  // Los detalles candidatos son independientes. Resolverlos en paralelo evita hasta
-  // seis esperas HTTP consecutivas cuando CIMA no incluye principios activos en el listado.
   const details = await Promise.all(limited.map((item) => withMedicationDetail(item, fetchFn, timeoutMs)));
   for (let index = 0; index < details.length; index += 1) {
     const detail = details[index];
-    const match = activeIngredientMatch(rawName, detail);
-    if (match) return confirmedResult(rawName, detail, match.matchType, limited[index]);
+    const match = activeIngredientMatch(queryName, detail);
+    if (match) return confirmedResult(queryName, detail, match.matchType, limited[index]);
   }
   return null;
+}
+
+function withAliasTrace(result, rawName, aliasResolution) {
+  return {
+    ...result,
+    rawName: clean(rawName),
+    queriedName: clean(aliasResolution?.canonical) || clean(rawName),
+    medicationAliasApplied: Boolean(aliasResolution?.corrected),
+    medicationAliasId: aliasResolution?.aliasId || "",
+  };
 }
 
 async function searchCima(rawName, options = {}) {
   const fetchFn = options.fetchFn || globalThis.fetch;
   if (typeof fetchFn !== "function") throw new Error("fetch no disponible para CIMA");
   const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
-  const query = clean(rawName);
-  const encoded = encodeURIComponent(query);
+  const aliasResolution = resolveKnownMedicationAlias(rawName);
+  const queryName = clean(aliasResolution.canonical) || clean(rawName);
+  const encoded = encodeURIComponent(queryName);
 
-  // Regla de seguridad: primero se comprueba expresamente como principio activo.
-  // Solo si CIMA responde correctamente y no hay coincidencia exacta se permite
-  // interpretar el texto como nombre de medicamento/marca.
-  // Solo se envía a CIMA el nombre farmacológico, nunca la transcripción ni datos del paciente.
+  // Corrección conservadora: solo alias farmacológicos explícitamente validados.
+  // No se usa distancia léxica libre ni fuzzy matching automático entre medicamentos.
   let activePayload;
   try {
     activePayload = await fetchJson(`${CIMA_BASE_URL}/medicamentos?practiv1=${encoded}`, fetchFn, timeoutMs);
@@ -146,8 +155,8 @@ async function searchCima(rawName, options = {}) {
   }
 
   const activeItems = listFromPayload(activePayload);
-  const activeMatch = await findExactActiveIngredient(rawName, activeItems, fetchFn, timeoutMs);
-  if (activeMatch) return activeMatch;
+  const activeMatch = await findExactActiveIngredient(queryName, activeItems, fetchFn, timeoutMs);
+  if (activeMatch) return withAliasTrace(activeMatch, rawName, aliasResolution);
 
   let productPayload;
   try {
@@ -157,11 +166,13 @@ async function searchCima(rawName, options = {}) {
   }
 
   const productItems = listFromPayload(productPayload);
-  const product = productItems.find((item) => productNameMatches(rawName, item));
-  if (!product) return { status: "not_found", rawName, source: "AEMPS CIMA" };
+  const product = productItems.find((item) => productNameMatches(queryName, item));
+  if (!product) {
+    return withAliasTrace({ status: "not_found", rawName: queryName, source: "AEMPS CIMA" }, rawName, aliasResolution);
+  }
 
   const detail = await withMedicationDetail(product, fetchFn, timeoutMs);
-  return confirmedResult(rawName, detail, "product_name_exact_or_prefix", product);
+  return withAliasTrace(confirmedResult(queryName, detail, "product_name_exact_or_prefix", product), rawName, aliasResolution);
 }
 
 function appendSafetyReview(assessment, med, note) {
@@ -180,33 +191,36 @@ function appendSafetyReview(assessment, med, note) {
 
 function canonicalDisplayName(verification, rawName) {
   const raw = clean(rawName);
+  const canonicalInput = verification.medicationAliasApplied
+    ? clean(verification.queriedName)
+    : raw;
   const matchType = verification.matchType || "";
 
-  // Si la palabra transcrita corresponde al principio activo, la conservamos literalmente.
-  // No sustituimos "Sertralina" por "Sertralina hidrocloruro" si la sal no fue expresada.
   if (matchType === "active_ingredient_exact" || matchType === "active_ingredient_exact_token") {
-    return titleCaseMedication(raw);
+    return titleCaseMedication(canonicalInput);
   }
 
-  // Si es una marca confirmada, mostramos el principio activo confirmado y conservamos
-  // la marca entre paréntesis. Nunca se infieren dosis, formulación ni vía desde CIMA.
   if (verification.activeIngredients?.length === 1) {
-    return `${titleCaseMedication(verification.activeIngredients[0])} (${raw})`;
+    return `${titleCaseMedication(verification.activeIngredients[0])} (${titleCaseMedication(canonicalInput)})`;
   }
   if (verification.activeIngredients?.length > 1) {
-    return `${verification.activeIngredients.map(titleCaseMedication).join(" / ")} (${raw})`;
+    return `${verification.activeIngredients.map(titleCaseMedication).join(" / ")} (${titleCaseMedication(canonicalInput)})`;
   }
 
-  return raw || clean(verification.officialName);
+  return titleCaseMedication(canonicalInput) || clean(verification.officialName);
 }
 
 export async function verifyMedicationName(rawName, options = {}) {
   try {
     return await searchCima(rawName, options);
   } catch (error) {
+    const aliasResolution = resolveKnownMedicationAlias(rawName);
     return {
       status: "unavailable",
       rawName: clean(rawName),
+      queriedName: clean(aliasResolution.canonical) || clean(rawName),
+      medicationAliasApplied: Boolean(aliasResolution.corrected),
+      medicationAliasId: aliasResolution.aliasId || "",
       source: "AEMPS CIMA",
       error: String(error?.message || "CIMA no disponible"),
     };
@@ -226,8 +240,6 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
     }
   }
 
-  // Los nombres farmacológicos independientes se verifican a la vez. Los duplicados
-  // habitual/actual siguen compartiendo un único resultado.
   const uniqueNames = new Map();
   for (const entry of medicationEntries) {
     if (!uniqueNames.has(entry.key)) uniqueNames.set(entry.key, entry.rawName);
@@ -250,6 +262,9 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
       med.active_ingredient_known = Boolean(verification.activeIngredients?.length)
         || verification.matchType === "active_ingredient_exact"
         || verification.matchType === "active_ingredient_exact_token";
+      if (verification.medicationAliasApplied) {
+        warnings.push(`medication_validated_alias_applied:${rawName}->${verification.queriedName}`);
+      }
     } else if (verification.status === "not_found") {
       med.display_name = `${rawName} (no encontrada correspondencia en CIMA)`;
       med.active_ingredient_known = false;
@@ -270,7 +285,8 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
       medication_verification_enabled: true,
       medication_verification_source: "AEMPS CIMA",
       medication_query_data_minimization: "medication_name_only",
-      medication_similarity_autocorrection: false,
+      medication_validated_alias_correction: true,
+      medication_free_fuzzy_autocorrection: false,
       medication_formulation_inference: false,
       medication_active_ingredient_lookup_precedes_product_lookup: true,
       medication_verification_parallelized: true,
