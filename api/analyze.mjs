@@ -167,13 +167,34 @@ export default async function handler(req, res) {
     const fastRoute = useFastClinicalRoute(safeTranscript);
     const fastMode = fastRoute && evidenceBundle.verified;
     const parallelFullMode = !fastRoute && evidenceBundle.verified;
+    let fastParallelClose = false;
+    let fastParallelFallbackUsed = false;
     const analysisStartedAt = Date.now();
-    const result = await analyzeTranscript(safeTranscript, {
-      ...(fastRoute ? { model: "gpt-5.6-luna" } : {}),
-      ...(evidenceBundle.verified ? { modelTranscript: evidenceBundle.transcript } : {}),
-      ...(fastMode ? { fastMode: true } : {}),
-      ...(parallelFullMode ? { parallelMode: true } : {}),
-    });
+    let result;
+
+    if (fastMode) {
+      try {
+        const { analyzeFastParallelTranscript } = await import("../server/fast-parallel-analysis.mjs");
+        result = await analyzeFastParallelTranscript(safeTranscript, {
+          model: "gpt-5.6-luna",
+          modelTranscript: evidenceBundle.transcript,
+        });
+        fastParallelClose = true;
+      } catch {
+        fastParallelFallbackUsed = true;
+        result = await analyzeTranscript(safeTranscript, {
+          model: "gpt-5.6-luna",
+          modelTranscript: evidenceBundle.transcript,
+          fastMode: true,
+        });
+      }
+    } else {
+      result = await analyzeTranscript(safeTranscript, {
+        ...(fastRoute ? { model: "gpt-5.6-luna" } : {}),
+        ...(evidenceBundle.verified ? { modelTranscript: evidenceBundle.transcript } : {}),
+        ...(parallelFullMode ? { parallelMode: true } : {}),
+      });
+    }
     const clinicalAnalysisMs = Date.now() - analysisStartedAt;
 
     return res.status(200).json({
@@ -197,6 +218,8 @@ export default async function handler(req, res) {
         long_interview_model_input_characters: evidenceBundle.verified ? evidenceBundle.transcript.length : safeTranscript.length,
         adaptive_fast_route: fastRoute,
         verified_fast_mode: fastMode,
+        fast_parallel_close: fastParallelClose,
+        fast_parallel_fallback_used: fastParallelFallbackUsed,
         parallel_full_close: parallelFullMode,
         request_performance_ms: {
           person_name_redaction: redactionMs,
