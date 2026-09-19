@@ -28,6 +28,96 @@ function medicationMentionUnits(transcript, rawName) {
   return transcriptUnits(transcript).filter((unit) => normalize(unit).includes(wanted));
 }
 
+const FAMILY_SPEAKER_LABELS = new Set(["MADRE", "PADRE", "FAMILIAR", "CUIDADOR", "CUIDADORA", "HERMANO", "HERMANA"]);
+const FAMILY_SELF_MEDICATION_PATTERN = /\b(?:yo\s+)?(?:ahora\s+mismo\s+)?(?:estoy\s+tomando|estaba\s+tomando|tomo|tomaba|he\s+tomado|me\s+tomo)\b/i;
+const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma|toma)\b/i;
+const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+(?:como|cómo)\s+es\s+el\s+tratamiento)\b/i;
+const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|deberá\s+tomar|tomara|tomará|tome|se\s+toma|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
+
+function speakerLines(transcript) {
+  return String(transcript || "")
+    .split(/\n+/)
+    .map((line, index) => {
+      const match = line.match(/^\s*([A-ZÁÉÍÓÚÜÑ_]+)\s*:\s*(.*)$/u);
+      if (!match) return null;
+      return { index, speaker: match[1].toUpperCase(), text: match[2].trim() };
+    })
+    .filter(Boolean);
+}
+
+function medicationCandidateNames(med) {
+  const values = [
+    med?.raw_name,
+    med?.display_name,
+    med?.medication_verification?.queriedName,
+    ...(med?.medication_verification?.activeIngredients || []),
+  ].map(normalize).filter(Boolean);
+  const expanded = [];
+  for (const value of values) {
+    expanded.push(value);
+    const withoutParentheses = value.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    if (withoutParentheses) expanded.push(withoutParentheses);
+    for (const part of value.split(/[()/,;+]/).map((x) => x.trim()).filter(Boolean)) expanded.push(part);
+  }
+  return [...new Set(expanded.filter((value) => value.length >= 4))];
+}
+
+function lineMentionsMedication(line, med) {
+  const text = normalize(line?.text);
+  return medicationCandidateNames(med).some((candidate) => text.includes(candidate));
+}
+
+function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  if (!lines.length) return;
+  const planAnchor = lines.find((line) => line.speaker === "PSIQUIATRA" && CURRENT_PLAN_ANCHOR_PATTERN.test(normalize(line.text)));
+  const planAnchorIndex = planAnchor?.index ?? Number.POSITIVE_INFINITY;
+
+  const hasFamilySelfMention = (med) => lines.some((line) =>
+    FAMILY_SPEAKER_LABELS.has(line.speaker)
+    && lineMentionsMedication(line, med)
+    && FAMILY_SELF_MEDICATION_PATTERN.test(normalize(line.text))
+  );
+
+  const hasHabitualPatientEvidence = (med) => lines.some((line) => {
+    if (line.index >= planAnchorIndex || !lineMentionsMedication(line, med)) return false;
+    if (line.speaker === "PACIENTE") return true;
+    if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
+      const text = normalize(line.text);
+      return !FAMILY_SELF_MEDICATION_PATTERN.test(text)
+        && COLLATERAL_PATIENT_MEDICATION_PATTERN.test(text);
+    }
+    return false;
+  });
+
+  const hasCurrentPatientEvidence = (med) => lines.some((line) => {
+    if (!lineMentionsMedication(line, med)) return false;
+    if (line.speaker === "PACIENTE" && line.index >= planAnchorIndex) return true;
+    if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
+      const text = normalize(line.text);
+      return !FAMILY_SELF_MEDICATION_PATTERN.test(text)
+        && COLLATERAL_PATIENT_MEDICATION_PATTERN.test(text);
+    }
+    if (line.speaker !== "PSIQUIATRA") return false;
+    const text = normalize(line.text);
+    return line.index > planAnchorIndex || CLINICIAN_PRESCRIPTION_PATTERN.test(text);
+  });
+
+  for (const [group, hasPatientEvidence] of [
+    ["habitual", hasHabitualPatientEvidence],
+    ["current", hasCurrentPatientEvidence],
+  ]) {
+    const list = assessment.medications?.[group];
+    if (!Array.isArray(list) || !list.length) continue;
+    assessment.medications[group] = list.filter((med) => {
+      if (!hasFamilySelfMention(med) || hasPatientEvidence(med)) return true;
+      const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
+      warnings.push(`medication_family_self_use_pruned_from_patient_${group}:${name}`);
+      return false;
+    });
+  }
+}
+
 const HISTORICAL_MEDICATION_PATTERN = /\b(?:alguna\s+vez|en\s+el\s+pasado|antes|anteriormente|previamente|tratamiento\s+previo|me\s+dieron|le\s+dieron|tomaba|tomé|tome|había\s+tomado|habia\s+tomado|usaba|utilicé|utilice|se\s+retiró|se\s+retiro|retiraron|dejé\s+de|deje\s+de|dejó\s+de|dejo\s+de|suspendí|suspendi|suspendió|suspendio|ya\s+no\s+(?:tomo|toma)|tratad[oa]\s+con)\b/i;
 const ACTIVE_MEDICATION_PATTERN = /\b(?:actualmente|ahora|tomo|toma|tomando|mantengo|mantiene|por\s+la\s+mañana|por\s+la\s+noche|cada\s+d[ií]a|todos\s+los\s+d[ií]as|a\s+diario|habitualmente|tratamiento\s+habitual|sigo\s+con|contin[uú]o|contin[uú]a\s+con)\b/i;
 
@@ -216,6 +306,8 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
 
+  pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);
+
   for (const med of assessment.medications?.habitual || []) {
     const rawName = clean(med.raw_name) || clean(med.display_name);
     if (!rawName || med.status !== "active") continue;
@@ -261,6 +353,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       sociofamily_encounter_accompaniment_guard: true,
       mental_history_medication_only_guard: true,
       motive_generic_family_concern_guard: true,
+      medication_family_self_use_guard: true,
     },
   };
 }
