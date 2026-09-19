@@ -18,6 +18,12 @@ export const MEDICATION_NAME_ALIASES = [
     pattern: /\bribotril\b/giu,
   },
   {
+    id: "ribotil_to_rivotril",
+    source: "ribotil",
+    canonical: "rivotril",
+    pattern: /\bribotil\b/giu,
+  },
+  {
     id: "mirtacepina_to_mirtazapina",
     source: "mirtacepina",
     canonical: "mirtazapina",
@@ -47,6 +53,12 @@ export const MEDICATION_NAME_ALIASES = [
     canonical: "mirtazapina",
     pattern: /\bmirta\s+zapina\b/giu,
     lookup: false,
+  },
+  {
+    id: "mil_tazapina_to_mirtazapina",
+    source: "mil tazapina",
+    canonical: "mirtazapina",
+    pattern: /\bmil\s+tazapina\b/giu,
   },
   {
     id: "loracepam_to_lorazepam",
