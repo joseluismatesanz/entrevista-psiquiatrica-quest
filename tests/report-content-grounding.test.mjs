@@ -116,3 +116,24 @@ test("V0.6 informe: elimina 'no se dispone de una exploración psicopatológica 
   );
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
 });
+
+test("V0.6 informe: elimina la variante 'no se documentan de forma suficiente otros dominios'", () => {
+  const input = assessment({
+    exploracion_psicopatologica: {
+      text: "Se exploran verbalmente nerviosismo, agitación, ansiedad e insomnio referidos por la paciente; la madre observa aspecto cansado. No se documentan de forma suficiente otros dominios del estado mental.",
+      evidence_status: "insufficient",
+      source_ids: ["p", "m"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa y duermo mal.\nMADRE: La veo cansada.",
+  );
+
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Se exploran verbalmente nerviosismo, agitación, ansiedad e insomnio referidos por la paciente; la madre observa aspecto cansado.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
