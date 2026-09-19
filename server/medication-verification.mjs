@@ -239,7 +239,11 @@ function canonicalDisplayName(verification, rawName) {
     : raw;
   const matchType = verification.matchType || "";
 
-  if (matchType === "active_ingredient_exact" || matchType === "active_ingredient_exact_token") {
+  if (
+    matchType === "active_ingredient_exact"
+    || matchType === "active_ingredient_exact_token"
+    || matchType === "active_ingredient_master_exact"
+  ) {
     return titleCaseMedication(canonicalInput);
   }
 
