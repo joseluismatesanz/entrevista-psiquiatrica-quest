@@ -141,6 +141,41 @@ function withCorrectionTrace(result, rawName, resolution) {
   };
 }
 
+async function findExactActiveIngredientInMaster(queryName, fetchFn, timeoutMs) {
+  const encoded = encodeURIComponent(queryName);
+  let payload;
+  try {
+    payload = await fetchJson(
+      `${CIMA_BASE_URL}/maestras?maestra=1&nombre=${encoded}&enuso=0`,
+      fetchFn,
+      timeoutMs,
+    );
+  } catch {
+    return null;
+  }
+
+  const wanted = normalize(queryName);
+  const items = listFromPayload(payload);
+  const exact = items.find((item) => normalize(item?.nombre) === wanted);
+  if (!exact) return null;
+
+  const official = clean(exact?.nombre) || queryName;
+  return {
+    status: "confirmed",
+    rawName: queryName,
+    source: "AEMPS CIMA",
+    matchType: "active_ingredient_master_exact",
+    officialName: official,
+    activeIngredients: [official],
+    nregistro: "",
+    registryState: null,
+    commercialized: null,
+    formulation_inferred: false,
+    dose_inferred: false,
+    route_inferred: false,
+  };
+}
+
 async function searchCima(rawName, options = {}) {
   const fetchFn = options.fetchFn || globalThis.fetch;
   if (typeof fetchFn !== "function") throw new Error("fetch no disponible para CIMA");
@@ -162,6 +197,9 @@ async function searchCima(rawName, options = {}) {
   const activeItems = listFromPayload(activePayload);
   const activeMatch = await findExactActiveIngredient(queryName, activeItems, fetchFn, timeoutMs);
   if (activeMatch) return withCorrectionTrace(activeMatch, rawName, resolution);
+
+  const masterMatch = await findExactActiveIngredientInMaster(queryName, fetchFn, timeoutMs);
+  if (masterMatch) return withCorrectionTrace(masterMatch, rawName, resolution);
 
   let productPayload;
   try {
@@ -268,7 +306,8 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
       med.display_name = canonicalDisplayName(verification, rawName);
       med.active_ingredient_known = Boolean(verification.activeIngredients?.length)
         || verification.matchType === "active_ingredient_exact"
-        || verification.matchType === "active_ingredient_exact_token";
+        || verification.matchType === "active_ingredient_exact_token"
+        || verification.matchType === "active_ingredient_master_exact";
 
       if (verification.medicationCorrectionType === "validated_alias") {
         warnings.push(`medication_validated_alias_applied:${rawName}->${verification.queriedName}`);
@@ -307,6 +346,7 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
       medication_free_fuzzy_autocorrection: false,
       medication_formulation_inference: false,
       medication_active_ingredient_lookup_precedes_product_lookup: true,
+      medication_active_ingredient_master_fallback: true,
       medication_verification_parallelized: true,
     },
   };
