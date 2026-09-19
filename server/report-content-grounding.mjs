@@ -78,6 +78,22 @@ function transcriptExplicitlyStatesSchooling(lines) {
   return /\b(?:estudio|estudia|estudiando|curso|cursa|escolarizad[oa]|voy\s+al\s+instituto|va\s+al\s+instituto|acude\s+al\s+instituto)\b/i.test(relevantText);
 }
 
+const META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+documentan?\s+otros?\s+(?:elementos?|componentes?)|no\s+constan?\s+(?:otras?\s+)?indicaciones?\s+sobre|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre)\b/i;
+
+function pruneMetaAbsenceSentences(section, warnings, warningCode) {
+  if (!section?.text) return;
+  const sentences = splitSentences(section.text);
+  const kept = sentences.filter((sentence) => !META_ABSENCE_SENTENCE_PATTERN.test(normalize(sentence)));
+  if (kept.length === sentences.length) return;
+
+  section.text = kept.join(" ").trim();
+  if (!section.text) {
+    section.evidence_status = "not_provided";
+    section.source_ids = [];
+  }
+  warnings.push(warningCode);
+}
+
 function removeInferredSchooling(section, lines, warnings) {
   const text = String(section?.text || "").trim();
   if (!text || transcriptExplicitlyStatesSchooling(lines)) return;
@@ -160,6 +176,17 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     assessment,
     lines,
     warnings,
+  );
+
+  pruneMetaAbsenceSentences(
+    assessment.sections?.exploracion_psicopatologica,
+    warnings,
+    "report_meta_absence_pruned_from_mse",
+  );
+  pruneMetaAbsenceSentences(
+    assessment.sections?.plan_terapeutico,
+    warnings,
+    "report_meta_absence_pruned_from_plan",
   );
 
   return { assessment, warnings };
