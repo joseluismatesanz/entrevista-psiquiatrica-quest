@@ -158,6 +158,20 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   assessment.medications.habitual = retainedHabitual;
   assessment.medications.current = current;
 
+  // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
+  // Si el único respaldo del fármaco es una prescripción del psiquiatra posterior
+  // al anclaje del nuevo plan, se elimina cualquier adherencia arrastrada por el modelo.
+  for (const med of assessment.medications.current || []) {
+    const newlyPrescribed = !hasHabitualPatientEvidence(med) && hasCurrentPatientEvidence(med);
+    if (!newlyPrescribed) continue;
+    if (med.adherence_status !== "unknown" || clean(med.adherence_text)) {
+      med.adherence_status = "unknown";
+      med.adherence_text = "";
+      const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
+      warnings.push(`medication_new_prescription_adherence_cleared:${name}`);
+    }
+  }
+
   if (retainedHabitual.length !== habitual.length && retainedHabitual.length === 0) {
     const section = assessment.sections?.tratamiento_habitual;
     if (section) {
@@ -405,6 +419,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       motive_generic_family_concern_guard: true,
       medication_family_self_use_guard: true,
       medication_new_prescription_temporality_guard: true,
+      medication_new_prescription_adherence_guard: true,
     },
   };
 }
