@@ -127,6 +127,45 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
       }
     }
   }
+
+  const habitual = Array.isArray(assessment.medications?.habitual)
+    ? assessment.medications.habitual
+    : [];
+  const current = Array.isArray(assessment.medications?.current)
+    ? assessment.medications.current
+    : [];
+
+  const overlaps = (left, right) => {
+    const a = new Set(medicationCandidateNames(left));
+    return medicationCandidateNames(right).some((name) => a.has(name));
+  };
+
+  const retainedHabitual = [];
+  for (const med of habitual) {
+    const onlyNewPrescription = !hasHabitualPatientEvidence(med) && hasCurrentPatientEvidence(med);
+    if (!onlyNewPrescription) {
+      retainedHabitual.push(med);
+      continue;
+    }
+
+    if (!current.some((existing) => overlaps(existing, med))) {
+      current.push({ ...med, status: "active" });
+    }
+    const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
+    warnings.push(`medication_new_prescription_moved_habitual_to_current:${name}`);
+  }
+
+  assessment.medications.habitual = retainedHabitual;
+  assessment.medications.current = current;
+
+  if (retainedHabitual.length !== habitual.length && retainedHabitual.length === 0) {
+    const section = assessment.sections?.tratamiento_habitual;
+    if (section) {
+      section.text = "";
+      section.evidence_status = "not_provided";
+      section.source_ids = [];
+    }
+  }
 }
 
 const HISTORICAL_MEDICATION_PATTERN = /\b(?:alguna\s+vez|en\s+el\s+pasado|antes|anteriormente|previamente|tratamiento\s+previo|me\s+dieron|le\s+dieron|tomaba|tomé|tome|había\s+tomado|habia\s+tomado|usaba|utilicé|utilice|se\s+retiró|se\s+retiro|retiraron|dejé\s+de|deje\s+de|dejó\s+de|dejo\s+de|suspendí|suspendi|suspendió|suspendio|ya\s+no\s+(?:tomo|toma)|tratad[oa]\s+con)\b/i;
@@ -365,6 +404,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       mental_history_medication_only_guard: true,
       motive_generic_family_concern_guard: true,
       medication_family_self_use_guard: true,
+      medication_new_prescription_temporality_guard: true,
     },
   };
 }
