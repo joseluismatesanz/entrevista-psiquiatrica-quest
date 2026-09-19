@@ -78,7 +78,7 @@ function transcriptExplicitlyStatesSchooling(lines) {
   return /\b(?:estudio|estudia|estudiando|curso|cursa|escolarizad[oa]|voy\s+al\s+instituto|va\s+al\s+instituto|acude\s+al\s+instituto)\b/i.test(relevantText);
 }
 
-const META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+documentan?\s+otros?\s+(?:elementos?|componentes?)|no\s+constan?\s+(?:otras?\s+)?indicaciones?\s+sobre|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre)\b/i;
+const META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+documentan?\s+otros?\s+(?:elementos?|componentes?)|no\s+constan?\s+(?:otras?\s+)?indicaciones?\s+sobre|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre|no\s+se\s+dispone\s+de\s+una\s+exploracion\s+psicopatologica\s+completa|no\s+se\s+ha\s+realizado\s+una\s+exploracion\s+psicopatologica\s+completa)\b/i;
 
 function pruneMetaAbsenceSentences(section, warnings, warningCode) {
   if (!section?.text) return;
