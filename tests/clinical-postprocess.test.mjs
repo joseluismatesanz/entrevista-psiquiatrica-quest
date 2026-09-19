@@ -275,3 +275,56 @@ test("V0.6 medicación: una pauta nueva no hereda adherencia expresada antes de 
   ));
   assert.equal(result.meta.medication_new_prescription_adherence_guard, true);
 });
+
+test("V0.6 medicación: la pregunta a la madre prevalece si su respuesta fue etiquetada como paciente", () => {
+  const fixture = assessmentFixture();
+  const lorazepam = med("azepam", "azepam (no encontrada correspondencia en CIMA)", "active", "", "");
+  const sertralinaHabitual = med("Sertralina", "Sertralina", "active", "", "");
+  lorazepam.adherence_status = "good";
+  lorazepam.adherence_text = "La madre refiere supervisar que tome todas las pastillas.";
+  sertralinaHabitual.adherence_status = "good";
+  sertralinaHabitual.adherence_text = "La madre refiere supervisar que tome todas las pastillas.";
+
+  fixture.medications.habitual = [lorazepam, sertralinaHabitual];
+  fixture.sections.tratamiento_habitual = {
+    text: "azepam. Adherencia: la madre refiere supervisar que tome todas las pastillas. Sertralina.",
+    evidence_status: "supported",
+    source_ids: ["patient"],
+  };
+
+  const transcript = [
+    "PSIQUIATRA: ¿Y toma alguna medicación usted, señora?",
+    "PACIENTE: Ahora mismo estoy tomando lorazepam y sertralina.",
+    "PSIQUIATRA: Como soy su psiquiatra, le voy a explicar cómo es el tratamiento que tiene que hacer a partir de este momento.",
+    "PSIQUIATRA: La sertralina se toma por la mañana 50 miligramos.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(result.assessment.medications.habitual, []);
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
+  assert.deepEqual(result.assessment.sections.tratamiento_habitual.source_ids, []);
+  assert.equal(result.meta.medication_habitual_preexisting_evidence_guard, true);
+});
+
+test("V0.6 medicación: elimina un habitual activo sin evidencia previa inequívoca", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana")];
+  fixture.sections.tratamiento_habitual = {
+    text: "Sertralina 50 mg por la mañana.",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+
+  const transcript = "PSIQUIATRA: Hoy revisaremos su evolución clínica y ampliaremos la anamnesis.";
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(result.assessment.medications.habitual, []);
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_habitual_pruned_without_preexisting_evidence:Sertralina")
+  ));
+});
