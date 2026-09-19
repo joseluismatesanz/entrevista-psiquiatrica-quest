@@ -149,3 +149,49 @@ test("V0.5.4 postproceso: motivo elimina preocupación familiar inespecífica si
   assert.equal(result.assessment.sections.motivo_consulta.text, "Agitación y nerviosismo subjetivos");
   assert.ok(result.warnings.includes("generic_unspecified_family_concern_pruned_from_motive"));
 });
+
+
+test("V0.6 medicación: la medicación que la madre toma para sí no se atribuye a la paciente", () => {
+  const fixture = assessmentFixture();
+  const lorazepam = med("Lorazepam", "Lorazepam", "active", "", "");
+  const sertralinaHabitual = med("Sertralina", "Sertralina", "active", "", "");
+  lorazepam.source_ids = ["mother"];
+  sertralinaHabitual.source_ids = ["mother"];
+
+  const sertralinaActual = med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana");
+  const rivotril = med("Rivotril", "Clonazepam (Rivotril)", "active", "0,5 mg", "a demanda");
+  const mirtazapina = med("Mirtazapina", "Mirtazapina", "active", "15 mg", "por la noche");
+  sertralinaActual.source_ids = ["psychiatrist"];
+  rivotril.source_ids = ["psychiatrist"];
+  mirtazapina.source_ids = ["psychiatrist"];
+
+  fixture.medications.habitual = [lorazepam, sertralinaHabitual];
+  fixture.medications.current = [sertralinaActual, rivotril, mirtazapina];
+  fixture.sections.tratamiento_habitual = { text: "Lorazepam y sertralina.", evidence_status: "supported", source_ids: ["mother"] };
+  fixture.sections.tratamiento_actual = { text: "", evidence_status: "not_provided", source_ids: [] };
+
+  const transcript = [
+    "PSIQUIATRA: ¿Y tomar alguna medicación usted, señora?",
+    "MADRE: ahora mismo estoy tomando lorazepam y sertralina.",
+    "PSIQUIATRA: Como soy su psiquiatra, le voy a explicar cómo es el tratamiento que tiene que hacer a partir de este momento.",
+    "PSIQUIATRA: La sertralina se toma por la mañana 50 miligramos.",
+    "PSIQUIATRA: Rivotril, que es clonazepam, lo debe tomar cuando sienta ansiedad, de rescate, 0,5 miligramos.",
+    "PSIQUIATRA: Debe tomar mirtazapina 15 miligramos antes de dormir.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(result.assessment.medications.habitual, []);
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => item.raw_name),
+    ["Sertralina", "Rivotril", "Mirtazapina"],
+  );
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Sertralina 50 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Clonazepam \(Rivotril\) 0,5 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 15 mg/);
+  assert.ok(result.warnings.some((warning) => warning.startsWith("medication_family_self_use_pruned_from_patient_habitual:Lorazepam")));
+  assert.ok(result.warnings.some((warning) => warning.startsWith("medication_family_self_use_pruned_from_patient_habitual:Sertralina")));
+  assert.equal(result.meta.medication_family_self_use_guard, true);
+});
