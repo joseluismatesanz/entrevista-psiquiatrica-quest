@@ -120,7 +120,7 @@ Devuelve exactamente el esquema solicitado.
 - ANTECEDENTES FAMILIARES PSIQUIÁTRICOS: conserva paciente y familiares/cuidadores como fuentes válidas; no mezcles discrepancias.
 - SITUACIÓN SOCIOFAMILIAR: convivencia, relaciones, apoyos, escolarización/empleo según edad; no conviertas contenido potencialmente delirante sobre identidad/filiación en hecho objetivo.
 - HÁBITOS TÓXICOS: nicotina, alcohol, cannabis y otras sustancias con patrón y discrepancias.
-- TRATAMIENTO HABITUAL: medicación vigente antes de la valoración y adherencia. Una entidad por fármaco; no inventes principio activo, dosis ni pauta.
+- TRATAMIENTO HABITUAL: medicación vigente antes de la valoración y adherencia. Una entidad por fármaco; no inventes principio activo, dosis ni pauta. Si un familiar dice "yo tomo X", X es del familiar y no del paciente salvo evidencia explícita independiente de que el paciente también lo toma.
 - missing_or_not_explored: solo ausencias clínicamente relevantes para riesgo, diagnóstico, tratamiento o seguimiento; no lista exhaustiva.
 - conflicts: conserva versiones incompatibles sin elegir una arbitrariamente.
 - Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.
@@ -169,7 +169,7 @@ Devuelve exactamente el esquema solicitado.
 - ORIENTACIÓN DIAGNÓSTICA: solo diagnóstico de trabajo si hay criterios suficientes. Si faltan duración, síndrome, impacto funcional, sustancias/causas médicas u otros datos esenciales, deja diagnóstico y códigos vacíos y marca insufficient; no uses categorías no especificadas para rellenar.
 - PLAN TERAPÉUTICO: ingreso/no ingreso, unidad, cambios farmacológicos, pruebas, seguimiento, seguridad y medidas no farmacológicas solo cuando estén sustentados.
 - TRATAMIENTO ACTUAL: medicación final tras la valoración. Separa medicación habitual de tratamiento final y dosis puntual administered_once.
-- MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Conserva marcas/nombres cuando no exista equivalencia inequívoca.
+- MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Conserva marcas/nombres cuando no exista equivalencia inequívoca. La medicación que un familiar refiere tomar para sí mismo no debe incorporarse al paciente; una prescripción explícita del psiquiatra dirigida al paciente sí pertenece al tratamiento actual.
 - missing_or_not_explored: solo ausencias que puedan cambiar diagnóstico, tratamiento o seguimiento.
 - conflicts: conserva versiones incompatibles sin resolverlas sin base.
 - Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.
