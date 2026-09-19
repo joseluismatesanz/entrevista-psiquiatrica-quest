@@ -195,3 +195,42 @@ test("V0.6 medicación: la medicación que la madre toma para sí no se atribuye
   assert.ok(result.warnings.some((warning) => warning.startsWith("medication_family_self_use_pruned_from_patient_habitual:Sertralina")));
   assert.equal(result.meta.medication_family_self_use_guard, true);
 });
+
+
+test("V0.6 medicación: una nueva pauta del psiquiatra no queda como tratamiento habitual", () => {
+  const fixture = assessmentFixture();
+  const rivotril = med("Rivotril", "Clonazepam (Rivotril)", "active", "0,5 mg", "a demanda");
+  const mirtazapina = med("Mirtazapina", "Mirtazapina", "active", "15 mg", "por la noche");
+  rivotril.source_ids = ["psychiatrist"];
+  mirtazapina.source_ids = ["psychiatrist"];
+
+  fixture.medications.habitual = [rivotril, mirtazapina];
+  fixture.medications.current = [];
+  fixture.sections.tratamiento_habitual = {
+    text: "Clonazepam (Rivotril) 0,5 mg a demanda. Mirtazapina 15 mg por la noche.",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+  fixture.sections.tratamiento_actual = { text: "", evidence_status: "not_provided", source_ids: [] };
+
+  const transcript = [
+    "PSIQUIATRA: Como soy su psiquiatra, le voy a explicar cómo es el tratamiento que tiene que hacer a partir de este momento.",
+    "PSIQUIATRA: Rivotril, que es clonazepam, lo debe tomar cuando sienta ansiedad, de rescate, 0,5 miligramos.",
+    "PSIQUIATRA: Debe tomar mirtazapina 15 miligramos antes de dormir.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(result.assessment.medications.habitual, []);
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => item.raw_name),
+    ["Rivotril", "Mirtazapina"],
+  );
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Clonazepam \(Rivotril\) 0,5 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 15 mg/);
+  assert.ok(result.warnings.some((warning) => warning.startsWith("medication_new_prescription_moved_habitual_to_current:Rivotril")));
+  assert.ok(result.warnings.some((warning) => warning.startsWith("medication_new_prescription_moved_habitual_to_current:Mirtazapina")));
+  assert.equal(result.meta.medication_new_prescription_temporality_guard, true);
+});
