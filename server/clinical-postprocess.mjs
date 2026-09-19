@@ -109,12 +109,23 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   ]) {
     const list = assessment.medications?.[group];
     if (!Array.isArray(list) || !list.length) continue;
-    assessment.medications[group] = list.filter((med) => {
+    const filtered = list.filter((med) => {
       if (!hasFamilySelfMention(med) || hasPatientEvidence(med)) return true;
       const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
       warnings.push(`medication_family_self_use_pruned_from_patient_${group}:${name}`);
       return false;
     });
+    assessment.medications[group] = filtered;
+
+    if (filtered.length === 0 && filtered.length !== list.length) {
+      const sectionKey = group === "habitual" ? "tratamiento_habitual" : "tratamiento_actual";
+      const section = assessment.sections?.[sectionKey];
+      if (section) {
+        section.text = "";
+        section.evidence_status = "not_provided";
+        section.source_ids = [];
+      }
+    }
   }
 }
 
