@@ -36,6 +36,7 @@ MEDICACIÓN
 - Mantén dosis, vía, PRN y pauta exactamente hasta donde estén documentadas.
 - Adherencia debe quedar explícita cuando se haya preguntado/obtenido.
 - Separa tratamiento habitual, histórico y dosis administrada una sola vez.
+- La medicación que un familiar refiere tomar para sí mismo NO pertenece al tratamiento del paciente. Ejemplo: MADRE: "yo tomo lorazepam" es medicación de la madre, no del paciente. Solo incorpora un fármaco al paciente si existe evidencia explícita dirigida al paciente (paciente que lo toma, familiar que dice que el paciente lo toma, o psiquiatra que se lo prescribe).
 - status="active": medicación vigente.
 - status="historical": medicación pasada o no confirmada como vigente.
 - status="administered_once": dosis puntual administrada durante el episodio actual.
