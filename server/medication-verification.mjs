@@ -156,7 +156,10 @@ async function findExactActiveIngredientInMaster(queryName, fetchFn, timeoutMs) 
 
   const wanted = normalize(queryName);
   const items = listFromPayload(payload);
-  const exact = items.find((item) => normalize(item?.nombre) === wanted);
+  const exact = items.find((item) =>
+    !clean(item?.nregistro)
+    && normalize(item?.nombre) === wanted
+  );
   if (!exact) return null;
 
   const official = clean(exact?.nombre) || queryName;
