@@ -98,3 +98,21 @@ test("V0.6 informe: elimina frases metadiscursivas de ausencia de MSE y plan", (
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
 });
+
+test("V0.6 informe: elimina 'no se dispone de una exploración psicopatológica completa'", () => {
+  const input = assessment({
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo y agitación. Refiere dificultades para dormir. La madre observa cansancio. No se dispone de una exploración psicopatológica completa.",
+      evidence_status: "supported",
+      source_ids: ["p", "m"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(input, "PACIENTE: Estoy nerviosa y duermo mal.");
+
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo y agitación. Refiere dificultades para dormir. La madre observa cansancio.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
