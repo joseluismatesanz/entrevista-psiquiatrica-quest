@@ -12,15 +12,20 @@ test("ASR farmacológico: corrige cetralina a sertralina sin otra llamada de mod
   assert.deepEqual(result.applied_aliases, ["cetralina_to_sertralina"]);
 });
 
-test("ASR farmacológico: corrige ribotril a rivotril sin fuzzy libre", () => {
-  const result = normalizeMedicationAsrText("Por la noche tomo Ribotril 0,5 mg.");
-  assert.equal(result.text, "Por la noche tomo Rivotril 0,5 mg.");
-  assert.equal(result.replacements, 1);
-  assert.deepEqual(result.applied_aliases, ["ribotril_to_rivotril"]);
+test("ASR farmacológico: corrige ribotril y ribotil a rivotril sin fuzzy libre", () => {
+  const ribotril = normalizeMedicationAsrText("Por la noche tomo Ribotril 0,5 mg.");
+  assert.equal(ribotril.text, "Por la noche tomo Rivotril 0,5 mg.");
+  assert.equal(ribotril.replacements, 1);
+  assert.deepEqual(ribotril.applied_aliases, ["ribotril_to_rivotril"]);
+
+  const ribotil = normalizeMedicationAsrText("Ribotil 0,5 mg de rescate.");
+  assert.equal(ribotil.text, "Rivotril 0,5 mg de rescate.");
+  assert.equal(ribotil.replacements, 1);
+  assert.deepEqual(ribotil.applied_aliases, ["ribotil_to_rivotril"]);
 });
 
 test("ASR farmacológico: recupera variantes observadas de mirtazapina", () => {
-  for (const heard of ["Mirtacepina", "Mirtazepina", "Mertazapina", "Mirtrazapina"]) {
+  for (const heard of ["Mirtacepina", "Mirtazepina", "Mertazapina", "Mirtrazapina", "Mil tazapina"]) {
     const result = normalizeMedicationAsrText(`Tomo ${heard} 15 mg por la noche.`);
     assert.equal(result.text, "Tomo Mirtazapina 15 mg por la noche.");
     assert.equal(result.replacements, 1);
