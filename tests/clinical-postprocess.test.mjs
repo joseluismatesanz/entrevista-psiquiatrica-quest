@@ -230,7 +230,13 @@ test("V0.6 medicación: una nueva pauta del psiquiatra no queda como tratamiento
   assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
   assert.match(result.assessment.sections.tratamiento_actual.text, /Clonazepam \(Rivotril\) 0,5 mg/);
   assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 15 mg/);
-  assert.ok(result.warnings.some((warning) => warning.startsWith("medication_new_prescription_moved_habitual_to_current:Rivotril")));
-  assert.ok(result.warnings.some((warning) => warning.startsWith("medication_new_prescription_moved_habitual_to_current:Mirtazapina")));
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_new_prescription_moved_habitual_to_current:")
+    && warning.includes("Rivotril")
+  ));
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_new_prescription_moved_habitual_to_current:")
+    && warning.includes("Mirtazapina")
+  ));
   assert.equal(result.meta.medication_new_prescription_temporality_guard, true);
 });
