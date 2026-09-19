@@ -78,6 +78,7 @@
   function invalidateVerifiedBlocks() {
     window.__LONG_INTERVIEW_VERIFIED_BLOCKS = null;
     window.__LONG_INTERVIEW_EVIDENCE = null;
+    window.__LONG_INTERVIEW_EVIDENCE_READY = null;
     window.__LONG_INTERVIEW_TRANSCRIPT = '';
   }
 
@@ -409,6 +410,15 @@
     window.__LONG_INTERVIEW_TRANSCRIPT = aggregate.transcript;
     window.__LONG_INTERVIEW_VERIFIED_BLOCKS = verifiedBlocks;
     publishEvidenceWindow();
+
+    // Todas las extracciones ya se han iniciado antes de publicar el agregado. La
+    // compuerta de análisis puede esperar esta promesa exacta en vez de sondear
+    // durante un plazo fijo. Si alguna extracción falla, allSettled termina igual
+    // y publishEvidenceWindow conserva el fallback seguro (evidencia = null).
+    window.__LONG_INTERVIEW_EVIDENCE_READY = Promise
+      .allSettled([...state.evidencePromises])
+      .then(() => publishEvidenceWindow());
+
     if ($('caseText')) $('caseText').value = aggregate.transcript;
     window.dispatchEvent(new CustomEvent('clinical-long-attribution-ready', { detail: aggregate }));
     startSpeculativeAnalysis(aggregate.transcript);
