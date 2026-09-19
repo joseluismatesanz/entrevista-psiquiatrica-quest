@@ -240,3 +240,38 @@ test("V0.6 medicación: una nueva pauta del psiquiatra no queda como tratamiento
   ));
   assert.equal(result.meta.medication_new_prescription_temporality_guard, true);
 });
+
+
+test("V0.6 medicación: una pauta nueva no hereda adherencia expresada antes de prescribirla", () => {
+  const fixture = assessmentFixture();
+  const sertralina = med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana");
+  sertralina.source_ids = ["psychiatrist"];
+  sertralina.adherence_status = "good";
+  sertralina.adherence_text = "La madre refiere que supervisa que tome todas las pastillas.";
+
+  fixture.medications.habitual = [];
+  fixture.medications.current = [sertralina];
+  fixture.sections.tratamiento_habitual = { text: "", evidence_status: "not_provided", source_ids: [] };
+  fixture.sections.tratamiento_actual = {
+    text: "Sertralina 50 mg por la mañana. Adherencia: La madre refiere que supervisa que tome todas las pastillas.",
+    evidence_status: "supported",
+    source_ids: ["mother", "psychiatrist"],
+  };
+
+  const transcript = [
+    "MADRE: Sí, sí, yo le miro que se tome todas las pastillas.",
+    "PSIQUIATRA: Como soy su psiquiatra, le voy a explicar cómo es el tratamiento que tiene que hacer a partir de este momento.",
+    "PSIQUIATRA: La sertralina se toma por la mañana 50 miligramos.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  const medActual = result.assessment.medications.current[0];
+  assert.equal(medActual.adherence_status, "unknown");
+  assert.equal(medActual.adherence_text, "");
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Adherencia:/i);
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_new_prescription_adherence_cleared:Sertralina")
+  ));
+  assert.equal(result.meta.medication_new_prescription_adherence_guard, true);
+});
