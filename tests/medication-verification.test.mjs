@@ -220,3 +220,28 @@ test("V0.6 medicamentos: caída de CIMA no se presenta como medicamento inexiste
   assert.equal(med.display_name, "Cetralina (verificación CIMA no disponible)");
   assert.equal(result.assessment.safety_review.length, 1);
 });
+
+
+test("V0.6 medicamentos: mirtazapina usa la maestra de principios activos de CIMA si la búsqueda de medicamentos falla", async () => {
+  const seen = [];
+  const fetchFn = async (url) => {
+    seen.push(url);
+    if (url.includes("practiv1=Mirtazapina")) return response({ resultados: [] });
+    if (url.includes("maestras?maestra=1") && url.includes("nombre=Mirtazapina")) {
+      return response([{ id: "PA-MIRTAZAPINA", nombre: "MIRTAZAPINA" }]);
+    }
+    if (url.includes("nombre=Mirtazapina")) return response({ resultados: [] });
+    return response({ resultados: [] });
+  };
+
+  const result = await verifyAssessmentMedications(baseAssessment("Mirtazapina"), { fetchFn });
+  const med = result.assessment.medications.habitual[0];
+
+  assert.equal(med.display_name, "Mirtazapina");
+  assert.equal(med.active_ingredient_known, true);
+  assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.matchType, "active_ingredient_master_exact");
+  assert.equal(result.assessment.safety_review.length, 0);
+  assert.ok(seen.some((url) => url.includes("maestras?maestra=1")));
+  assert.equal(result.meta.medication_active_ingredient_master_fallback, true);
+});
