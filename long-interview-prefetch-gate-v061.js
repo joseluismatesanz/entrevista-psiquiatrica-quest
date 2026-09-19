@@ -2,7 +2,7 @@
   if (typeof window.fetch !== 'function') return;
 
   const inheritedFetch = window.fetch.bind(window);
-  const MAX_EVIDENCE_WAIT_MS = 12000;
+  const MAX_EVIDENCE_WAIT_MS = 5000;
   const POLL_MS = 100;
   const verifiedPrefetches = new Map();
 
@@ -45,6 +45,21 @@
     const immediate = completeEvidenceFor(blocks);
     if (immediate) return immediate;
 
+    const readiness = window.__LONG_INTERVIEW_EVIDENCE_READY;
+    if (readiness && typeof readiness.then === 'function') {
+      let timer = null;
+      try {
+        await Promise.race([
+          readiness,
+          new Promise((resolve) => { timer = setTimeout(resolve, MAX_EVIDENCE_WAIT_MS); }),
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      return completeEvidenceFor(blocks);
+    }
+
+    // Compatibilidad defensiva si el controlador anterior siguiera en caché.
     const startedAt = performance.now();
     while (performance.now() - startedAt < MAX_EVIDENCE_WAIT_MS) {
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
