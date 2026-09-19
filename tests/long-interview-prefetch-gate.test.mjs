@@ -2,13 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [gate, index] = await Promise.all([
+const [controller, gate, index] = await Promise.all([
+  readFile(new URL("../long-interview-v06.js", import.meta.url), "utf8"),
   readFile(new URL("../long-interview-prefetch-gate-v061.js", import.meta.url), "utf8"),
   readFile(new URL("../index.html", import.meta.url), "utf8"),
 ]);
 
-test("V0.6: preanálisis largo espera evidencia completa y siempre conserva proofs de bloques", () => {
-  assert.match(gate, /MAX_EVIDENCE_WAIT_MS\s*=\s*12000/);
+test("V0.6: preanálisis largo espera la finalización real y conserva proofs de bloques", () => {
+  assert.match(controller, /__LONG_INTERVIEW_EVIDENCE_READY\s*=\s*Promise/);
+  assert.match(controller, /\.allSettled\(\[\.\.\.state\.evidencePromises\]\)/);
+  assert.match(gate, /MAX_EVIDENCE_WAIT_MS\s*=\s*5000/);
+  assert.match(gate, /__LONG_INTERVIEW_EVIDENCE_READY/);
+  assert.match(gate, /Promise\.race/);
+  assert.match(gate, /return completeEvidenceFor\(blocks\)/);
   assert.match(gate, /__LONG_INTERVIEW_VERIFIED_BLOCKS/);
   assert.match(gate, /__LONG_INTERVIEW_EVIDENCE/);
   assert.match(gate, /evidence\.length === blocks\.length/);
@@ -28,5 +34,6 @@ test("V0.6: la compuerta se carga después del controlador de bloques y usa revi
   const gatePosition = index.indexOf('long-interview-prefetch-gate-v061.js');
   const context = index.indexOf('long-interview-context-v06.js');
   assert.ok(controller >= 0 && gatePosition > controller && context > gatePosition);
-  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20260912-2/);
+  assert.match(index, /long-interview-v06\.js\?v=20260919-evidence-sync-1/);
+  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20260919-evidence-sync-1/);
 });
