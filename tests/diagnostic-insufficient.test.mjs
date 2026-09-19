@@ -69,11 +69,9 @@ test("Diagnóstico: una entrevista insuficiente no fuerza etiqueta ni códigos",
   assert.equal(assessment.diagnostic_judgment.cie10_code, "");
   assert.equal(assessment.diagnostic_judgment.dsm5_code, "");
   assert.equal(assessment.sections.orientacion_diagnostica.evidence_status, "insufficient");
-  assert.match(
-    assessment.sections.orientacion_diagnostica.text,
-    /Información insuficiente para establecer un juicio clínico diagnóstico/
-  );
-  assert.match(report, /ORIENTACIÓN DIAGNÓSTICA\nInformación insuficiente/);
+  assert.equal(assessment.sections.orientacion_diagnostica.text, "");
+  assert.match(report, /ORIENTACIÓN DIAGNÓSTICA\nInformación insuficiente\./);
+  assert.doesNotMatch(report, /con la entrevista disponible/i);
   assert.ok(warnings.includes("diagnostic_judgment_withheld_for_insufficient_evidence"));
   assert.deepEqual(collectClinicalInvariantViolations(assessment), []);
 });
