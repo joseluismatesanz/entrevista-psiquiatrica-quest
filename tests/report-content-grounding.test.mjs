@@ -61,3 +61,40 @@ test("Informe: el plan conserva la ampliación diagnóstica explícita del psiqu
   assert.match(text, /Ampliar cronología, impacto funcional, sueño, posibles causas médicas y evolución del contenido ideativo/i);
   assert.ok(result.warnings.includes("report_plan_enriched_from_explicit_psychiatrist_assessment"));
 });
+
+
+test("V0.6 informe: elimina frases metadiscursivas de ausencia de MSE y plan", () => {
+  const assessment = {
+    sources: [{ id: "psy", label: "Psiquiatra", kind: "psychiatrist" }],
+    sections: {
+      enfermedad_actual: { text: "", evidence_status: "not_provided", source_ids: [] },
+      situacion_sociofamiliar: { text: "", evidence_status: "not_provided", source_ids: [] },
+      exploracion_psicopatologica: {
+        text: "Se exploran nerviosismo y alteración del sueño. No se documentan otros elementos del examen psicopatológico.",
+        evidence_status: "supported",
+        source_ids: ["psy"],
+      },
+      plan_terapeutico: {
+        text: "Sertralina 50 mg por la mañana. No constan indicaciones sobre ingreso, pruebas, medidas de seguridad ni intervenciones no farmacológicas.",
+        evidence_status: "supported",
+        source_ids: ["psy"],
+      },
+    },
+  };
+
+  const result = groundReportContentToTranscript(
+    assessment,
+    "PSIQUIATRA: Sertralina 50 mg por la mañana.",
+  );
+
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Se exploran nerviosismo y alteración del sueño.",
+  );
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "Sertralina 50 mg por la mañana.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
+});
