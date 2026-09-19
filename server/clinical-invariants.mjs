@@ -259,8 +259,10 @@ export function applyClinicalInvariants(input) {
     assessment.sections.orientacion_diagnostica.evidence_status = "supported";
   } else if (presentCount === 0) {
     warnings.push("diagnostic_judgment_withheld_for_insufficient_evidence");
-    assessment.sections.orientacion_diagnostica.text =
-      "Información insuficiente para establecer un juicio clínico diagnóstico con la entrevista disponible.";
+    // La explicación de la insuficiencia pertenece a la capa de revisión.
+    // El informe renderiza el estado canónico breve "Información insuficiente."
+    // a partir de evidence_status, sin añadir metadiscurso al documento clínico.
+    assessment.sections.orientacion_diagnostica.text = "";
     assessment.sections.orientacion_diagnostica.evidence_status = "insufficient";
     assessment.sections.orientacion_diagnostica.source_ids = [];
     addMissing(
