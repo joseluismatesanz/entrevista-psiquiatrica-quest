@@ -140,6 +140,48 @@ test("V0.6 informe: elimina la variante 'no se documentan de forma suficiente ot
   assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
 });
 
+test("V0.6 informe: elimina 'no se exploraron de forma documentada otros dominios psicopatológicos'", () => {
+  const input = assessment({
+    exploracion_psicopatologica: {
+      text: "La paciente refiere nerviosismo, insomnio y agitación. No se exploraron de forma documentada otros dominios psicopatológicos.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y duermo mal.",
+  );
+
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "La paciente refiere nerviosismo, insomnio y agitación.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
+
+test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", () => {
+  const input = assessment({
+    plan_terapeutico: {
+      text: "Sertralina 50 mg por la mañana. Se hará referencia a una próxima visita.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PSIQUIATRA: Sertralina 50 mg por la mañana y revisión en la próxima consulta.",
+  );
+
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "Sertralina 50 mg por la mañana. Seguimiento en próxima consulta.",
+  );
+  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
