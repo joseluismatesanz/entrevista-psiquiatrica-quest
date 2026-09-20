@@ -94,9 +94,33 @@ function pruneMetaAbsenceSentences(section, warnings, warningCode) {
   warnings.push(warningCode);
 }
 
-const CURRENT_PLAN_SENTENCE_PATTERN = /\b(?:durante\s+la\s+valoracion\s+se\s+(?:revisa|indica|pauta|prescribe)|(?:se|le)\s+(?:indica|pauta|prescribe|inicia)|pauta\s+indicada|tratamiento\s+final)\b/i;
+const CURRENT_PLAN_SENTENCE_PATTERN = /\b(?:durante\s+la\s+valoracion\s+se\s+(?:revisa|indica|pauta|prescribe)|(?:se|le)\s+(?:indica|pauta|prescribe|inicia)|(?:el|la)\s+(?:psiquiatra|profesional|facultativ[oa])\s+(?:indica|pauta|prescribe|inicia)|pauta\s+indicada|tratamiento\s+final)\b/i;
 const MEDICATION_REGIMEN_PATTERN = /\b(?:medicacion|tratamiento|farmaco|\d+(?:[.,]\d+)?\s*(?:mg|miligramos?)|por\s+la\s+manana|antes\s+de\s+dormir|de\s+rescate|a\s+demanda)\b/i;
 const ACUTE_MEDICATION_EVENT_PATTERN = /\b(?:se\s+administr[oa]|recibi[oa]|tras\s+la\s+administracion|dosis\s+administrada|intramuscular|contencion)\b/i;
+const CURRENT_MEDICATION_ASSERTION_PATTERN = /\b(?:actualmente|ahora\s+mismo|en\s+la\s+actualidad)\s+(?:se\s+)?(?:toma|tomando|esta\s+tomando)|\btratamiento\s+habitual\b/i;
+const FAMILY_MEDICATION_SUPERVISION_PATTERN = /\b(?:supervision\s+(?:materna|paterna|familiar)\s+de\s+la\s+administracion|(?:madre|padre|familia)\b[^.!?]*\bsupervis\w*\b|supervisad[oa]\s+por\s+(?:la\s+)?(?:madre|padre|familia))\b/i;
+
+function pruneUnsupportedHabitualMedicationFromIllness(section, assessment, warnings) {
+  if (!section?.text) return;
+  const hasActiveHabitual = (assessment.medications?.habitual || [])
+    .some((medication) => medication?.status === "active");
+  if (hasActiveHabitual) return;
+
+  const sentences = splitSentences(section.text);
+  const kept = sentences.filter((sentence) => {
+    const text = normalize(sentence);
+    return !(CURRENT_MEDICATION_ASSERTION_PATTERN.test(text)
+      && FAMILY_MEDICATION_SUPERVISION_PATTERN.test(text));
+  });
+  if (kept.length === sentences.length) return;
+
+  section.text = kept.join(" ").trim();
+  if (!section.text) {
+    section.evidence_status = "not_provided";
+    section.source_ids = [];
+  }
+  warnings.push("report_unsupported_habitual_medication_pruned_from_current_illness");
+}
 
 function pruneCurrentTreatmentPlanFromIllness(section, warnings) {
   if (!section?.text) return;
@@ -261,6 +285,12 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
 
   pruneCurrentTreatmentPlanFromIllness(
     assessment.sections?.enfermedad_actual,
+    warnings,
+  );
+
+  pruneUnsupportedHabitualMedicationFromIllness(
+    assessment.sections?.enfermedad_actual,
+    assessment,
     warnings,
   );
 
