@@ -94,7 +94,7 @@ function pruneMetaAbsenceSentences(section, warnings, warningCode) {
   warnings.push(warningCode);
 }
 
-const CURRENT_PLAN_SENTENCE_PATTERN = /\b(?:durante\s+la\s+valoracion\s+se\s+(?:revisa|indica|pauta|prescribe)|(?:se|le)\s+(?:indica|pauta|prescribe|inicia)|(?:el|la)\s+(?:psiquiatra|profesional|facultativ[oa])\s+(?:indica|pauta|prescribe|inicia)|pauta\s+indicada|tratamiento\s+final)\b/i;
+const CURRENT_PLAN_SENTENCE_PATTERN = /\b(?:durante\s+la\s+valoracion\s+se\s+(?:revisa|indica|pauta|prescribe|informa|recoge|detalla|explica)|(?:se|le)\s+(?:indica|pauta|prescribe|inicia)|(?:el|la)\s+(?:psiquiatra|profesional|facultativ[oa])\s+(?:indica|pauta|prescribe|inicia)|pauta\s+(?:farmacologica|terapeutica)(?:\s+a\s+seguir)?|pauta\s+indicada|tratamiento\s+final)\b/i;
 const MEDICATION_REGIMEN_PATTERN = /\b(?:medicacion|tratamiento|farmaco|\d+(?:[.,]\d+)?\s*(?:mg|miligramos?)|por\s+la\s+manana|antes\s+de\s+dormir|de\s+rescate|a\s+demanda)\b/i;
 const ACUTE_MEDICATION_EVENT_PATTERN = /\b(?:se\s+administr[oa]|recibi[oa]|tras\s+la\s+administracion|dosis\s+administrada|intramuscular|contencion)\b/i;
 const CURRENT_MEDICATION_ASSERTION_PATTERN = /\b(?:actualmente|ahora\s+mismo|en\s+la\s+actualidad)\s+(?:se\s+)?(?:toma|tomando|esta\s+tomando)|\btratamiento\s+habitual\b/i;
