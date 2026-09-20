@@ -161,6 +161,27 @@ test("V0.6 informe: elimina 'no se exploraron de forma documentada otros dominio
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
 });
 
+test("V0.6 informe: elimina 'no consta exploración suficiente de otros dominios psicopatológicos'", () => {
+  const input = assessment({
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo, agitación e insomnio. No consta exploración suficiente de otros dominios psicopatológicos.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y no puedo dormir.",
+  );
+
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo, agitación e insomnio.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
+
 test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", () => {
   const input = assessment({
     plan_terapeutico: {
