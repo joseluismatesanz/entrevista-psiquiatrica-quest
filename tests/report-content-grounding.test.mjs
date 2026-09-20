@@ -182,6 +182,38 @@ test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", ()
   assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
 });
 
+test("V0.6 informe: limpia las variantes de metatexto visibles en exploración y plan", () => {
+  const input = assessment({
+    exploracion_psicopatologica: {
+      text: "La paciente refiere nerviosismo, insomnio y agitación. No constan datos suficientes sobre ánimo, afecto, pensamiento, percepción, cognición, juicio, introspección ni ideación suicida u homicida.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+    plan_terapeutico: {
+      text: "Sertralina 50 mg por la mañana. Se menciona una próxima visita, sin fecha ni condiciones especificadas. No constan indicación de ingreso, unidad, pruebas, medidas de seguridad ni intervención no farmacológica.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y duermo mal.\nPSIQUIATRA: Sertralina 50 mg por la mañana y revisión en la próxima consulta.",
+  );
+
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "La paciente refiere nerviosismo, insomnio y agitación.",
+  );
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "Sertralina 50 mg por la mañana. Seguimiento en próxima consulta.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
