@@ -362,6 +362,40 @@ test("V0.6 medicación: una respuesta elíptica a la pregunta dirigida a la madr
   ));
 });
 
+test("V0.6 medicación: 'usted' mantiene el turno de la madre aunque la respuesta se etiquete como paciente", () => {
+  const fixture = assessmentFixture();
+  const lorazepam = med("Lorazepam", "Lorazepam", "active", "", "");
+  const sertralinaHabitual = med("Sertralina", "Sertralina", "active", "", "");
+  lorazepam.adherence_status = "good";
+  lorazepam.adherence_text = "La madre supervisa que tome todas las pastillas.";
+  sertralinaHabitual.adherence_status = "good";
+  sertralinaHabitual.adherence_text = "La madre supervisa que tome todas las pastillas.";
+
+  fixture.medications.habitual = [lorazepam, sertralinaHabitual];
+  fixture.sections.tratamiento_habitual = {
+    text: "Lorazepam. Adherencia: La madre supervisa que tome todas las pastillas. Sertralina. Adherencia: La madre supervisa que tome todas las pastillas.",
+    evidence_status: "supported",
+    source_ids: ["patient", "mother"],
+  };
+
+  const transcript = [
+    "MADRE: La veo muy agobiada y duerme mal.",
+    "PSIQUIATRA: ¿Y toma alguna medicación usted?",
+    "PACIENTE: La medicación que toma ahora mismo es lorazepam y sertralina.",
+    "PSIQUIATRA: Como soy su psiquiatra, le explico el tratamiento a partir de este momento.",
+    "PSIQUIATRA: Sertralina 50 miligramos por la mañana.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(result.assessment.medications.habitual, []);
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_family_self_use_pruned_from_patient_habitual:")
+  ));
+});
+
 test("V0.6 medicación: elimina un habitual activo sin evidencia previa inequívoca", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana")];
