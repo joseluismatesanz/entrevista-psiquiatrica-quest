@@ -222,6 +222,64 @@ test("V0.6 informe: limpia las nuevas variantes metadiscursivas de sociofamiliar
   assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
 });
 
+test("V0.6 informe: limpia las variantes del informe tras la nueva prueba completa", () => {
+  const input = assessment({
+    situacion_sociofamiliar: {
+      text: "Se menciona a la madre, descrita por la paciente como agobiada y con falta de sueño.",
+      evidence_status: "supported",
+      source_ids: ["p"],
+    },
+    enfermedad_actual: {
+      text: "Refiere encontrarse muy nerviosa últimamente, con sueño alterado y sensación de agitación persistente. Expresa preocupación por el estado de su madre, a quien describe agobiada y con aspecto cansado por falta de sueño. Durante la entrevista refiere estar tomando lorazepam y sertralina y señala que es adherente a la medicación.",
+      evidence_status: "supported",
+      source_ids: ["p", "m"],
+    },
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo, agitación e insomnio. Otros dominios psicopatológicos no explorados en la entrevista disponible.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+    plan_terapeutico: {
+      text: "Se indica sertralina 50 mg por la mañana, en una sola dosis con el desayuno. Se indica no tomarla con la comida ni con la cena. Se prescribe Rivotril (clonazepam) 0,5 mg como medicación de rescate durante el día cuando aparezca ansiedad. Se indica mirtazapina 15 mg por la noche antes de dormir.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+  input.medications = {
+    habitual: [],
+    current: [
+      { raw_name: "Sertralina", status: "active" },
+      { raw_name: "Rivotril", status: "active" },
+      { raw_name: "Mirtazapina", status: "active" },
+    ],
+  };
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y duermo mal.\nMADRE: Está agobiada y parece cansada.\nPSIQUIATRA: Indico sertralina 50 mg por la mañana, Rivotril 0,5 mg de rescate y mirtazapina 15 mg por la noche.",
+  );
+
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.text, "");
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.evidence_status, "insufficient");
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "Refiere encontrarse muy nerviosa últimamente, con sueño alterado y sensación de agitación persistente.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo, agitación e insomnio.",
+  );
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "Se indica sertralina 50 mg por la mañana, en una sola dosis con el desayuno. Se prescribe Rivotril (clonazepam) 0,5 mg como medicación de rescate durante el día cuando aparezca ansiedad. Se indica mirtazapina 15 mg por la noche antes de dormir.",
+  );
+  assert.ok(result.warnings.includes("report_family_self_symptoms_pruned_from_sociofamily"));
+  assert.ok(result.warnings.includes("report_family_self_symptoms_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_unsupported_habitual_medication_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+});
+
 test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", () => {
   const input = assessment({
     plan_terapeutico: {
