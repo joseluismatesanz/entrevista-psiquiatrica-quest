@@ -328,6 +328,40 @@ test("V0.6 medicación: la pregunta a la madre prevalece si su respuesta fue eti
   assert.equal(result.meta.medication_habitual_preexisting_evidence_guard, true);
 });
 
+test("V0.6 medicación: una respuesta elíptica a la pregunta dirigida a la madre sigue siendo medicación de la madre", () => {
+  const fixture = assessmentFixture();
+  const lorazepam = med("Lorazepam", "Lorazepam", "active", "", "");
+  const sertralinaHabitual = med("Sertralina", "Sertralina", "active", "", "");
+  lorazepam.adherence_status = "good";
+  lorazepam.adherence_text = "La madre refiere supervisar que toma todas las pastillas.";
+  sertralinaHabitual.adherence_status = "good";
+  sertralinaHabitual.adherence_text = "La madre refiere supervisar que toma todas las pastillas.";
+
+  fixture.medications.habitual = [lorazepam, sertralinaHabitual];
+  fixture.sections.tratamiento_habitual = {
+    text: "Lorazepam. Adherencia: La madre refiere supervisar que toma todas las pastillas. Sertralina. Adherencia: La madre refiere supervisar que toma todas las pastillas.",
+    evidence_status: "supported",
+    source_ids: ["mother"],
+  };
+
+  const transcript = [
+    "PSIQUIATRA: ¿Y toma alguna medicación usted, señora?",
+    "MADRE: La medicación que toma ahora mismo es lorazepam y sertralina.",
+    "PSIQUIATRA: Como soy su psiquiatra, le voy a explicar el tratamiento que tiene que hacer a partir de este momento.",
+    "PSIQUIATRA: La sertralina se toma por la mañana, 50 miligramos.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(result.assessment.medications.habitual, []);
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
+  assert.deepEqual(result.assessment.sections.tratamiento_habitual.source_ids, []);
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_family_self_use_pruned_from_patient_habitual:")
+  ));
+});
+
 test("V0.6 medicación: elimina un habitual activo sin evidencia previa inequívoca", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana")];
