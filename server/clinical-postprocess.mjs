@@ -44,6 +44,7 @@ const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\
 const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
 const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
 const FAMILY_ADDRESS_PATTERN = /\b(?:señora|senora|madre|padre|familiar|cuidador(?:a)?)\b/i;
+const FORMAL_ADDRESS_PATTERN = /\busted\b/i;
 const MEDICATION_QUESTION_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?|toma(?:r|s)?|tomando)\b/i;
 const HABITUAL_MEDICATION_QUESTION_PATTERN = /\b(?:(?:que|qué)\s+(?:tratamiento|medicacion|medicación)\s+(?:tomas?|toma)|(?:tomas?|toma)\s+(?:alguna\s+)?medicacion|tratamiento\s+habitual)\b/i;
 const NO_CURRENT_MEDICATION_PATTERN = /\b(?:no\s+(?:tomo|toma|estoy\s+tomando|esta\s+tomando|está\s+tomando)|ningun[ao]?\s+(?:medicacion|medicación|tratamiento)|sin\s+(?:medicacion|medicación|tratamiento))\b/i;
@@ -72,12 +73,25 @@ function previousPsychiatristLine(lines, line) {
   return null;
 }
 
+function previousNonPsychiatristLine(lines, line) {
+  const position = lines.indexOf(line);
+  for (let index = position - 1; index >= 0; index -= 1) {
+    if (lines[index]?.speaker !== "PSIQUIATRA") return lines[index];
+  }
+  return null;
+}
+
 function isFamilySelfMedicationLine(lines, line) {
   const text = normalize(line?.text);
   const previousQuestion = previousPsychiatristLine(lines, line);
   const previousQuestionText = normalize(previousQuestion?.text);
+  const priorRespondent = previousQuestion
+    ? previousNonPsychiatristLine(lines, previousQuestion)
+    : null;
+  const continuesFormalFamilyTurn = FORMAL_ADDRESS_PATTERN.test(previousQuestionText)
+    && FAMILY_SPEAKER_LABELS.has(priorRespondent?.speaker);
   const familyDirectedMedicationQuestion = previousQuestion
-    && FAMILY_ADDRESS_PATTERN.test(previousQuestionText)
+    && (FAMILY_ADDRESS_PATTERN.test(previousQuestionText) || continuesFormalFamilyTurn)
     && MEDICATION_QUESTION_PATTERN.test(previousQuestionText);
 
   // Si la pregunta del psiquiatra iba expresamente dirigida a la madre/padre,
