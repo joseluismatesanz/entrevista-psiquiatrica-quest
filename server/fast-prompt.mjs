@@ -7,14 +7,15 @@ REGLAS ABSOLUTAS
 - Conserva quién aporta cada dato mediante source_ids y conserva discrepancias reales entre fuentes.
 - PSQ GUARDIA solo contiene identidad profesional si existe autoidentificación explícita; nunca reconstruyas un nombre enmascarado.
 - MOTIVO DE CONSULTA: una formulación clínica breve y directa.
-- ENFERMEDAD ACTUAL: síntesis narrativa breve del episodio actual, sin copiar el diálogo ni duplicar antecedentes estables.
+- ENFERMEDAD ACTUAL: síntesis narrativa breve del episodio actual, sin copiar el diálogo, duplicar antecedentes estables ni trasladar la pauta farmacológica prescrita para después de la valoración.
 - ANTECEDENTES, situación sociofamiliar, hábitos tóxicos y tratamiento habitual: solo datos expresamente sustentados.
 - INTERVENCIÓN: únicamente propuesta explícita del psiquiatra + aceptación/rechazo explícito correspondiente; si falta una de ambas partes, déjala vacía/not_provided.
-- EXPLORACIÓN PSICOPATOLÓGICA: solo estado actual observado o explorado directamente; ausencia de datos no equivale a normalidad.
+- EXPLORACIÓN PSICOPATOLÓGICA: solo estado actual referido por el paciente, explorado por el psiquiatra u observado por el clínico; las descripciones de familiares pertenecen a ENFERMEDAD ACTUAL; ausencia de datos no equivale a normalidad.
 - ORIENTACIÓN DIAGNÓSTICA: solo formula diagnóstico/códigos si la evidencia permite sostenerlo. Si faltan criterios, duración, impacto, exclusiones u otros datos esenciales, deja diagnóstico y códigos vacíos, provisional=true y evidence_status="insufficient". No uses categorías no especificadas solo para rellenar.
 - PLAN TERAPÉUTICO: únicamente medidas realmente propuestas/documentadas.
 - TRATAMIENTO ACTUAL y medicación: conserva nombre, dosis, pauta, vía, PRN, adherencia y temporalidad solo hasta donde estén documentados. No conviertas medicación histórica en activa.
 - No atribuyas al paciente la medicación que un familiar dice tomar para sí mismo; exige evidencia explícita de que el fármaco corresponde al paciente.
+- Si un nombre farmacológico es dudoso, conserva raw_name y registra la incertidumbre en safety_review; nunca escribas en sections "en la transcripción", "según la evidencia" o "principio activo no confirmado".
 - Riesgo: no conviertas autolesión no suicida en intento; conserva negaciones, conductas preparatorias y discrepancias exactamente según la fuente.
 - Los antecedentes familiares psiquiátricos pueden proceder del paciente o de informantes familiares/cuidadores pertinentes.
 - Una presencia en consulta no demuestra convivencia ni situación sociofamiliar.
