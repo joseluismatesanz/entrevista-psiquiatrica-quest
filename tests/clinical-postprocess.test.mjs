@@ -328,3 +328,36 @@ test("V0.6 medicación: elimina un habitual activo sin evidencia previa inequív
     warning.startsWith("medication_habitual_pruned_without_preexisting_evidence:Sertralina")
   ));
 });
+
+test("V0.6 medicación: una confirmación posterior a la prescripción no convierte la pauta nueva en habitual", () => {
+  const fixture = assessmentFixture();
+  const sertralinaHabitual = med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana");
+  sertralinaHabitual.adherence_status = "good";
+  sertralinaHabitual.adherence_text = "La paciente refiere que la está tomando; la madre supervisa la toma.";
+  const sertralinaActual = structuredClone(sertralinaHabitual);
+  sertralinaActual.source_ids = ["psychiatrist"];
+
+  fixture.medications.habitual = [sertralinaHabitual];
+  fixture.medications.current = [sertralinaActual];
+  fixture.sections.tratamiento_habitual = {
+    text: "Sertralina 50 mg. Adherencia: la paciente refiere que la está tomando.",
+    evidence_status: "supported",
+    source_ids: ["patient"],
+  };
+
+  const transcript = [
+    "PSIQUIATRA: Le indico sertralina 50 miligramos por la mañana, con el desayuno.",
+    "PACIENTE: De acuerdo, la estoy tomando desde ahora.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(result.assessment.medications.habitual, []);
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
+  assert.equal(result.assessment.medications.current[0].adherence_status, "unknown");
+  assert.equal(result.assessment.medications.current[0].adherence_text, "");
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_new_prescription_moved_habitual_to_current:Sertralina")
+  ));
+});
