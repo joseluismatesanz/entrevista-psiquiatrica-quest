@@ -78,7 +78,7 @@ function transcriptExplicitlyStatesSchooling(lines) {
   return /\b(?:estudio|estudia|estudiando|curso|cursa|escolarizad[oa]|voy\s+al\s+instituto|va\s+al\s+instituto|acude\s+al\s+instituto)\b/i.test(relevantText);
 }
 
-const META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+documentan?(?:\s+(?:de\s+forma\s+suficiente|suficientemente))?\s+(?:otros?\s+)?(?:elementos?|componentes?|dominios?)(?:\s+de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica))?|no\s+se\s+exploraron?(?:\s+de\s+forma\s+documentada)?\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+(?:psicopatologicos?|de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica)))?|no\s+constan?\s+(?:otras?\s+)?indicaciones?\s+sobre|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre|no\s+se\s+dispone\s+de\s+una\s+exploracion\s+psicopatologica\s+completa|no\s+se\s+ha\s+realizado\s+una\s+exploracion\s+psicopatologica\s+completa)\b/i;
+const META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+documentan?(?:\s+(?:de\s+forma\s+suficiente|suficientemente))?\s+(?:otros?\s+)?(?:elementos?|componentes?|dominios?)(?:\s+de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica))?|no\s+se\s+exploraron?(?:\s+de\s+forma\s+documentada)?\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+(?:psicopatologicos?|de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica)))?|no\s+constan?\s+datos?\s+(?:suficientes?\s+)?sobre|no\s+constan?\s+(?:otras?\s+)?indicacion(?:es)?\s+(?:sobre|de)|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre|no\s+se\s+dispone\s+de\s+una\s+exploracion\s+psicopatologica\s+completa|no\s+se\s+ha\s+realizado\s+una\s+exploracion\s+psicopatologica\s+completa)\b/i;
 
 function pruneMetaAbsenceSentences(section, warnings, warningCode) {
   if (!section?.text) return;
@@ -129,6 +129,7 @@ function cleanClinicalMetaPhrasing(section, warnings, warningCode) {
     .replace(/\s*,?\s*(?:seg[uú]n|de\s+acuerdo\s+con)\s+la\s+transcripci[oó]n/gi, "")
     .replace(/seguimiento\s+en\s+(?:la\s+)?pr[oó]xima\s+(?:visita|consulta)\s+mencionado\s*,?\s*sin\s+fecha\s+ni\s+dispositivo\s+especificados\.?/gi, "Seguimiento en próxima consulta.")
     .replace(/se\s+har[aá]\s+referencia\s+a\s+(?:una\s+)?pr[oó]xima\s+(?:visita|consulta)\.?/gi, "Seguimiento en próxima consulta.")
+    .replace(/se\s+menciona\s+(?:una\s+)?pr[oó]xima\s+(?:visita|consulta)\s*,?\s*sin\s+fecha\s+ni\s+(?:condiciones|dispositivo)\s+especificad[oa]s\.?/gi, "Seguimiento en próxima consulta.")
     .replace(/\s+([,.;:])/g, "$1")
     .replace(/\.{2,}/g, ".")
     .replace(/\s{2,}/g, " ")
