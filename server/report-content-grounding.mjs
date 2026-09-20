@@ -78,8 +78,9 @@ function transcriptExplicitlyStatesSchooling(lines) {
   return /\b(?:estudio|estudia|estudiando|curso|cursa|escolarizad[oa]|voy\s+al\s+instituto|va\s+al\s+instituto|acude\s+al\s+instituto)\b/i.test(relevantText);
 }
 
-const META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+documentan?(?:\s+(?:de\s+forma\s+suficiente|suficientemente))?(?:\s+en\s+(?:esta|la)\s+evidencia)?\s+(?:otros?\s+)?(?:elementos?|componentes?|dominios?)(?:\s+de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental(?:\s+actual)?|exploracion\s+psicopatologica))?|no\s+se\s+exploraron?(?:\s+de\s+forma\s+documentada)?\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+(?:psicopatologicos?|de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica)))?|no\s+consta\s+(?:una\s+)?exploracion\s+(?:suficiente|completa)\s+de\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+psicopatologicos?)?|no\s+constan?\s+datos?\s+(?:suficientes?\s+)?sobre|no\s+constan?\s+(?:otras?\s+)?indicacion(?:es)?\s+(?:sobre|de)|no\s+consta\s+(?:ingreso(?:\s+ni\s+no\s+ingreso)?|alta|unidad\s+asistencial|pruebas?\s+complementarias?|seguimiento\s+programado|medidas?\s+especificas?\s+de\s+seguridad)|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre|no\s+se\s+dispone\s+de\s+una\s+exploracion\s+psicopatologica\s+completa|no\s+se\s+ha\s+realizado\s+una\s+exploracion\s+psicopatologica\s+completa)\b/i;
+const META_ABSENCE_SENTENCE_PATTERN = /^(?:otros?\s+dominios?\s+psicopatologicos?\s+no\s+(?:explorados?|documentados?)(?:\s+en\s+la\s+entrevista\s+disponible)?|no\s+se\s+documentan?(?:\s+(?:de\s+forma\s+suficiente|suficientemente))?(?:\s+en\s+(?:esta|la)\s+evidencia)?\s+(?:otros?\s+)?(?:elementos?|componentes?|dominios?)(?:\s+de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental(?:\s+actual)?|exploracion\s+psicopatologica))?|no\s+se\s+exploraron?(?:\s+de\s+forma\s+documentada)?\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+(?:psicopatologicos?|de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica)))?|no\s+consta\s+(?:una\s+)?exploracion\s+(?:suficiente|completa)\s+de\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+psicopatologicos?)?|no\s+constan?\s+datos?\s+(?:suficientes?\s+)?sobre|no\s+constan?\s+(?:otras?\s+)?indicacion(?:es)?\s+(?:sobre|de)|no\s+consta\s+(?:ingreso(?:\s+ni\s+no\s+ingreso)?|alta|unidad\s+asistencial|pruebas?\s+complementarias?|seguimiento\s+programado|medidas?\s+especificas?\s+de\s+seguridad)|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre|no\s+se\s+dispone\s+de\s+una\s+exploracion\s+psicopatologica\s+completa|no\s+se\s+ha\s+realizado\s+una\s+exploracion\s+psicopatologica\s+completa)\b/i;
 const SOCIOFAMILY_META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+exploraron?|no\s+constan?\s+datos?\s+sobre)\s+(?:la\s+)?(?:convivencia|apoyo|red\s+(?:social|de\s+apoyo)|escolarizacion|situacion\s+laboral|empleo)\b/i;
+const FAMILY_SELF_SYMPTOM_SENTENCE_PATTERN = /^(?:se\s+menciona\s+a\s+(?:la|el)\s+(?:madre|padre)|(?:(?:la\s+)?paciente\s+)?expresa\s+preocupacion\s+por\s+el\s+estado\s+de\s+su\s+(?:madre|padre)|(?:la\s+)?paciente\s+(?:describe|refiere)\s+(?:a\s+)?su\s+(?:madre|padre))\b[^.!?]*\b(?:agobiad[oa]|cansad[oa]|falta\s+de\s+sueno|duerme\s+mal|insomnio|nervios[oa]|ansiedad)\b/i;
 
 function pruneMetaAbsenceSentences(
   section,
@@ -103,8 +104,21 @@ function pruneMetaAbsenceSentences(
 const CURRENT_PLAN_SENTENCE_PATTERN = /\b(?:durante\s+la\s+valoracion\s+se\s+(?:revisa|indica|pauta|prescribe|informa|recoge|detalla|explica)|(?:se|le)\s+(?:indica|pauta|prescribe|inicia)|(?:el|la)\s+(?:psiquiatra|profesional|facultativ[oa])\s+(?:indica|pauta|prescribe|inicia)|pauta\s+(?:farmacologica|terapeutica)(?:\s+a\s+seguir)?|pauta\s+indicada|tratamiento\s+final)\b/i;
 const MEDICATION_REGIMEN_PATTERN = /\b(?:medicacion|tratamiento|farmaco|\d+(?:[.,]\d+)?\s*(?:mg|miligramos?)|por\s+la\s+manana|antes\s+de\s+dormir|de\s+rescate|a\s+demanda)\b/i;
 const ACUTE_MEDICATION_EVENT_PATTERN = /\b(?:se\s+administr[oa]|recibi[oa]|tras\s+la\s+administracion|dosis\s+administrada|intramuscular|contencion)\b/i;
-const CURRENT_MEDICATION_ASSERTION_PATTERN = /\b(?:actualmente|ahora\s+mismo|en\s+la\s+actualidad)\s+(?:se\s+)?(?:toma|tomando|esta\s+tomando)|\btratamiento\s+habitual\b/i;
-const FAMILY_MEDICATION_SUPERVISION_PATTERN = /\b(?:supervision\s+(?:materna|paterna|familiar)\s+de\s+la\s+administracion|(?:madre|padre|familia)\b[^.!?]*\bsupervis\w*\b|supervisad[oa]\s+por\s+(?:la\s+)?(?:madre|padre|familia))\b/i;
+const CURRENT_MEDICATION_ASSERTION_PATTERN = /\b(?:(?:actualmente|ahora\s+mismo|en\s+la\s+actualidad)\s+(?:se\s+)?(?:toma|tomando|esta\s+tomando)|(?:durante\s+la\s+entrevista\s+)?refiere\s+(?:que\s+)?(?:estar\s+)?tomando|tratamiento\s+habitual)\b/i;
+
+function pruneFamilySelfSymptoms(section, warnings, warningCode, emptyStatus = "insufficient") {
+  if (!section?.text) return;
+  const sentences = splitSentences(section.text);
+  const kept = sentences.filter((sentence) => !FAMILY_SELF_SYMPTOM_SENTENCE_PATTERN.test(normalize(sentence)));
+  if (kept.length === sentences.length) return;
+
+  section.text = kept.join(" ").trim();
+  if (!section.text) {
+    section.evidence_status = emptyStatus;
+    section.source_ids = [];
+  }
+  warnings.push(warningCode);
+}
 
 function pruneUnsupportedHabitualMedicationFromIllness(section, assessment, warnings) {
   if (!section?.text) return;
@@ -115,8 +129,7 @@ function pruneUnsupportedHabitualMedicationFromIllness(section, assessment, warn
   const sentences = splitSentences(section.text);
   const kept = sentences.filter((sentence) => {
     const text = normalize(sentence);
-    return !(CURRENT_MEDICATION_ASSERTION_PATTERN.test(text)
-      && FAMILY_MEDICATION_SUPERVISION_PATTERN.test(text));
+    return !CURRENT_MEDICATION_ASSERTION_PATTERN.test(text);
   });
   if (kept.length === sentences.length) return;
 
@@ -172,7 +185,7 @@ function cleanClinicalMetaPhrasing(section, warnings, warningCode) {
     && /\b(?:una\s+sola\s+(?:dosis|toma)|con\s+el\s+desayuno)\b/.test(normalizedText);
   if (hasPositiveSertralineSchedule) {
     text = splitSentences(text)
-      .filter((sentence) => !/\bno\s+tomar\s+medicacion\b.*\bcomida\b.*\bcena\b.*\bsertralina\b/i.test(normalize(sentence)))
+      .filter((sentence) => !/\bno\s+tomar(?:la|\s+(?:la|medicacion))?\b.*\bcomida\b.*\bcena\b/i.test(normalize(sentence)))
       .join(" ")
       .trim();
   }
@@ -307,10 +320,23 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     "report_meta_phrasing_pruned_from_current_illness",
   );
 
+  pruneFamilySelfSymptoms(
+    assessment.sections?.enfermedad_actual,
+    warnings,
+    "report_family_self_symptoms_pruned_from_current_illness",
+    "not_provided",
+  );
+
   removeInferredSchooling(
     assessment.sections?.situacion_sociofamiliar,
     lines,
     warnings,
+  );
+
+  pruneFamilySelfSymptoms(
+    assessment.sections?.situacion_sociofamiliar,
+    warnings,
+    "report_family_self_symptoms_pruned_from_sociofamily",
   );
 
   pruneMetaAbsenceSentences(
