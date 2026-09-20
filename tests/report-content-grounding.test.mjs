@@ -214,6 +214,36 @@ test("V0.6 informe: limpia las variantes de metatexto visibles en exploración y
   assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
 });
 
+test("V0.6 informe: elimina de enfermedad actual la medicación de la madre y la nueva pauta", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "La paciente refiere encontrarse muy nerviosa últimamente, con sueño insuficiente y agitación constante. La madre la describe siempre muy agobiada y con mal descanso, observándole aspecto cansado. Durante la valoración se recoge que actualmente toma lorazepam y sertralina, con supervisión materna de la administración. El psiquiatra indica una pauta a partir de ese momento: sertralina 50 mg por la mañana, clonazepam de rescate durante el día y mirtazapina 15 mg antes de dormir.",
+      evidence_status: "supported",
+      source_ids: ["p", "m", "q"],
+    },
+  });
+  input.medications = {
+    habitual: [],
+    current: [
+      { raw_name: "Sertralina", status: "active" },
+      { raw_name: "Clonazepam", status: "active" },
+      { raw_name: "Mirtazapina", status: "active" },
+    ],
+  };
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y duermo mal.\nMADRE: La veo muy agobiada, cansada y duerme mal.\nPSIQUIATRA: Le indico sertralina, clonazepam y mirtazapina a partir de ahora.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "La paciente refiere encontrarse muy nerviosa últimamente, con sueño insuficiente y agitación constante. La madre la describe siempre muy agobiada y con mal descanso, observándole aspecto cansado.",
+  );
+  assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_unsupported_habitual_medication_pruned_from_current_illness"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
