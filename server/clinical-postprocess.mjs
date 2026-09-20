@@ -408,6 +408,7 @@ function isIdentitySubstitutionRealityCheckNonConflict(conflict, kinds) {
 
 const ENCOUNTER_ACCOMPANIMENT_PATTERN = /\b(?:acude\s+acompanad[oa]|acude\s+con\s+(?:su\s+)?(?:madre|padre|familiar|acompanante)|acompanad[oa]\s+por\s+(?:su\s+)?(?:madre|padre|familiar|acompanante)|participa\s+en\s+(?:la\s+)?(?:valoracion|entrevista)|esta\s+presente\s+(?:en|durante))\b/i;
 const CONCRETE_SOCIOFAMILY_PATTERN = /\b(?:vive|convive|reside|domicilio|hogar|relacion|se\s+lleva|apoyo|red\s+de\s+apoyo|contacto\s+(?:frecuente|diario|semanal)|pareja|hij[oa]s?|custodia|escolariz|instituto|colegio|trabaj|emple|desemple|amig)\w*/i;
+const MEDICATION_SUPERVISION_PATTERN = /(?:\b(?:supervis|control|comprueb|vigil|administra|se\s+asegura)\w*\b[^.!?]*\b(?:medicacion|tratamiento|pastill\w*|dosis|toma(?:r|s|n)?)\b|\b(?:medicacion|tratamiento|pastill\w*|dosis|toma(?:r|s|n)?)\b[^.!?]*\b(?:supervis|control|comprueb|vigil|administra|se\s+asegura)\w*\b)/i;
 
 function pruneEncounterPresenceFromSociofamily(assessment, warnings) {
   const section = assessment.sections?.situacion_sociofamiliar;
@@ -431,6 +432,35 @@ function pruneEncounterPresenceFromSociofamily(assessment, warnings) {
 
   if (!pruned) return;
   warnings.push("sociofamily_encounter_accompaniment_pruned_postprocess");
+  section.text = retained.join(" ").trim();
+  if (!section.text) {
+    section.evidence_status = "insufficient";
+    section.source_ids = [];
+  }
+}
+
+function pruneMedicationSupervisionFromSociofamily(assessment, warnings) {
+  const section = assessment.sections?.situacion_sociofamiliar;
+  if (!section?.text) return;
+
+  const sentences = String(section.text)
+    .match(/[^.!?]+[.!?]?/g)?.map((sentence) => sentence.trim()).filter(Boolean) || [];
+  const retained = [];
+  let pruned = false;
+
+  for (const sentence of sentences) {
+    const normalized = normalize(sentence);
+    const medicationOnly = MEDICATION_SUPERVISION_PATTERN.test(normalized)
+      && !CONCRETE_SOCIOFAMILY_PATTERN.test(normalized);
+    if (medicationOnly) {
+      pruned = true;
+      continue;
+    }
+    retained.push(sentence);
+  }
+
+  if (!pruned) return;
+  warnings.push("sociofamily_medication_supervision_pruned_postprocess");
   section.text = retained.join(" ").trim();
   if (!section.text) {
     section.evidence_status = "insufficient";
@@ -511,6 +541,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
 
   pruneEncounterPresenceFromSociofamily(assessment, warnings);
+  pruneMedicationSupervisionFromSociofamily(assessment, warnings);
   guardMentalHistoryFromMedicationOnly(assessment, transcript, warnings);
   pruneGenericUnspecifiedConcernFromMotive(assessment, warnings);
 
@@ -538,6 +569,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       identity_substitution_reality_check_guard: true,
       adherence_label_deduplicated: true,
       sociofamily_encounter_accompaniment_guard: true,
+      sociofamily_medication_supervision_guard: true,
       mental_history_medication_only_guard: true,
       motive_generic_family_concern_guard: true,
       medication_family_self_use_guard: true,
