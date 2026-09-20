@@ -112,9 +112,10 @@ test("V0.6 informe: elimina 'no se dispone de una exploración psicopatológica 
 
   assert.equal(
     result.assessment.sections.exploracion_psicopatologica.text,
-    "Refiere nerviosismo y agitación. Refiere dificultades para dormir. La madre observa cansancio.",
+    "Refiere nerviosismo y agitación. Refiere dificultades para dormir.",
   );
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+  assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
 });
 
 test("V0.6 informe: elimina la variante 'no se documentan de forma suficiente otros dominios'", () => {
@@ -133,7 +134,50 @@ test("V0.6 informe: elimina la variante 'no se documentan de forma suficiente ot
 
   assert.equal(
     result.assessment.sections.exploracion_psicopatologica.text,
-    "Se exploran verbalmente nerviosismo, agitación, ansiedad e insomnio referidos por la paciente; la madre observa aspecto cansado.",
+    "Se exploran verbalmente nerviosismo, agitación, ansiedad e insomnio referidos por la paciente.",
   );
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+  assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
+});
+
+test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "Refiere encontrarse muy nerviosa últimamente, con agitación persistente y dificultad para dormir. La madre describe que está siempre muy agobiada, que duerme mal y presenta aspecto cansado. Durante la valoración se revisa el tratamiento: se indica sertralina 50 mg por la mañana, en una sola toma con el desayuno; clonazepam 0,5 mg de rescate; y un fármaco referido como «catapina», de 5 mg antes de dormir, cuyo principio activo no queda establecido en la transcripción. También se indica no tomar medicación en la comida ni en la cena en relación con la sertralina.",
+      evidence_status: "supported",
+      source_ids: ["p", "m", "q"],
+    },
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo, agitación y dificultades de sueño. La madre refiere agobio, mal descanso y aspecto cansado.",
+      evidence_status: "supported",
+      source_ids: ["p", "m"],
+    },
+    plan_terapeutico: {
+      text: "Pauta indicada durante la valoración: sertralina 50 mg por la mañana, en una sola dosis con el desayuno; clonazepam 0,5 mg durante el día como medicación de rescate ante ansiedad; y un fármaco referido como «catapina», 5 mg antes de dormir, sin principio activo confirmado. Se indica no tomar medicación ni en comida ni en cena en relación con la sertralina. Seguimiento en próxima visita mencionado, sin fecha ni dispositivo especificados.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa y duermo mal.\nMADRE: Está agobiada y parece cansada.\nPSIQUIATRA: Indico sertralina 50 mg por la mañana, clonazepam 0,5 mg de rescate y catapina 5 mg antes de dormir. Seguimiento en próxima consulta.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "Refiere encontrarse muy nerviosa últimamente, con agitación persistente y dificultad para dormir. La madre describe que está siempre muy agobiada, que duerme mal y presenta aspecto cansado.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo, agitación y dificultades de sueño.",
+  );
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "sertralina 50 mg por la mañana, en una sola dosis con el desayuno; clonazepam 0,5 mg durante el día como medicación de rescate ante ansiedad; y «catapina», 5 mg antes de dormir. Seguimiento en próxima consulta.",
+  );
+  assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /transcripci[oó]n|principio activo|mencionado|sin fecha/i);
+  assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
 });
