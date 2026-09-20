@@ -244,6 +244,27 @@ test("V0.6 informe: elimina de enfermedad actual la medicación de la madre y la
   assert.ok(result.warnings.includes("report_unsupported_habitual_medication_pruned_from_current_illness"));
 });
 
+test("V0.6 informe: elimina la variante 'se informa de una pauta farmacológica a seguir'", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "La paciente refiere estar muy nerviosa últimamente, con dificultad para dormir y agitación constante. La madre la describe siempre muy agobiada, con mal descanso nocturno y aspecto cansado. Durante la valoración se informa de una pauta farmacológica a seguir: sertralina 50 mg por la mañana, clonazepam 0,5 mg como medicación de rescate ante ansiedad y mirtazapina 15 mg por la noche.",
+      evidence_status: "supported",
+      source_ids: ["p", "m", "q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y duermo mal.\nMADRE: La veo agobiada y cansada.\nPSIQUIATRA: Indico sertralina, clonazepam y mirtazapina a partir de ahora.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "La paciente refiere estar muy nerviosa últimamente, con dificultad para dormir y agitación constante. La madre la describe siempre muy agobiada, con mal descanso nocturno y aspecto cansado.",
+  );
+  assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
