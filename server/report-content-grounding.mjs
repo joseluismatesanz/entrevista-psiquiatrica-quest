@@ -78,17 +78,23 @@ function transcriptExplicitlyStatesSchooling(lines) {
   return /\b(?:estudio|estudia|estudiando|curso|cursa|escolarizad[oa]|voy\s+al\s+instituto|va\s+al\s+instituto|acude\s+al\s+instituto)\b/i.test(relevantText);
 }
 
-const META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+documentan?(?:\s+(?:de\s+forma\s+suficiente|suficientemente))?\s+(?:otros?\s+)?(?:elementos?|componentes?|dominios?)(?:\s+de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica))?|no\s+se\s+exploraron?(?:\s+de\s+forma\s+documentada)?\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+(?:psicopatologicos?|de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica)))?|no\s+consta\s+(?:una\s+)?exploracion\s+(?:suficiente|completa)\s+de\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+psicopatologicos?)?|no\s+constan?\s+datos?\s+(?:suficientes?\s+)?sobre|no\s+constan?\s+(?:otras?\s+)?indicacion(?:es)?\s+(?:sobre|de)|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre|no\s+se\s+dispone\s+de\s+una\s+exploracion\s+psicopatologica\s+completa|no\s+se\s+ha\s+realizado\s+una\s+exploracion\s+psicopatologica\s+completa)\b/i;
+const META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+documentan?(?:\s+(?:de\s+forma\s+suficiente|suficientemente))?(?:\s+en\s+(?:esta|la)\s+evidencia)?\s+(?:otros?\s+)?(?:elementos?|componentes?|dominios?)(?:\s+de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental(?:\s+actual)?|exploracion\s+psicopatologica))?|no\s+se\s+exploraron?(?:\s+de\s+forma\s+documentada)?\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+(?:psicopatologicos?|de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica)))?|no\s+consta\s+(?:una\s+)?exploracion\s+(?:suficiente|completa)\s+de\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+psicopatologicos?)?|no\s+constan?\s+datos?\s+(?:suficientes?\s+)?sobre|no\s+constan?\s+(?:otras?\s+)?indicacion(?:es)?\s+(?:sobre|de)|no\s+consta\s+(?:ingreso(?:\s+ni\s+no\s+ingreso)?|alta|unidad\s+asistencial|pruebas?\s+complementarias?|seguimiento\s+programado|medidas?\s+especificas?\s+de\s+seguridad)|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre|no\s+se\s+dispone\s+de\s+una\s+exploracion\s+psicopatologica\s+completa|no\s+se\s+ha\s+realizado\s+una\s+exploracion\s+psicopatologica\s+completa)\b/i;
+const SOCIOFAMILY_META_ABSENCE_SENTENCE_PATTERN = /^(?:no\s+se\s+exploraron?|no\s+constan?\s+datos?\s+sobre)\s+(?:la\s+)?(?:convivencia|apoyo|red\s+(?:social|de\s+apoyo)|escolarizacion|situacion\s+laboral|empleo)\b/i;
 
-function pruneMetaAbsenceSentences(section, warnings, warningCode) {
+function pruneMetaAbsenceSentences(
+  section,
+  warnings,
+  warningCode,
+  { pattern = META_ABSENCE_SENTENCE_PATTERN, emptyStatus = "not_provided" } = {},
+) {
   if (!section?.text) return;
   const sentences = splitSentences(section.text);
-  const kept = sentences.filter((sentence) => !META_ABSENCE_SENTENCE_PATTERN.test(normalize(sentence)));
+  const kept = sentences.filter((sentence) => !pattern.test(normalize(sentence)));
   if (kept.length === sentences.length) return;
 
   section.text = kept.join(" ").trim();
   if (!section.text) {
-    section.evidence_status = "not_provided";
+    section.evidence_status = emptyStatus;
     section.source_ids = [];
   }
   warnings.push(warningCode);
@@ -154,6 +160,7 @@ function cleanClinicalMetaPhrasing(section, warnings, warningCode) {
     .replace(/seguimiento\s+en\s+(?:la\s+)?pr[oó]xima\s+(?:visita|consulta)\s+mencionado\s*,?\s*sin\s+fecha\s+ni\s+dispositivo\s+especificados\.?/gi, "Seguimiento en próxima consulta.")
     .replace(/se\s+har[aá]\s+referencia\s+a\s+(?:una\s+)?pr[oó]xima\s+(?:visita|consulta)\.?/gi, "Seguimiento en próxima consulta.")
     .replace(/se\s+menciona\s+(?:una\s+)?pr[oó]xima\s+(?:visita|consulta)\s*,?\s*sin\s+fecha\s+ni\s+(?:condiciones|dispositivo)\s+especificad[oa]s\.?/gi, "Seguimiento en próxima consulta.")
+    .replace(/\s*,?\s*y\s+expresa\s+(?:la\s+)?expectativa\s+de\s+mejor[ií]a\s+en\s+(?:la\s+)?pr[oó]xima\s+(?:visita|consulta)\.?/gi, "")
     .replace(/\s+([,.;:])/g, "$1")
     .replace(/\.{2,}/g, ".")
     .replace(/\s{2,}/g, " ")
@@ -304,6 +311,16 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     assessment.sections?.situacion_sociofamiliar,
     lines,
     warnings,
+  );
+
+  pruneMetaAbsenceSentences(
+    assessment.sections?.situacion_sociofamiliar,
+    warnings,
+    "report_meta_absence_pruned_from_sociofamily",
+    {
+      pattern: SOCIOFAMILY_META_ABSENCE_SENTENCE_PATTERN,
+      emptyStatus: "insufficient",
+    },
   );
 
   enrichPlanFromExplicitPsychiatristAssessment(
