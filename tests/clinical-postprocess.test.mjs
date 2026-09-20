@@ -120,6 +120,26 @@ test("V0.5.4 postproceso: acompañamiento en la consulta no se convierte en situ
   assert.ok(result.warnings.includes("sociofamily_encounter_accompaniment_pruned_postprocess"));
 });
 
+test("V0.6 postproceso: supervisar la medicación no se convierte en situación sociofamiliar", () => {
+  const fixture = assessmentFixture();
+  fixture.sections.situacion_sociofamiliar = {
+    text: "La madre refiere supervisar que toma toda la medicación.",
+    evidence_status: "supported",
+    source_ids: ["mother"],
+  };
+
+  const result = applyClinicalPostprocessing(
+    fixture,
+    "MADRE: Yo me aseguraré de que tome la medicación que acaba de indicar.",
+  );
+
+  const section = result.assessment.sections.situacion_sociofamiliar;
+  assert.equal(section.text, "");
+  assert.equal(section.evidence_status, "insufficient");
+  assert.deepEqual(section.source_ids, []);
+  assert.ok(result.warnings.includes("sociofamily_medication_supervision_pruned_postprocess"));
+});
+
 test("V0.5.4 postproceso: psicofármacos actuales no crean antecedentes personales en salud mental", () => {
   const transcript = `PSIQUIATRA: ¿Qué tratamiento tomas habitualmente?\nPACIENTE: Sertralina 50 mg por la mañana y Risperdal por la noche.`;
   const result = applyClinicalPostprocessing(assessmentFixture(), transcript);
