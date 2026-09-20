@@ -182,6 +182,46 @@ test("V0.6 informe: elimina 'no consta exploración suficiente de otros dominios
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
 });
 
+test("V0.6 informe: limpia las nuevas variantes metadiscursivas de sociofamiliar, MSE y plan", () => {
+  const input = assessment({
+    situacion_sociofamiliar: {
+      text: "No se exploraron convivencia, apoyo adicional, escolarización ni empleo.",
+      evidence_status: "insufficient",
+      source_ids: ["q"],
+    },
+    exploracion_psicopatologica: {
+      text: "La paciente refiere nerviosismo, insomnio y agitación. No se documentan en esta evidencia otros elementos del estado mental actual.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+    plan_terapeutico: {
+      text: "No consta ingreso ni no ingreso, unidad asistencial, pruebas complementarias, seguimiento programado ni medidas específicas de seguridad. El psiquiatra indica la pauta de sertralina, clonazepam de rescate y mirtazapina nocturna, y expresa expectativa de mejoría en la próxima visita.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y no puedo dormir.\nPSIQUIATRA: Indico sertralina, clonazepam de rescate y mirtazapina por la noche.",
+  );
+
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.text, "");
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.evidence_status, "insufficient");
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "La paciente refiere nerviosismo, insomnio y agitación.",
+  );
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "El psiquiatra indica la pauta de sertralina, clonazepam de rescate y mirtazapina nocturna",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_sociofamily"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+});
+
 test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", () => {
   const input = assessment({
     plan_terapeutico: {
