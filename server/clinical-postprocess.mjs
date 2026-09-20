@@ -40,7 +40,7 @@ const FAMILY_SPEAKER_LABELS = new Set([
   "HERMANO/A",
 ]);
 const FAMILY_SELF_MEDICATION_PATTERN = /\b(?:yo\s+)?(?:ahora\s+mismo\s+)?(?:estoy\s+tomando|estaba\s+tomando|tomo|tomaba|he\s+tomado|me\s+tomo)\b/i;
-const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma|toma)\b/i;
+const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma)\b/i;
 const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
 const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
 const FAMILY_ADDRESS_PATTERN = /\b(?:señora|senora|madre|padre|familiar|cuidador(?:a)?)\b/i;
@@ -64,19 +64,36 @@ function previousSpeakerLine(lines, line) {
   return position > 0 ? lines[position - 1] : null;
 }
 
+function previousPsychiatristLine(lines, line) {
+  const position = lines.indexOf(line);
+  for (let index = position - 1; index >= 0; index -= 1) {
+    if (lines[index]?.speaker === "PSIQUIATRA") return lines[index];
+  }
+  return null;
+}
+
 function isFamilySelfMedicationLine(lines, line) {
   const text = normalize(line?.text);
+  const previousQuestion = previousPsychiatristLine(lines, line);
+  const previousQuestionText = normalize(previousQuestion?.text);
+  const familyDirectedMedicationQuestion = previousQuestion
+    && FAMILY_ADDRESS_PATTERN.test(previousQuestionText)
+    && MEDICATION_QUESTION_PATTERN.test(previousQuestionText);
+
+  // Si la pregunta del psiquiatra iba expresamente dirigida a la madre/padre,
+  // una respuesta elíptica como «la medicación que toma es...» pertenece al
+  // familiar salvo que nombre de forma inequívoca a la paciente.
+  if (familyDirectedMedicationQuestion && !COLLATERAL_PATIENT_MEDICATION_PATTERN.test(text)) {
+    return true;
+  }
+
   if (!FAMILY_SELF_MEDICATION_PATTERN.test(text)) return false;
   if (FAMILY_SPEAKER_LABELS.has(line?.speaker)) return true;
 
   // La atribución automática puede etiquetar como PACIENTE la respuesta de la
   // madre. Una pregunta inmediatamente anterior dirigida de forma explícita a
   // la señora/madre/padre fija la propiedad aunque falle esa etiqueta.
-  const previous = previousSpeakerLine(lines, line);
-  const previousText = normalize(previous?.text);
-  return previous?.speaker === "PSIQUIATRA"
-    && FAMILY_ADDRESS_PATTERN.test(previousText)
-    && MEDICATION_QUESTION_PATTERN.test(previousText);
+  return familyDirectedMedicationQuestion;
 }
 
 function medicationCandidateNames(med) {
