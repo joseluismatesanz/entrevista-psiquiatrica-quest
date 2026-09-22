@@ -71,6 +71,31 @@ test("V0.5.6: un parentesco explícito MADRE prevalece aunque el clasificador pr
   assert.equal(result.review_items.length, 0);
 });
 
+test("V0.6: las preguntas consecutivas con usted mantienen a la madre como interlocutora", async () => {
+  const segments = [
+    { id: "s1", speaker: "A", text: "Y usted, ¿es su madre? ¿Qué piensa de cómo está estos días?" },
+    { id: "s2", speaker: "B", text: "Está siempre muy agobiada y desde hace una semana duerme peor." },
+    { id: "s3", speaker: "A", text: "¿Y toma alguna medicación usted, señora?" },
+    { id: "s4", speaker: "B", text: "Ahora mismo estoy tomando lorazepam y sertralina." },
+  ];
+
+  const result = await attributeClinicalSpeakerRoles(segments, {
+    client: mockClient([
+      { segment_id: "s1", role: "psychiatrist", confidence: "high" },
+      { segment_id: "s2", role: "patient", confidence: "high" },
+      { segment_id: "s3", role: "psychiatrist", confidence: "high" },
+      { segment_id: "s4", role: "patient", confidence: "high" },
+    ]),
+  });
+
+  assert.equal(result.segments[1].role, "mother");
+  assert.equal(result.segments[1].role_anchor, "explicit_family_relationship");
+  assert.equal(result.segments[3].role, "mother");
+  assert.equal(result.segments[3].role_anchor, "family_addressee_continuity");
+  assert.match(result.transcript, /^MADRE: Ahora mismo estoy tomando lorazepam y sertralina\.$/m);
+  assert.equal(result.meta.family_addressee_continuity_anchors, 1);
+});
+
 test("V0.5.6: una autoidentificación explícita como madre no puede degradarse a familiar genérico", async () => {
   const segments = [
     { id: "s1", speaker: "C", text: "Soy su madre. Llevo una semana notándola mucho más aislada." },
