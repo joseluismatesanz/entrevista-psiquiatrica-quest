@@ -51,6 +51,47 @@ test("V0.6: MADRE explícita prevalece también en la ruta combinada de privacid
   assert.equal(result.meta.explicit_family_role_anchors, 1);
 });
 
+test("V0.6: la ruta combinada mantiene a la madre en preguntas consecutivas con usted", async () => {
+  const segments = [
+    { id: "s1", speaker: "A", text: "Y usted, ¿es su madre? ¿Qué piensa de cómo está estos días?" },
+    { id: "s2", speaker: "B", text: "Está siempre muy agobiada y desde hace una semana duerme peor." },
+    { id: "s3", speaker: "A", text: "¿Y toma alguna medicación usted, señora?" },
+    { id: "s4", speaker: "B", text: "Ahora mismo estoy tomando lorazepam y sertralina." },
+  ];
+  const result = await redactAndAttributeSegments(segments, {
+    client: combinedClient([
+      { segment_id: "s1", redacted_text: segments[0].text, replacements: 0, residual_person_name: false, role: "psychiatrist", confidence: "high" },
+      { segment_id: "s2", redacted_text: segments[1].text, replacements: 0, residual_person_name: false, role: "patient", confidence: "high" },
+      { segment_id: "s3", redacted_text: segments[2].text, replacements: 0, residual_person_name: false, role: "psychiatrist", confidence: "high" },
+      { segment_id: "s4", redacted_text: segments[3].text, replacements: 0, residual_person_name: false, role: "patient", confidence: "high" },
+    ]),
+  });
+
+  assert.equal(result.segments[1].role, "mother");
+  assert.equal(result.segments[3].role, "mother");
+  assert.equal(result.segments[3].role_anchor, "family_addressee_continuity");
+  assert.match(result.transcript, /^MADRE: Ahora mismo estoy tomando lorazepam y sertralina\.$/m);
+  assert.equal(result.meta.family_addressee_continuity_anchors, 1);
+});
+
+test("V0.6: la continuidad de madre cruza bloques largos mediante el contexto previo", async () => {
+  const segments = [
+    { id: "s3", speaker: "A", text: "¿Y toma alguna medicación usted, señora?" },
+    { id: "s4", speaker: "B", text: "Ahora mismo estoy tomando lorazepam y sertralina." },
+  ];
+  const result = await redactAndAttributeSegments(segments, {
+    previousSafeContext: "PSIQUIATRA: Y usted, ¿es su madre?\nMADRE: Sí, soy su madre y la veo muy agobiada.",
+    client: combinedClient([
+      { segment_id: "s3", redacted_text: segments[0].text, replacements: 0, residual_person_name: false, role: "psychiatrist", confidence: "high" },
+      { segment_id: "s4", redacted_text: segments[1].text, replacements: 0, residual_person_name: false, role: "patient", confidence: "high" },
+    ]),
+  });
+
+  assert.equal(result.segments[1].role, "mother");
+  assert.equal(result.segments[1].role_anchor, "family_addressee_continuity");
+  assert.equal(result.meta.family_addressee_continuity_anchors, 1);
+});
+
 test("V0.6: el contexto previo desidentificado se usa solo como referencia y no forma parte de la salida", async () => {
   const prior = "MADRE: Desde ayer está peor y duerme poco.";
   const segment = { id: "s1", speaker: "A", text: "Además hoy no ha querido ir a clase." };
