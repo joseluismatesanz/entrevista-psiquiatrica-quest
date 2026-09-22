@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { resolveModelAuth } from "./model-auth.mjs";
+import { resolveFamilyRoleAnchor } from "./family-role-anchor.mjs";
 
 export const SPEAKER_ROLE_MODEL = "gpt-5.6-luna";
 
@@ -71,58 +72,6 @@ const FILLER_WORDS = new Set([
   "pues", "bueno", "vale", "sí", "si", "no", "y", "ya", "eh", "mmm", "ajá", "aja",
 ]);
 
-// Anclajes deterministas de parentesco. Una relación explícita en el diálogo tiene
-// prioridad sobre etiquetas genéricas como caregiver/family y sobre una inferencia del modelo.
-// No se usa voz, sexo, edad ni biometría: solo texto conversacional explícito.
-const EXPLICIT_FAMILY_ROLE_RULES = [
-  {
-    role: "mother",
-    selfPhrases: ["soy su madre", "soy la madre"],
-    addressedPhrases: [
-      "usted es su madre",
-      "usted es la madre",
-      "es usted su madre",
-      "es usted la madre",
-      "usted que es su madre",
-      "usted que es la madre",
-      "usted es madre",
-      "es usted madre",
-    ],
-  },
-  {
-    role: "father",
-    selfPhrases: ["soy su padre", "soy el padre"],
-    addressedPhrases: [
-      "usted es su padre",
-      "usted es el padre",
-      "es usted su padre",
-      "es usted el padre",
-      "usted que es su padre",
-      "usted que es el padre",
-      "usted es padre",
-      "es usted padre",
-    ],
-  },
-  {
-    role: "sibling",
-    selfPhrases: ["soy su hermano", "soy el hermano", "soy su hermana", "soy la hermana"],
-    addressedPhrases: [
-      "usted es su hermano",
-      "usted es el hermano",
-      "es usted su hermano",
-      "es usted el hermano",
-      "usted que es su hermano",
-      "usted que es el hermano",
-      "usted es su hermana",
-      "usted es la hermana",
-      "es usted su hermana",
-      "es usted la hermana",
-      "usted que es su hermana",
-      "usted que es la hermana",
-    ],
-  },
-];
-
 function isSourceSensitive(text) {
   return SOURCE_SENSITIVE_PATTERNS.some((pattern) => pattern.test(String(text || "")));
 }
@@ -148,15 +97,6 @@ function normalizedWords(text) {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
-}
-
-function normalizedPhrase(text) {
-  return normalizedWords(text).join(" ");
-}
-
-function containsExplicitPhrase(text, phrases) {
-  const normalized = ` ${normalizedPhrase(text)} `;
-  return phrases.some((phrase) => normalized.includes(` ${phrase} `));
 }
 
 function endsWithWords(haystack, needle) {
@@ -243,6 +183,7 @@ REGLAS CRÍTICAS:
 - mother/father/sibling/caregiver/family: información colateral sobre el paciente. Usa mother/father/etc. solo si el diálogo lo hace explícito; si solo consta que es un familiar, usa family.
 - Si el psiquiatra identifica explícitamente al siguiente interlocutor como madre/padre/hermano (p. ej. «¿usted es su madre?» o «¿y usted qué es, su madre?»), el turno de respuesta debe conservar ese parentesco; NUNCA lo rebajes a caregiver/family.
 - Si una persona dice explícitamente «soy su madre/padre/hermano», conserva ese parentesco y no lo sustituyas por caregiver/family.
+- Una vez identificado un familiar, las preguntas consecutivas que el psiquiatra le dirige con «usted», «señora» o «señor» siguen dirigidas a ese familiar hasta que exista un cambio explícito de interlocutor.
 - nurse/police/security: solo cuando el contenido o contexto lo haga explícito.
 - unknown: cuando no pueda distinguirse razonablemente la fuente.
 - confidence=high solo con evidencia contextual clara; medium cuando es probable pero no inequívoco; low cuando es débil.
@@ -258,28 +199,6 @@ function extractParsed(response) {
     }
   }
   return null;
-}
-
-function explicitFamilyRoleFromOwnText(text, proposedRole) {
-  if (!["mother", "father", "sibling", "caregiver", "family", "other", "unknown"].includes(proposedRole)) return null;
-  const rule = EXPLICIT_FAMILY_ROLE_RULES.find((candidate) => containsExplicitPhrase(text, candidate.selfPhrases));
-  return rule?.role || null;
-}
-
-function explicitFamilyRoleFromPriorClinicianTurn(segments, index, assignments) {
-  if (index <= 0) return null;
-  const previous = segments[index - 1];
-  const previousAssignment = assignments.get(previous.id);
-  if (previousAssignment?.role !== "psychiatrist") return null;
-  const rule = EXPLICIT_FAMILY_ROLE_RULES.find((candidate) => containsExplicitPhrase(previous.text, candidate.addressedPhrases));
-  return rule?.role || null;
-}
-
-function anchoredFamilyRole(segments, index, assignments, proposedRole) {
-  const own = explicitFamilyRoleFromOwnText(segments[index]?.text, proposedRole);
-  if (own) return own;
-  if (proposedRole === "psychiatrist") return null;
-  return explicitFamilyRoleFromPriorClinicianTurn(segments, index, assignments);
 }
 
 async function resolveClient(options = {}) {
@@ -336,13 +255,24 @@ export async function attributeClinicalSpeakerRoles(inputSegments, options = {})
 
   const byId = new Map((parsed.assignments || []).map((item) => [String(item.segment_id), item]));
   let explicitFamilyRoleAnchors = 0;
+  let familyAddresseeContinuityAnchors = 0;
+  const resolvedRoles = new Map();
   const attributedSegments = segments.map((segment, index) => {
     const assignment = byId.get(segment.id) || { role: "unknown", confidence: "low" };
     const proposedRole = ROLE_LABELS[assignment.role] ? assignment.role : "unknown";
-    const anchoredRole = anchoredFamilyRole(segments, index, byId, proposedRole);
-    const role = anchoredRole || proposedRole;
-    const confidence = anchoredRole ? "high" : (["high", "medium", "low"].includes(assignment.confidence) ? assignment.confidence : "low");
-    if (anchoredRole && anchoredRole !== proposedRole) explicitFamilyRoleAnchors += 1;
+    const previousRole = index > 0 ? resolvedRoles.get(segments[index - 1].id) : null;
+    const anchor = resolveFamilyRoleAnchor({
+      segments,
+      index,
+      proposedRole,
+      previousRole,
+      resolvedRoles,
+    });
+    const role = anchor.role;
+    const confidence = anchor.reason ? "high" : (["high", "medium", "low"].includes(assignment.confidence) ? assignment.confidence : "low");
+    resolvedRoles.set(segment.id, role);
+    if (anchor.reason === "explicit_family_relationship" && role !== proposedRole) explicitFamilyRoleAnchors += 1;
+    if (anchor.reason === "family_addressee_continuity" && role !== proposedRole) familyAddresseeContinuityAnchors += 1;
     const sourceSensitive = isSourceSensitive(segment.text);
     const reviewRequired = sourceSensitive && (role === "unknown" || confidence !== "high");
     return {
@@ -352,7 +282,7 @@ export async function attributeClinicalSpeakerRoles(inputSegments, options = {})
       role_label: ROLE_LABELS[role],
       role_display: ROLE_DISPLAY[role],
       role_confidence: confidence,
-      role_anchor: anchoredRole ? "explicit_family_relationship" : "",
+      role_anchor: anchor.reason,
       source_sensitive: sourceSensitive,
       review_required: reviewRequired,
     };
@@ -386,6 +316,7 @@ export async function attributeClinicalSpeakerRoles(inputSegments, options = {})
       abstention_enabled: true,
       critical_review_count: reviewItems.length,
       explicit_family_role_anchors: explicitFamilyRoleAnchors,
+      family_addressee_continuity_anchors: familyAddresseeContinuityAnchors,
       deduplicated_overlap_segments: deduplication.removed,
       request_id: response?._request_id || "",
     },
