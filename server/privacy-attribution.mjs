@@ -3,7 +3,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { resolveModelAuth } from "./model-auth.mjs";
 import { PERSON_NAME_MASK } from "./person-name-redaction.mjs";
 import { deduplicateClearAdjacentOverlaps } from "./speaker-attribution.mjs";
-import { anchorExplicitFamilyRole } from "./family-role-anchor.mjs";
+import { resolveFamilyRoleAnchor } from "./family-role-anchor.mjs";
 
 export const PRIVACY_ATTRIBUTION_MODEL = "gpt-5.6-luna";
 
@@ -91,6 +91,7 @@ ATRIBUCIÓN:
 - mother/father/sibling/caregiver/family solo si el contexto lo hace explícito.
 - Si el psiquiatra identifica explícitamente al siguiente interlocutor como madre/padre/hermano, conserva ese parentesco; nunca lo rebajes a caregiver/family.
 - Si una persona dice explícitamente "soy su madre/padre/hermano", conserva ese parentesco.
+- Una vez identificado un familiar, las preguntas consecutivas que el psiquiatra le dirige con «usted», «señora» o «señor» siguen dirigidas a ese familiar hasta que exista un cambio explícito de interlocutor.
 - Si se aporta CONTEXTO PREVIO DESIDENTIFICADO, úsalo solo para mantener continuidad de interlocutores entre bloques. No lo copies, no lo resumas y no lo devuelvas: la salida debe contener exclusivamente los segmentos actuales.
 - nurse/police/security solo si es explícito; unknown si no puede saberse razonablemente.
 - confidence=high solo con evidencia contextual clara.
@@ -124,6 +125,8 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
 
   let replacements = 0;
   let explicitFamilyRoleAnchors = 0;
+  let familyAddresseeContinuityAnchors = 0;
+  const resolvedRoles = new Map();
   const attributedSegments = segments.map((segment, index) => {
     const item = byId.get(segment.id);
     if (!item || item.residual_person_name) throw new Error("No se pudo verificar la eliminación de nombres personales.");
@@ -132,16 +135,21 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
     replacements += Number(item.replacements) || 0;
 
     const proposedRole = ROLE_LABELS[item.role] ? item.role : "unknown";
-    const previousItem = index > 0 ? byId.get(segments[index - 1].id) : null;
-    const role = anchorExplicitFamilyRole({
+    const previousRole = index > 0 ? resolvedRoles.get(segments[index - 1].id) : null;
+    const anchor = resolveFamilyRoleAnchor({
       segments,
       index,
       proposedRole,
-      previousRole: previousItem?.role,
+      previousRole,
+      resolvedRoles,
+      previousSafeContext: context,
     });
-    if (role !== proposedRole) explicitFamilyRoleAnchors += 1;
+    const role = anchor.role;
+    resolvedRoles.set(segment.id, role);
+    if (anchor.reason === "explicit_family_relationship" && role !== proposedRole) explicitFamilyRoleAnchors += 1;
+    if (anchor.reason === "family_addressee_continuity" && role !== proposedRole) familyAddresseeContinuityAnchors += 1;
 
-    const confidence = role !== proposedRole
+    const confidence = anchor.reason
       ? "high"
       : (["high", "medium", "low"].includes(item.confidence) ? item.confidence : "low");
     const sourceSensitive = isSourceSensitive(text);
@@ -154,6 +162,7 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
       role_label: ROLE_LABELS[role],
       role_display: ROLE_DISPLAY[role],
       role_confidence: confidence,
+      role_anchor: anchor.reason,
       source_sensitive: sourceSensitive,
       review_required: sourceSensitive && (role === "unknown" || confidence !== "high"),
     };
@@ -181,6 +190,7 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
       automatic_role_attribution: true,
       critical_review_count: reviewItems.length,
       explicit_family_role_anchors: explicitFamilyRoleAnchors,
+      family_addressee_continuity_anchors: familyAddresseeContinuityAnchors,
       previous_safe_context_used: Boolean(context),
       deduplicated_overlap_segments: deduplication.removed,
       request_id: response?._request_id || "",
