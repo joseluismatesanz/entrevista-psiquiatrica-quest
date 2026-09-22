@@ -322,6 +322,37 @@ test("V0.6 informe: limpia la contaminación madre-paciente observada tras la re
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
 });
 
+test("V0.6 informe: aclara la observación materna y elimina el metatexto de la captura final", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "La paciente refiere encontrarse muy nerviosa últimamente, con dificultad para dormir y agitación constante. La madre la describe siempre muy agobiada, con mal descanso nocturno y aspecto cansado.",
+      evidence_status: "supported",
+      source_ids: ["p", "m"],
+    },
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo, agitación e insomnio. No se realiza exploración psicopatológica completa en la entrevista aportada.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y duermo mal.\nMADRE: La veo muy agobiada, cansada y duerme mal.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "La paciente refiere encontrarse muy nerviosa últimamente, con dificultad para dormir y agitación constante. Según la madre, la paciente se muestra siempre muy agobiada, con mal descanso nocturno y aspecto cansado.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo, agitación e insomnio.",
+  );
+  assert.ok(result.warnings.includes("report_maternal_collateral_subject_clarified"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
+
 test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", () => {
   const input = assessment({
     plan_terapeutico: {
@@ -399,8 +430,9 @@ test("V0.6 informe: elimina de enfermedad actual la medicación de la madre y la
 
   assert.equal(
     result.assessment.sections.enfermedad_actual.text,
-    "La paciente refiere encontrarse muy nerviosa últimamente, con sueño insuficiente y agitación constante. La madre la describe siempre muy agobiada y con mal descanso, observándole aspecto cansado.",
+    "La paciente refiere encontrarse muy nerviosa últimamente, con sueño insuficiente y agitación constante. Según la madre, la paciente se muestra siempre muy agobiada y con mal descanso y presenta aspecto cansado.",
   );
+  assert.ok(result.warnings.includes("report_maternal_collateral_subject_clarified"));
   assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
   assert.ok(result.warnings.includes("report_unsupported_habitual_medication_pruned_from_current_illness"));
 });
@@ -421,8 +453,9 @@ test("V0.6 informe: elimina la variante 'se informa de una pauta farmacológica 
 
   assert.equal(
     result.assessment.sections.enfermedad_actual.text,
-    "La paciente refiere estar muy nerviosa últimamente, con dificultad para dormir y agitación constante. La madre la describe siempre muy agobiada, con mal descanso nocturno y aspecto cansado.",
+    "La paciente refiere estar muy nerviosa últimamente, con dificultad para dormir y agitación constante. Según la madre, la paciente se muestra siempre muy agobiada, con mal descanso nocturno y aspecto cansado.",
   );
+  assert.ok(result.warnings.includes("report_maternal_collateral_subject_clarified"));
   assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
 });
 
@@ -452,7 +485,7 @@ test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaj
 
   assert.equal(
     result.assessment.sections.enfermedad_actual.text,
-    "Refiere encontrarse muy nerviosa últimamente, con agitación persistente y dificultad para dormir. La madre describe que está siempre muy agobiada, que duerme mal y presenta aspecto cansado.",
+    "Refiere encontrarse muy nerviosa últimamente, con agitación persistente y dificultad para dormir. Según la madre, la paciente está siempre muy agobiada, duerme mal y presenta aspecto cansado.",
   );
   assert.equal(
     result.assessment.sections.exploracion_psicopatologica.text,
