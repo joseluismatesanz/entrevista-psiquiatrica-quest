@@ -280,6 +280,48 @@ test("V0.6 informe: limpia las variantes del informe tras la nueva prueba comple
   assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
 });
 
+test("V0.6 informe: limpia la contaminación madre-paciente observada tras la regresión", () => {
+  const input = assessment({
+    situacion_sociofamiliar: {
+      text: "Se menciona a la madre en el contexto de la relación actual. La paciente refiere que su madre está muy agobiada y duerme mal.",
+      evidence_status: "supported",
+      source_ids: ["p"],
+    },
+    enfermedad_actual: {
+      text: "Refiere encontrarse muy nerviosa últimamente, con dificultad para dormir y sensación de agitación constante. Durante la entrevista menciona también que su madre está muy agobiada y duerme mal. Refiere tratamiento actual con lorazepam y sertralina, sin aportar dosis ni pauta.",
+      evidence_status: "supported",
+      source_ids: ["p", "m"],
+    },
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo, agitación y dificultades de sueño. No se exploraron de forma suficiente otros dominios psicopatológicos.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+  });
+  input.medications = { habitual: [], current: [] };
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y duermo mal.\nMADRE: Está muy agobiada y duerme mal.",
+  );
+
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.text, "");
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.evidence_status, "insufficient");
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "Refiere encontrarse muy nerviosa últimamente, con dificultad para dormir y sensación de agitación constante.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo, agitación y dificultades de sueño.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_sociofamily"));
+  assert.ok(result.warnings.includes("report_family_self_symptoms_pruned_from_sociofamily"));
+  assert.ok(result.warnings.includes("report_family_self_symptoms_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_unsupported_habitual_medication_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
+
 test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", () => {
   const input = assessment({
     plan_terapeutico: {
