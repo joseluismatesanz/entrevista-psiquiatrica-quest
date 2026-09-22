@@ -19,6 +19,9 @@ const RULES = [
   },
 ];
 
+const FAMILY_ROLES = new Set(["mother", "father", "sibling", "caregiver", "family"]);
+const FORMAL_CONTINUATION_PATTERN = /\b(?:usted|senora|senor)\b/i;
+
 function normalize(value) {
   return String(value || "")
     .toLocaleLowerCase("es")
@@ -42,9 +45,62 @@ export function explicitFamilyRoleFromAddressedTurn(text) {
   return RULES.find((rule) => containsPhrase(text, rule.addressed))?.role || null;
 }
 
-export function anchorExplicitFamilyRole({ segments, index, proposedRole, previousRole }) {
+function lastResolvedParticipantRole(segments, index, resolvedRoles) {
+  if (!(resolvedRoles instanceof Map)) return null;
+  for (let cursor = index - 2; cursor >= 0; cursor -= 1) {
+    const role = resolvedRoles.get(segments?.[cursor]?.id);
+    if (!role || role === "psychiatrist") continue;
+    return role;
+  }
+  return null;
+}
+
+function lastParticipantRoleFromContext(previousSafeContext) {
+  const labels = {
+    MADRE: "mother",
+    PADRE: "father",
+    "HERMANO/A": "sibling",
+    "CUIDADOR/A": "caregiver",
+    FAMILIAR: "family",
+    PACIENTE: "patient",
+  };
+  let lastRole = null;
+  for (const line of String(previousSafeContext || "").split(/\n+/)) {
+    const match = line.match(/^\s*(MADRE|PADRE|HERMANO\/A|CUIDADOR\/A|FAMILIAR|PACIENTE)\s*:/i);
+    if (match) lastRole = labels[match[1].toLocaleUpperCase("es")] || null;
+  }
+  return lastRole;
+}
+
+export function resolveFamilyRoleAnchor({
+  segments,
+  index,
+  proposedRole,
+  previousRole,
+  resolvedRoles,
+  previousSafeContext = "",
+}) {
   const own = explicitFamilyRoleFromOwnText(segments?.[index]?.text);
-  if (own) return own;
-  if (proposedRole === "psychiatrist" || previousRole !== "psychiatrist" || index <= 0) return proposedRole;
-  return explicitFamilyRoleFromAddressedTurn(segments[index - 1]?.text) || proposedRole;
+  if (own) return { role: own, reason: "explicit_family_relationship" };
+  if (proposedRole === "psychiatrist" || previousRole !== "psychiatrist" || index <= 0) {
+    return { role: proposedRole, reason: "" };
+  }
+
+  const previousText = segments[index - 1]?.text;
+  const explicit = explicitFamilyRoleFromAddressedTurn(previousText);
+  if (explicit) return { role: explicit, reason: "explicit_family_relationship" };
+
+  if (FORMAL_CONTINUATION_PATTERN.test(normalize(previousText))) {
+    const currentRole = lastResolvedParticipantRole(segments, index, resolvedRoles)
+      || lastParticipantRoleFromContext(previousSafeContext);
+    if (FAMILY_ROLES.has(currentRole)) {
+      return { role: currentRole, reason: "family_addressee_continuity" };
+    }
+  }
+
+  return { role: proposedRole, reason: "" };
+}
+
+export function anchorExplicitFamilyRole(options) {
+  return resolveFamilyRoleAnchor(options).role;
 }
