@@ -498,6 +498,37 @@ test("V0.6 informe: elimina la variante 'se informa de una pauta farmacológica 
   assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
 });
 
+test("V0.6 informe: elimina la pauta y el metatexto exactos de la captura más reciente", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "La paciente refiere encontrarse muy nerviosa últimamente, con dificultades para dormir y sensación de agitación constante. Según la madre, la paciente se muestra siempre muy agobiada y con aspecto cansado; refiere discrepancia sobre el sueño, ya que la madre refiere que duerme bien mientras la paciente comunica dificultad para dormir. Durante la valoración, el psiquiatra explica una pauta de tratamiento con sertralina por la mañana, clonazepam de rescate durante el día y mirtazapina por la noche.",
+      evidence_status: "supported",
+      source_ids: ["p", "m", "q"],
+    },
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo, agitación y dificultades para dormir. No permite una exploración psicopatológica completa.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y me cuesta dormir.\nMADRE: La veo agobiada y cansada.\nPSIQUIATRA: Indico sertralina por la mañana, clonazepam de rescate y mirtazapina por la noche.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "La paciente refiere encontrarse muy nerviosa últimamente, con dificultades para dormir y sensación de agitación constante. Según la madre, la paciente se muestra siempre muy agobiada y con aspecto cansado; refiere discrepancia sobre el sueño, ya que la madre refiere que duerme bien mientras la paciente comunica dificultad para dormir.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo, agitación y dificultades para dormir.",
+  );
+  assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
