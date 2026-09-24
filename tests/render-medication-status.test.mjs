@@ -69,3 +69,28 @@ test("renderer: habitual solo activo; actual activo + dosis puntual; históricos
   assert.match(current, /Olanzapina 10 mg \(intramuscular\)/);
   assert.doesNotMatch(current, /Risperidona/);
 });
+
+test("renderer: no muestra marcadores internos de adherencia desconocida", () => {
+  const input = assessment();
+  input.medications.current = [
+    medication("Sertralina", "active", {
+      dose: "50 mg",
+      schedule: "por la mañana, con el desayuno",
+      adherence_status: "unknown",
+      adherence_text: "[unknown]",
+    }),
+    medication("Clonazepam", "active", {
+      dose: "0,5 mg",
+      schedule: "de rescate si aparece ansiedad",
+      adherence_status: "unknown",
+      adherence_text: "not_applicable",
+    }),
+  ];
+
+  const report = renderClinicalReport(input);
+  const current = report.split("TRATAMIENTO ACTUAL\n")[1];
+
+  assert.match(current, /Sertralina 50 mg: por la mañana, con el desayuno/);
+  assert.match(current, /Clonazepam 0,5 mg: de rescate si aparece ansiedad/);
+  assert.doesNotMatch(current, /unknown|not[_ ]?applicable|Adherencia/i);
+});
