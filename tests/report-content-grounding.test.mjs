@@ -353,6 +353,45 @@ test("V0.6 informe: aclara la observación materna y elimina el metatexto de la 
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
 });
 
+test("V0.6 informe: elimina medicación materna y metatexto observados en la nueva captura", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "La paciente refiere estar muy nerviosa últimamente, con dificultad para dormir y agitación persistente. La madre informa de tratamiento actual con lorazepam y sertralina y refiere supervisar la toma de toda la medicación.",
+      evidence_status: "supported",
+      source_ids: ["p", "m"],
+    },
+    exploracion_psicopatologica: {
+      text: "La paciente refiere nerviosismo, insomnio y agitación. No constan otros elementos del estado mental actual explorados u observados.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+  });
+  input.medications = {
+    habitual: [],
+    current: [
+      { raw_name: "Sertralina", status: "active" },
+      { raw_name: "Clonazepam", status: "active" },
+      { raw_name: "Mirtazapina", status: "active" },
+    ],
+  };
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y duermo mal.\nMADRE: Yo tomo lorazepam y sertralina.\nPSIQUIATRA: Para la paciente indico sertralina, clonazepam y mirtazapina.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "La paciente refiere estar muy nerviosa últimamente, con dificultad para dormir y agitación persistente.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "La paciente refiere nerviosismo, insomnio y agitación.",
+  );
+  assert.ok(result.warnings.includes("report_unsupported_habitual_medication_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
+
 test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", () => {
   const input = assessment({
     plan_terapeutico: {
