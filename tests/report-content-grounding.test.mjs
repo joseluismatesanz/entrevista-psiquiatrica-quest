@@ -529,6 +529,37 @@ test("V0.6 informe: elimina la pauta y el metatexto exactos de la captura más r
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
 });
 
+test("V0.6 informe: limpia los dos restos detectados al verificar el Preview", () => {
+  const input = assessment({
+    exploracion_psicopatologica: {
+      text: "La paciente refiere nerviosismo y agitación, con dificultad para dormir. discrepa respecto al sueño, que considera conservado.",
+      evidence_status: "insufficient",
+      source_ids: ["p", "m"],
+    },
+    plan_terapeutico: {
+      text: "Se indica sertralina 50 mg por la mañana, clonazepam 0,5 mg de rescate durante el día si aparece ansiedad y mirtazapina 15 mg por la noche. No se especifican destino asistencial, seguimiento, pruebas ni medidas de seguridad.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y me cuesta dormir.\nMADRE: Yo creo que duerme bien.\nPSIQUIATRA: Indico sertralina, clonazepam y mirtazapina.",
+  );
+
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "La paciente refiere nerviosismo y agitación, con dificultad para dormir.",
+  );
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "Se indica sertralina 50 mg por la mañana, clonazepam 0,5 mg de rescate durante el día si aparece ansiedad y mirtazapina 15 mg por la noche.",
+  );
+  assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
