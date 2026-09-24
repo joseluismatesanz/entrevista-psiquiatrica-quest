@@ -21,7 +21,9 @@ function clean(value) {
 }
 
 function cleanAdherence(value) {
-  return clean(value).replace(/^adherencia\s*:?\s*/i, "").trim();
+  const adherence = clean(value).replace(/^adherencia\s*:?\s*/i, "").trim();
+  if (/^\[?\s*(?:unknown|not[_ ]?applicable|null|n\/?a)\s*\]?$/i.test(adherence)) return "";
+  return adherence;
 }
 
 function medicationLine(med) {
