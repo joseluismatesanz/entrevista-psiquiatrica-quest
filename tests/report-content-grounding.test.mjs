@@ -560,6 +560,84 @@ test("V0.6 informe: limpia los dos restos detectados al verificar el Preview", (
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
 });
 
+test("V0.6 informe: limpia variantes plurales y colaterales del Preview final", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "La paciente refiere encontrarse muy nerviosa y agitada, con dificultad para dormir. Según la madre, la paciente se muestra habitualmente muy agobiada, con mal descanso y apariencia de cansancio. Durante la valoración se indican para la paciente sertralina 50 mg por la mañana con el desayuno, clonazepam 0,5 mg de rescate durante el día cuando aparezca ansiedad y mirtazapina 15 mg por la noche antes de dormir.",
+      evidence_status: "supported",
+      source_ids: ["p", "m", "q"],
+    },
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo, agitación y dificultad para dormir. Según la madre, presenta agobio, mal descanso y aspecto cansado.",
+      evidence_status: "insufficient",
+      source_ids: ["p", "m"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y me cuesta dormir.\nMADRE: Está agobiada, duerme mal y parece cansada.\nPSIQUIATRA: Indico sertralina, clonazepam y mirtazapina.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "La paciente refiere encontrarse muy nerviosa y agitada, con dificultad para dormir. Según la madre, la paciente se muestra habitualmente muy agobiada, con mal descanso y apariencia de cansancio.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo, agitación y dificultad para dormir.",
+  );
+  assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
+});
+
+test("V0.6 informe: limpia las tres variantes de la captura del 25 de septiembre", () => {
+  const input = assessment({
+    situacion_sociofamiliar: {
+      text: "Se menciona la presencia de la madre durante la valoración.",
+      evidence_status: "insufficient",
+      source_ids: ["m"],
+    },
+    enfermedad_actual: {
+      text: "La paciente refiere encontrarse muy nerviosa últimamente, con dificultad para dormir y agitación persistente. Durante la entrevista, la madre refiere que la paciente toma actualmente lorazepam y sertralina y que supervisa la toma de toda la medicación.",
+      evidence_status: "supported",
+      source_ids: ["p", "m"],
+    },
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo, agitación e insomnio. No se exploran de forma suficiente otros dominios psicopatológicos.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+  });
+  input.medications = {
+    habitual: [],
+    current: [
+      { raw_name: "Sertralina", status: "active" },
+      { raw_name: "Clonazepam", status: "active" },
+      { raw_name: "Mirtazapina", status: "active" },
+    ],
+  };
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y me cuesta dormir.\nMADRE: La veo muy agobiada.\nPSIQUIATRA: Indico sertralina, clonazepam y mirtazapina.",
+  );
+
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.text, "");
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.evidence_status, "insufficient");
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "La paciente refiere encontrarse muy nerviosa últimamente, con dificultad para dormir y agitación persistente.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo, agitación e insomnio.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_sociofamily"));
+  assert.ok(result.warnings.includes("report_unsupported_habitual_medication_pruned_from_current_illness"));
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
