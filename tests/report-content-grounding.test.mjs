@@ -638,6 +638,36 @@ test("V0.6 informe: limpia las tres variantes de la captura del 25 de septiembre
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
 });
 
+test("V0.6 informe: limpia el nuevo metatexto sociofamiliar y la medicación nocturna no verificada", () => {
+  const input = assessment({
+    situacion_sociofamiliar: {
+      text: "Otros datos sociofamiliares no explorados.",
+      evidence_status: "insufficient",
+      source_ids: ["m"],
+    },
+    plan_terapeutico: {
+      text: "Se indica sertralina 50 mg por la mañana, clonazepam 0,5 mg como rescate y una medicación nocturna de 15 mg identificada en el discurso como 'clatipina'. Seguimiento en próxima consulta.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PSIQUIATRA: Indico sertralina 50 mg por la mañana, clonazepam 0,5 mg de rescate y clatipina 15 mg antes de dormir. Seguimiento en próxima consulta.",
+  );
+
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.text, "");
+  assert.equal(result.assessment.sections.situacion_sociofamiliar.evidence_status, "insufficient");
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "Se indica sertralina 50 mg por la mañana, clonazepam 0,5 mg como rescate y «clatipina» 15 mg antes de dormir. Seguimiento en próxima consulta.",
+  );
+  assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /identificada|discurso|transcripci[oó]n/i);
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_sociofamily"));
+  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
