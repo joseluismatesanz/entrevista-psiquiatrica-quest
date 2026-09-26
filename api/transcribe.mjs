@@ -2,6 +2,7 @@ import { transcribeAudioPayload } from "../server/transcribe.mjs";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
 import { redactPersonNamesInSegments } from "../server/person-name-redaction.mjs";
 import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
+import { deidentifySegmentsWithPresidio } from "../server/presidio-deidentification.mjs";
 import {
   createPrivacyProof,
   verifyPrivacyProof,
@@ -75,6 +76,12 @@ export default async function handler(req, res) {
           person_name_redaction_replacements: 0,
           person_name_redaction_store: false,
           person_name_redaction_fail_closed: true,
+          presidio_enabled: true,
+          presidio_language: "es",
+          presidio_replacements: 0,
+          presidio_skipped_empty_block: true,
+          presidio_store: false,
+          presidio_fail_closed: true,
           automatic_role_attribution: true,
           signed_privacy_proof_issued: true,
           previous_safe_context_verified: Boolean(previousSafeContext),
@@ -89,7 +96,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // Vía normal: una sola llamada estructurada hace anonimización + atribución.
+    // Primera barrera: Presidio se ejecuta dentro del mismo despliegue y elimina
+    // identificadores directos antes de enviar texto a cualquier modelo clínico.
+    // Si la barrera falla, la petición completa falla cerrada.
+    const presidioStartedAt = Date.now();
+    const presidio = await deidentifySegmentsWithPresidio(acoustic.segments);
+    const presidioMs = Date.now() - presidioStartedAt;
+
+    // Segunda barrera: una sola llamada estructurada verifica nombres residuales
+    // y atribuye roles clínicos sobre texto que ya ha pasado por Presidio.
     // En V0.6 puede recibir únicamente contexto previo ya desidentificado y firmado,
     // para mantener continuidad de roles entre bloques. Si falla, se conserva el
     // camino anterior como fallback seguro.
@@ -97,10 +112,10 @@ export default async function handler(req, res) {
     let processed;
     let fallbackUsed = false;
     try {
-      processed = await redactAndAttributeSegments(acoustic.segments, { previousSafeContext });
+      processed = await redactAndAttributeSegments(presidio.segments, { previousSafeContext });
     } catch {
       fallbackUsed = true;
-      const redaction = await redactPersonNamesInSegments(acoustic.segments);
+      const redaction = await redactPersonNamesInSegments(presidio.segments);
       const attributed = await attributeClinicalSpeakerRoles(redaction.segments);
       processed = {
         transcript: attributed.transcript,
@@ -145,6 +160,16 @@ export default async function handler(req, res) {
         person_name_redaction_replacements: processed.replacements,
         person_name_redaction_store: false,
         person_name_redaction_fail_closed: true,
+        presidio_enabled: true,
+        presidio_engine: presidio.meta.engine,
+        presidio_version: presidio.meta.version,
+        presidio_model: presidio.meta.model,
+        presidio_language: presidio.meta.language,
+        presidio_replacements: presidio.replacements,
+        presidio_entity_counts: presidio.entityCounts,
+        presidio_self_hosted: presidio.meta.self_hosted,
+        presidio_store: false,
+        presidio_fail_closed: true,
         automatic_role_attribution: true,
         role_model: processed.meta.model,
         role_transport: processed.meta.transport,
@@ -161,6 +186,7 @@ export default async function handler(req, res) {
           : 600,
         performance_ms: {
           transcription: transcriptionMs,
+          presidio_deidentification: presidioMs,
           privacy_and_speaker_attribution: privatePassMs,
           total_audio_pipeline: Date.now() - totalStartedAt,
         },

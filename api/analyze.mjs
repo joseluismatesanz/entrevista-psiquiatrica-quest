@@ -3,6 +3,7 @@ import {
   LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
 } from "../server/privacy-proof.mjs";
 import { verifyClinicalEvidenceProof } from "../server/clinical-evidence-proof.mjs";
+import { deidentifyTranscriptWithPresidio } from "../server/presidio-deidentification.mjs";
 
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -135,7 +136,17 @@ export default async function handler(req, res) {
     const privacyProofVerified = singleProofVerified || blockProofs.verified;
 
     let safeTranscript = normalizedTranscript;
+    let presidioMs = 0;
     let redactionMs = 0;
+    let presidioMeta = {
+      engine: "presidio",
+      version: "verified-upstream",
+      model: "verified-upstream-audio",
+      language: "es",
+      replacements: 0,
+      entityCounts: {},
+      upstreamVerified: true,
+    };
     let redactionMeta = {
       mask: "XXXXXXXXXXX",
       model: blockProofs.verified ? "verified-upstream-audio-blocks" : "verified-upstream-audio",
@@ -143,10 +154,22 @@ export default async function handler(req, res) {
     };
 
     if (!privacyProofVerified) {
+      stage = "presidio_deidentification";
+      const presidioStartedAt = Date.now();
+      const presidio = await deidentifyTranscriptWithPresidio(normalizedTranscript);
+      presidioMs = Date.now() - presidioStartedAt;
+      safeTranscript = presidio.transcript;
+      presidioMeta = {
+        ...presidio.meta,
+        replacements: presidio.replacements,
+        entityCounts: presidio.entityCounts,
+        upstreamVerified: false,
+      };
+
       stage = "person_name_redaction";
       const redactionStartedAt = Date.now();
       const { redactPersonNamesInTranscript } = await import("../server/person-name-redaction.mjs");
-      const redaction = await redactPersonNamesInTranscript(normalizedTranscript);
+      const redaction = await redactPersonNamesInTranscript(safeTranscript);
       redactionMs = Date.now() - redactionStartedAt;
       safeTranscript = redaction.transcript;
       redactionMeta = {
@@ -208,6 +231,16 @@ export default async function handler(req, res) {
         person_name_redaction_replacements: redactionMeta.replacements,
         person_name_redaction_store: false,
         person_name_redaction_fail_closed: true,
+        presidio_enabled: true,
+        presidio_engine: presidioMeta.engine,
+        presidio_version: presidioMeta.version,
+        presidio_model: presidioMeta.model,
+        presidio_language: presidioMeta.language,
+        presidio_replacements: presidioMeta.replacements,
+        presidio_entity_counts: presidioMeta.entityCounts,
+        presidio_upstream_verified: presidioMeta.upstreamVerified,
+        presidio_store: false,
+        presidio_fail_closed: true,
         privacy_proof_verified: privacyProofVerified,
         duplicate_redaction_skipped: privacyProofVerified,
         long_interview_block_proofs_verified: blockProofs.verified,
@@ -222,6 +255,7 @@ export default async function handler(req, res) {
         fast_parallel_fallback_used: fastParallelFallbackUsed,
         parallel_full_close: parallelFullMode,
         request_performance_ms: {
+          presidio_deidentification: presidioMs,
           person_name_redaction: redactionMs,
           clinical_analysis: clinicalAnalysisMs,
           total_request: Date.now() - totalStartedAt,
@@ -232,9 +266,9 @@ export default async function handler(req, res) {
     const isClientError = error instanceof SyntaxError || error instanceof TypeError;
     const status = stage === "load_clinical_engine" ? 500 : (isClientError ? 400 : 502);
     return res.status(status).json({
-      error: stage === "load_clinical_engine" ? "clinical_engine_unavailable" : stage === "person_name_redaction" ? "person_name_redaction_failed" : safeErrorName(error),
+      error: stage === "load_clinical_engine" ? "clinical_engine_unavailable" : stage === "presidio_deidentification" ? "presidio_deidentification_failed" : stage === "person_name_redaction" ? "person_name_redaction_failed" : safeErrorName(error),
       stage,
-      message: stage === "load_clinical_engine" ? "No se pudo cargar el motor clínico en el backend." : stage === "person_name_redaction" ? "No se pudo verificar la desidentificación de nombres personales. No se ha generado ningún documento." : safeErrorMessage(error),
+      message: stage === "load_clinical_engine" ? "No se pudo cargar el motor clínico en el backend." : stage === "presidio_deidentification" ? "No se pudo verificar la desidentificación con Presidio. No se ha generado ningún documento." : stage === "person_name_redaction" ? "No se pudo verificar la desidentificación de nombres personales. No se ha generado ningún documento." : safeErrorMessage(error),
     });
   }
 }
