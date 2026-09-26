@@ -94,3 +94,21 @@ test("renderer: no muestra marcadores internos de adherencia desconocida", () =>
   assert.match(current, /Clonazepam 0,5 mg: de rescate si aparece ansiedad/);
   assert.doesNotMatch(current, /unknown|not[_ ]?applicable|Adherencia/i);
 });
+
+test("renderer: no muestra mensajes internos de verificación de CIMA", () => {
+  const input = assessment();
+  input.medications.current = [
+    medication("clatipina", "active", {
+      display_name: "clatipina (no encontrada correspondencia en CIMA)",
+      active_ingredient_known: false,
+      dose: "15 mg",
+      schedule: "antes de dormir",
+    }),
+  ];
+
+  const report = renderClinicalReport(input);
+  const current = report.split("TRATAMIENTO ACTUAL\n")[1];
+
+  assert.equal(current, "clatipina 15 mg: antes de dormir");
+  assert.doesNotMatch(current, /CIMA|correspondencia|no encontrada/i);
+});
