@@ -11,7 +11,8 @@ const [transcribeApi, analyzeApi, validationJs, combinedPrivacy, redactionModule
 ]);
 
 test("privacidad: el audio queda desidentificado antes de llegar al cliente y la vía rápida falla cerrado", () => {
-  assert.match(transcribeApi, /redactAndAttributeSegments\(acoustic\.segments(?:,\s*\{\s*previousSafeContext\s*\})?\)/);
+  assert.match(transcribeApi, /deidentifySegmentsWithPresidio\(acoustic\.segments\)/);
+  assert.match(transcribeApi, /redactAndAttributeSegments\(presidio\.segments(?:,\s*\{\s*previousSafeContext\s*\})?\)/);
   assert.match(combinedPrivacy, /redacted_text/);
   assert.match(combinedPrivacy, /residual_person_name/);
   assert.match(combinedPrivacy, /PERSON_NAME_MASK/);
@@ -23,14 +24,16 @@ test("privacidad: el audio queda desidentificado antes de llegar al cliente y la
   assert.match(transcribeApi, /createPrivacyProof\(processed\.transcript/);
   // Si falla la llamada combinada, el fallback conserva la secuencia segura:
   // primero redacta y solo después atribuye roles.
-  assert.match(transcribeApi, /redactPersonNamesInSegments\(acoustic\.segments\)[\s\S]*attributeClinicalSpeakerRoles\(redaction\.segments\)/);
+  assert.match(transcribeApi, /redactPersonNamesInSegments\(presidio\.segments\)[\s\S]*attributeClinicalSpeakerRoles\(redaction\.segments\)/);
 });
 
 test("privacidad: cualquier texto sin prueba válida se desidentifica antes del motor clínico; una prueba válida solo evita duplicar el mismo paso", () => {
   assert.match(analyzeApi, /verifyPrivacyProof\(normalizedTranscript, body\.privacy_proof\)/);
   assert.match(analyzeApi, /if \(!privacyProofVerified\)/);
+  assert.match(analyzeApi, /stage = "presidio_deidentification"/);
+  assert.match(analyzeApi, /deidentifyTranscriptWithPresidio\(normalizedTranscript\)/);
   assert.match(analyzeApi, /stage = "person_name_redaction"/);
-  assert.match(analyzeApi, /redactPersonNamesInTranscript\(normalizedTranscript\)/);
+  assert.match(analyzeApi, /redactPersonNamesInTranscript\(safeTranscript\)/);
   assert.match(analyzeApi, /const fastRoute = useFastClinicalRoute\(safeTranscript\)/);
   assert.match(analyzeApi, /analyzeTranscript\(safeTranscript,/);
   assert.match(analyzeApi, /deidentified_transcript: safeTranscript/);

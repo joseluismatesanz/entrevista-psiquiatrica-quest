@@ -74,8 +74,9 @@ test("V0.5.6 correo: entrega el mailto y destruye inmediatamente el estado clín
   assert.match(validationJs, /window\.location\.replace/);
 });
 
-test("V0.5.6 privacidad: la interfaz informa del enmascarado de nombres personales", () => {
-  assert.match(indexHtml, /nombres de personas enmascarados como XXXXXXXXXXX/);
+test("V0.5.6 privacidad: la interfaz informa de Presidio y la verificación adicional", () => {
+  assert.match(indexHtml, /identificadores personales desidentificados con Microsoft Presidio/);
+  assert.match(indexHtml, /nombres verificados adicionalmente/);
 });
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
