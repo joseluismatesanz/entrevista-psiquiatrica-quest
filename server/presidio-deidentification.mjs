@@ -28,6 +28,20 @@ function resolveEndpoint(options = {}) {
   throw new Error("Presidio no está disponible en este entorno. Usa Vercel o configura PRESIDIO_URL.");
 }
 
+export function presidioEndpointForRequest(req) {
+  const forwardedHost = String(req?.headers?.["x-forwarded-host"] || "").split(",")[0].trim();
+  const requestHost = String(req?.headers?.host || "").trim();
+  const host = forwardedHost || requestHost;
+
+  if (/^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.vercel\.app$/i.test(host)) {
+    return `https://${host}/api/presidio`;
+  }
+  if (/^(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(host)) {
+    return `http://${host}/api/presidio`;
+  }
+  return undefined;
+}
+
 function chunkItems(items) {
   const chunks = [];
   let current = [];
