@@ -81,6 +81,9 @@ function transcriptExplicitlyStatesSchooling(lines) {
 const META_ABSENCE_SENTENCE_PATTERN = /^(?:otros?\s+dominios?\s+psicopatologicos?\s+no\s+(?:explorados?|documentados?)(?:\s+en\s+la\s+entrevista\s+disponible)?|no\s+se\s+documentan?(?:\s+(?:de\s+forma\s+suficiente|suficientemente))?(?:\s+en\s+(?:esta|la)\s+evidencia)?\s+(?:otros?\s+)?(?:elementos?|componentes?|dominios?)(?:\s+de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental(?:\s+actual)?|exploracion\s+psicopatologica))?|no\s+se\s+(?:exploraron?|exploran)(?:\s+de\s+forma\s+(?:documentada|suficiente))?\s+(?:(?:el\s+)?resto\s+de(?:\s+los?)?|otros?)\s+(?:elementos?|componentes?|dominios?)(?:\s+(?:psicopatologicos?|de(?:l)?\s+(?:examen\s+psicopatologico|estado\s+mental|exploracion\s+psicopatologica)))?|no\s+consta\s+(?:una\s+)?exploracion\s+(?:suficiente|completa)\s+de\s+otros?\s+(?:elementos?|componentes?|dominios?)(?:\s+psicopatologicos?)?|no\s+constan?\s+otros?\s+(?:elementos?|componentes?|dominios?)\s+de(?:l)?\s+estado\s+mental(?:\s+actual)?\s+(?:explorados?|observados?)(?:\s+[uy]\s+(?:explorados?|observados?))?|no\s+constan?\s+datos?\s+(?:suficientes?\s+)?sobre|no\s+constan?\s+(?:otras?\s+)?indicacion(?:es)?\s+(?:sobre|de)|no\s+consta\s+(?:ingreso(?:\s+ni\s+no\s+ingreso)?|alta|unidad\s+asistencial|pruebas?\s+complementarias?|seguimiento\s+programado|medidas?\s+especificas?\s+de\s+seguridad)|no\s+se\s+especifican?\s+(?:destino\s+asistencial|seguimiento|pruebas?|medidas?\s+de\s+seguridad)|no\s+se\s+aportan?\s+datos?\s+sobre|no\s+constan?\s+otros?\s+datos?\s+sobre|no\s+se\s+dispone\s+de\s+(?:una\s+)?exploracion\s+(?:psicopatologica\s+)?(?:completa|suficiente)(?:\s+de\s+otros?\s+dominios?\s+psicopatologicos?)?|no\s+(?:permite|permitio)\s+(?:una\s+)?exploracion\s+psicopatologica\s+(?:completa|suficiente)|no\s+se\s+(?:ha\s+realizado|realiza)\s+(?:una\s+)?exploracion\s+psicopatologica\s+completa(?:\s+en\s+la\s+entrevista\s+aportada)?)\b/i;
 const SOCIOFAMILY_META_ABSENCE_SENTENCE_PATTERN = /^(?:otros?\s+datos?\s+sociofamiliares?\s+no\s+explorados?|(?:no\s+se\s+(?:exploraron?|exploran)|no\s+constan?\s+datos?\s+sobre)\s+(?:la\s+)?(?:convivencia|apoyo|red\s+(?:social|de\s+apoyo)|escolarizacion|situacion\s+laboral|empleo)|se\s+menciona\s+(?:a\s+(?:la|el)\s+(?:madre|padre)\s+en\s+el\s+contexto\s+de\s+la\s+relacion\s+actual|la\s+presencia\s+de\s+(?:la|el)\s+(?:madre|padre)\s+durante\s+la\s+valoracion))\b/i;
 const FAMILY_SELF_SYMPTOM_SENTENCE_PATTERN = /^(?:se\s+menciona\s+a\s+(?:la|el)\s+(?:madre|padre)|(?:(?:la\s+)?paciente\s+)?expresa\s+preocupacion\s+por\s+el\s+estado\s+de\s+su\s+(?:madre|padre)|(?:la\s+)?paciente\s+(?:describe|refiere)(?:\s+que)?\s+(?:a\s+)?su\s+(?:madre|padre)|(?:durante\s+la\s+entrevista\s+)?menciona(?:\s+tambien)?\s+que\s+su\s+(?:madre|padre))\b[^.!?]*\b(?:agobiad[oa]|cansad[oa]|falta\s+de\s+sueno|duerme\s+mal|insomnio|nervios[oa]|ansiedad)\b/i;
+const FAMILY_SELF_MEDICATION_HISTORY_PATTERN = /^(?:(?:la|el)\s+)?(?:madre|padre|familiar|cuidador(?:a)?|herman[oa])\s+(?:refiere|indica|comenta|explica|senala)\s+(?:que\s+)?(?:toma|tomar|estar\s+tomando|haber\s+tomado|se\s+encuentra\s+en\s+tratamiento\s+con)\b/i;
+const EXPLICIT_FAMILY_PSYCHIATRIC_HISTORY_PATTERN = /\b(?:diagnosticad[oa]|diagnostico|trastorno|depresion|ansiedad|bipolar|psicosis|esquizofrenia|anorexia|bulimia|trastorno\s+de\s+la\s+conducta\s+alimentaria|tdah|autismo|tea|conducta\s+suicida|intento\s+de\s+suicidio|ingreso\s+psiquiatrico|tratamiento\s+psiquiatrico|seguimiento\s+(?:por|en)\s+salud\s+mental)\b/i;
+const FAMILY_HISTORY_REASONING_META_PATTERN = /\b(?:(?:este|ese|dicho)\s+dato\s+(?:corresponde|pertenece)\s+a\s+(?:la|el)\s+(?:madre|padre|familiar)|no\s+(?:establece|permite\s+establecer|constituye)\s+(?:un\s+)?antecedente(?:s)?\s+(?:psiquiatrico(?:s)?\s+)?familiar(?:es)?|sin\s+que\s+(?:ello\s+)?(?:establezca|constituya)\s+(?:un\s+)?antecedente(?:s)?\s+(?:psiquiatrico(?:s)?\s+)?familiar(?:es)?)\b/i;
 
 function pruneMetaAbsenceSentences(
   section,
@@ -118,6 +121,25 @@ function pruneFamilySelfSymptoms(section, warnings, warningCode, emptyStatus = "
     section.source_ids = [];
   }
   warnings.push(warningCode);
+}
+
+function pruneMedicationOnlyFamilyPsychiatricHistory(section, warnings) {
+  if (!section?.text) return;
+  const sentences = splitSentences(section.text);
+  const kept = sentences.filter((sentence) => {
+    const text = normalize(sentence);
+    if (FAMILY_HISTORY_REASONING_META_PATTERN.test(text)) return false;
+    if (!FAMILY_SELF_MEDICATION_HISTORY_PATTERN.test(text)) return true;
+    return EXPLICIT_FAMILY_PSYCHIATRIC_HISTORY_PATTERN.test(text);
+  });
+  if (kept.length === sentences.length) return;
+
+  section.text = kept.join(" ").trim();
+  if (!section.text || /^(?:no\s+explorad[oa]|no\s+consta|sin\s+datos)[.!?]?$/i.test(normalize(section.text))) {
+    section.evidence_status = "insufficient";
+    section.source_ids = [];
+  }
+  warnings.push("report_family_self_medication_pruned_from_family_psychiatric_history");
 }
 
 function clarifyMaternalCollateralSubject(section, warnings) {
@@ -197,6 +219,7 @@ function cleanClinicalMetaPhrasing(section, warnings, warningCode) {
   const original = section.text;
   let text = String(original)
     .replace(/^\s*pauta\s+indicada\s+durante\s+la\s+valoraci[oó]n\s*:\s*/i, "")
+    .replace(/\b[A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]+\s*,?\s*identificad[oa]\s+por\s+(?:el|la)\s+(?:psiquiatra|profesional|facultativ[oa])\s+como\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]+)/gi, "$1")
     .replace(/\bun\s+f[aá]rmaco\s+referido\s+como\s+([«\"][^»\"]+[»\"])/gi, "$1")
     .replace(/\s*,?\s*cuyo\s+principio\s+activo\s+no\s+(?:queda|qued[oó]|ha\s+quedado)\s+(?:establecido|identificado|confirmado)(?:\s+en\s+la\s+transcripci[oó]n)?/gi, "")
     .replace(/\s*,?\s*sin\s+principio\s+activo\s+(?:confirmado|establecido|identificado)/gi, "")
@@ -374,6 +397,11 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     assessment.sections?.situacion_sociofamiliar,
     warnings,
     "report_family_self_symptoms_pruned_from_sociofamily",
+  );
+
+  pruneMedicationOnlyFamilyPsychiatricHistory(
+    assessment.sections?.antecedentes_familiares_psiquiatricos,
+    warnings,
   );
 
   pruneMetaAbsenceSentences(
