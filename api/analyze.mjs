@@ -3,7 +3,10 @@ import {
   LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
 } from "../server/privacy-proof.mjs";
 import { verifyClinicalEvidenceProof } from "../server/clinical-evidence-proof.mjs";
-import { deidentifyTranscriptWithPresidio } from "../server/presidio-deidentification.mjs";
+import {
+  deidentifyTranscriptWithPresidio,
+  presidioEndpointForRequest,
+} from "../server/presidio-deidentification.mjs";
 
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -156,7 +159,9 @@ export default async function handler(req, res) {
     if (!privacyProofVerified) {
       stage = "presidio_deidentification";
       const presidioStartedAt = Date.now();
-      const presidio = await deidentifyTranscriptWithPresidio(normalizedTranscript);
+      const presidio = await deidentifyTranscriptWithPresidio(normalizedTranscript, {
+        endpoint: presidioEndpointForRequest(req),
+      });
       presidioMs = Date.now() - presidioStartedAt;
       safeTranscript = presidio.transcript;
       presidioMeta = {

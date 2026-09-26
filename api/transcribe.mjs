@@ -2,7 +2,10 @@ import { transcribeAudioPayload } from "../server/transcribe.mjs";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
 import { redactPersonNamesInSegments } from "../server/person-name-redaction.mjs";
 import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
-import { deidentifySegmentsWithPresidio } from "../server/presidio-deidentification.mjs";
+import {
+  deidentifySegmentsWithPresidio,
+  presidioEndpointForRequest,
+} from "../server/presidio-deidentification.mjs";
 import {
   createPrivacyProof,
   verifyPrivacyProof,
@@ -100,7 +103,9 @@ export default async function handler(req, res) {
     // identificadores directos antes de enviar texto a cualquier modelo clínico.
     // Si la barrera falla, la petición completa falla cerrada.
     const presidioStartedAt = Date.now();
-    const presidio = await deidentifySegmentsWithPresidio(acoustic.segments);
+    const presidio = await deidentifySegmentsWithPresidio(acoustic.segments, {
+      endpoint: presidioEndpointForRequest(req),
+    });
     const presidioMs = Date.now() - presidioStartedAt;
 
     // Segunda barrera: una sola llamada estructurada verifica nombres residuales
