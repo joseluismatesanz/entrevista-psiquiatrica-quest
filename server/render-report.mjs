@@ -26,8 +26,16 @@ function cleanAdherence(value) {
   return adherence;
 }
 
+function cleanMedicationName(value) {
+  return clean(value)
+    .replace(/\s*\(\s*no\s+(?:(?:se\s+)?encontr[oó]|encontrada)\s+correspondencia\s+en\s+CIMA\s*\)\s*$/i, "")
+    .trim();
+}
+
 function medicationLine(med) {
-  const name = clean(med.display_name) || clean(med.raw_name) || "Medicamento no identificado";
+  const name = cleanMedicationName(med.display_name)
+    || cleanMedicationName(med.raw_name)
+    || "Medicamento no identificado";
   const dose = clean(med.dose);
   const schedule = clean(med.schedule);
   const route = clean(med.route);
