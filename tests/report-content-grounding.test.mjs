@@ -668,6 +668,27 @@ test("V0.6 informe: limpia el nuevo metatexto sociofamiliar y la medicación noc
   assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
 });
 
+test("V0.6 informe: elimina 'el resto de dominios' detectado en la prueba del Preview", () => {
+  const input = assessment({
+    exploracion_psicopatologica: {
+      text: "Refiere nerviosismo y agitación. Dificultad para dormir de varias semanas de evolución. No se exploraron de forma suficiente el resto de dominios psicopatológicos.",
+      evidence_status: "insufficient",
+      source_ids: ["p"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Estoy nerviosa, agitada y me cuesta dormir desde hace varias semanas.",
+  );
+
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Refiere nerviosismo y agitación. Dificultad para dormir de varias semanas de evolución.",
+  );
+  assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
