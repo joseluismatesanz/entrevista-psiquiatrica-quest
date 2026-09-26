@@ -99,9 +99,10 @@ test("Presidio: falla cerrado si no devuelve todos los fragmentos", async () => 
 });
 
 test("Presidio: se ejecuta antes de la verificación LLM y del análisis clínico", async () => {
-  const [transcribeApi, analyzeApi] = await Promise.all([
+  const [transcribeApi, analyzeApi, presidioPython] = await Promise.all([
     readFile(new URL("../api/transcribe.mjs", import.meta.url), "utf8"),
     readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../api/presidio.py", import.meta.url), "utf8"),
   ]);
 
   assert.ok(
@@ -118,4 +119,7 @@ test("Presidio: se ejecuta antes de la verificación LLM y del análisis clínic
   );
   assert.match(transcribeApi, /presidio_fail_closed: true/);
   assert.match(analyzeApi, /presidio_deidentification_failed/);
+  assert.match(presidioPython, /CLINICAL_NON_ENTITIES/);
+  assert.match(presidioPython, /"LLEVO"/);
+  assert.match(presidioPython, /supported_entity="EMAIL_ADDRESS"/);
 });
