@@ -11,7 +11,8 @@ const [transcribeApi, analyzeApi, validationJs, combinedPrivacy, redactionModule
 ]);
 
 test("privacidad: el audio queda desidentificado antes de llegar al cliente y la vía rápida falla cerrado", () => {
-  assert.match(transcribeApi, /deidentifySegmentsWithPresidio\(acoustic\.segments\)/);
+  assert.match(transcribeApi, /deidentifySegmentsWithPresidio\(acoustic\.segments,\s*\{/);
+  assert.match(transcribeApi, /endpoint:\s*presidioEndpointForRequest\(req\)/);
   assert.match(transcribeApi, /redactAndAttributeSegments\(presidio\.segments(?:,\s*\{\s*previousSafeContext\s*\})?\)/);
   assert.match(combinedPrivacy, /redacted_text/);
   assert.match(combinedPrivacy, /residual_person_name/);
@@ -31,7 +32,8 @@ test("privacidad: cualquier texto sin prueba válida se desidentifica antes del 
   assert.match(analyzeApi, /verifyPrivacyProof\(normalizedTranscript, body\.privacy_proof\)/);
   assert.match(analyzeApi, /if \(!privacyProofVerified\)/);
   assert.match(analyzeApi, /stage = "presidio_deidentification"/);
-  assert.match(analyzeApi, /deidentifyTranscriptWithPresidio\(normalizedTranscript\)/);
+  assert.match(analyzeApi, /deidentifyTranscriptWithPresidio\(normalizedTranscript,\s*\{/);
+  assert.match(analyzeApi, /endpoint:\s*presidioEndpointForRequest\(req\)/);
   assert.match(analyzeApi, /stage = "person_name_redaction"/);
   assert.match(analyzeApi, /redactPersonNamesInTranscript\(safeTranscript\)/);
   assert.match(analyzeApi, /const fastRoute = useFastClinicalRoute\(safeTranscript\)/);

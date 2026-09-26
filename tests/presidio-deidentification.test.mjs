@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import {
   deidentifySegmentsWithPresidio,
   deidentifyTranscriptWithPresidio,
+  presidioEndpointForRequest,
 } from "../server/presidio-deidentification.mjs";
 
 function mockResponse(payload, status = 200) {
@@ -98,6 +99,18 @@ test("Presidio: falla cerrado si no devuelve todos los fragmentos", async () => 
   );
 });
 
+test("Presidio: usa el host público verificado de la petición Vercel", () => {
+  assert.equal(
+    presidioEndpointForRequest({ headers: { host: "preview-ejemplo.vercel.app" } }),
+    "https://preview-ejemplo.vercel.app/api/presidio",
+  );
+  assert.equal(
+    presidioEndpointForRequest({ headers: { "x-forwarded-host": "rama.vercel.app, proxy.invalid" } }),
+    "https://rama.vercel.app/api/presidio",
+  );
+  assert.equal(presidioEndpointForRequest({ headers: { host: "evil.example" } }), undefined);
+});
+
 test("Presidio: se ejecuta antes de la verificación LLM y del análisis clínico", async () => {
   const [transcribeApi, analyzeApi, presidioPython] = await Promise.all([
     readFile(new URL("../api/transcribe.mjs", import.meta.url), "utf8"),
@@ -106,11 +119,11 @@ test("Presidio: se ejecuta antes de la verificación LLM y del análisis clínic
   ]);
 
   assert.ok(
-    transcribeApi.indexOf("deidentifySegmentsWithPresidio(acoustic.segments)")
+    transcribeApi.indexOf("deidentifySegmentsWithPresidio(acoustic.segments")
       < transcribeApi.indexOf("redactAndAttributeSegments(presidio.segments"),
   );
   assert.ok(
-    analyzeApi.indexOf("deidentifyTranscriptWithPresidio(normalizedTranscript)")
+    analyzeApi.indexOf("deidentifyTranscriptWithPresidio(normalizedTranscript")
       < analyzeApi.indexOf("redactPersonNamesInTranscript(safeTranscript)"),
   );
   assert.ok(
