@@ -689,6 +689,59 @@ test("V0.6 informe: elimina 'el resto de dominios' detectado en la prueba del Pr
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
 });
 
+test("V0.6 informe: la medicación propia de la madre no se convierte en antecedente familiar ni muestra razonamiento interno", () => {
+  const input = assessment({
+    antecedentes_familiares_psiquiatricos: {
+      text: "No explorado. La madre refiere tomar lorazepam y sertralina; este dato corresponde a la madre y no establece antecedentes psiquiátricos familiares.",
+      evidence_status: "insufficient",
+      source_ids: ["m"],
+    },
+    plan_terapeutico: {
+      text: "Se propone sertralina 50 mg por la mañana; Rivotril, identificado por el psiquiatra como clonazepam, 0,5 mg de rescate; y mirtazapina 15 mg antes de dormir.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "MADRE: Yo tomo lorazepam y sertralina.\nPSIQUIATRA: Para la paciente indico sertralina 50 mg por la mañana, clonazepam 0,5 mg de rescate y mirtazapina 15 mg antes de dormir.",
+  );
+
+  const familyHistory = result.assessment.sections.antecedentes_familiares_psiquiatricos;
+  assert.equal(familyHistory.text, "No explorado.");
+  assert.equal(familyHistory.evidence_status, "insufficient");
+  assert.deepEqual(familyHistory.source_ids, []);
+  assert.doesNotMatch(familyHistory.text, /lorazepam|sertralina|corresponde|establece/i);
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "Se propone sertralina 50 mg por la mañana; clonazepam, 0,5 mg de rescate; y mirtazapina 15 mg antes de dormir.",
+  );
+  assert.ok(result.warnings.includes("report_family_self_medication_pruned_from_family_psychiatric_history"));
+  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+});
+
+test("V0.6 informe: conserva un antecedente familiar psiquiátrico explícito aunque incluya medicación", () => {
+  const input = assessment({
+    antecedentes_familiares_psiquiatricos: {
+      text: "La madre refiere diagnóstico de depresión y tratamiento con sertralina.",
+      evidence_status: "supported",
+      source_ids: ["m"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "MADRE: Tengo diagnóstico de depresión y tomo sertralina.",
+  );
+
+  assert.equal(
+    result.assessment.sections.antecedentes_familiares_psiquiatricos.text,
+    "La madre refiere diagnóstico de depresión y tratamiento con sertralina.",
+  );
+  assert.equal(result.assessment.sections.antecedentes_familiares_psiquiatricos.evidence_status, "supported");
+});
+
 test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaje interno", () => {
   const input = assessment({
     enfermedad_actual: {
