@@ -83,6 +83,30 @@ CLINICAL_ROLE_LABELS = {
     "NIE",
 }
 
+CLINICAL_NON_ENTITIES = {
+    "ACUDE",
+    "COMENTA",
+    "CONTINÚA",
+    "CONTINUA",
+    "DUERME",
+    "DUERMO",
+    "ESTÁ",
+    "ESTA",
+    "EXPLICA",
+    "INDICA",
+    "LLEVA",
+    "LLEVO",
+    "MANTIENE",
+    "MANIFIESTA",
+    "NIEGA",
+    "PRESENTA",
+    "REFIERE",
+    "SEÑALA",
+    "SENALA",
+    "TIENE",
+    "TOMA",
+}
+
 ABSOLUTE_DATE_RE = re.compile(
     r"(?:\b\d{1,2}[/-]\d{1,2}[/-](?:\d{2}|\d{4})\b|"
     r"\b\d{4}-\d{2}-\d{2}\b|"
@@ -140,6 +164,16 @@ def _custom_recognizers():
                 ),
             ],
             context=["teléfono", "telefono", "tel", "móvil", "movil", "llamar", "contacto"],
+        ),
+        PatternRecognizer(
+            supported_entity="EMAIL_ADDRESS",
+            supported_language=LANGUAGE,
+            patterns=[Pattern(
+                name="correo_electronico_global",
+                regex=r"\b[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\b",
+                score=0.95,
+            )],
+            context=["correo", "email", "e-mail", "contacto"],
         ),
         PatternRecognizer(
             supported_entity="PERSON",
@@ -244,7 +278,7 @@ def _keep_result(text, result):
     detected = text[result.start:result.end]
     if result.entity_type in {"PERSON", "LOCATION", "ORGANIZATION"}:
         normalized = detected.strip(" .,:;-").upper()
-        if normalized in CLINICAL_ROLE_LABELS:
+        if normalized in CLINICAL_ROLE_LABELS or normalized in CLINICAL_NON_ENTITIES:
             return False
         # El NER español puede etiquetar síntomas aislados en minúscula como PERSON.
         # La segunda barrera de nombres revisa después los nombres no capitalizados.
