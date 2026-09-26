@@ -48,6 +48,7 @@ const FORMAL_ADDRESS_PATTERN = /\busted\b/i;
 const MEDICATION_QUESTION_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?|toma(?:r|s)?|tomando)\b/i;
 const HABITUAL_MEDICATION_QUESTION_PATTERN = /\b(?:(?:que|qué)\s+(?:tratamiento|medicacion|medicación)\s+(?:tomas?|toma)|(?:tomas?|toma)\s+(?:alguna\s+)?medicacion|tratamiento\s+habitual)\b/i;
 const NO_CURRENT_MEDICATION_PATTERN = /\b(?:no\s+(?:tomo|toma|estoy\s+tomando|esta\s+tomando|está\s+tomando)|ningun[ao]?\s+(?:medicacion|medicación|tratamiento)|sin\s+(?:medicacion|medicación|tratamiento))\b/i;
+const MEDICATION_NOUN_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?)\b/i;
 
 function speakerLines(transcript) {
   return String(transcript || "")
@@ -392,6 +393,69 @@ function syncMedicationSection(assessment, group, sectionKey, statuses) {
   }
 }
 
+function sourceIdsForSpeaker(assessment, speaker) {
+  const kindsBySpeaker = {
+    PACIENTE: ["patient"],
+    MADRE: ["mother"],
+    PADRE: ["father"],
+    FAMILIAR: ["family"],
+    CUIDADOR: ["caregiver"],
+    CUIDADORA: ["caregiver"],
+    "CUIDADOR/A": ["caregiver"],
+    HERMANO: ["family"],
+    HERMANA: ["family"],
+    "HERMANO/A": ["family"],
+  };
+  const allowed = new Set(kindsBySpeaker[speaker] || []);
+  return (assessment.sources || [])
+    .filter((source) => allowed.has(source.kind))
+    .map((source) => source.id);
+}
+
+function restoreExplicitNoHabitualMedication(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  if (!lines.length) return;
+
+  const planAnchor = lines.find((line) =>
+    line.speaker === "PSIQUIATRA" && CURRENT_PLAN_ANCHOR_PATTERN.test(normalize(line.text))
+  );
+  const planAnchorIndex = planAnchor?.index ?? Number.POSITIVE_INFINITY;
+  const denial = lines.find((line) => {
+    if (line.index >= planAnchorIndex) return false;
+    const text = normalize(line.text);
+    if (!NO_CURRENT_MEDICATION_PATTERN.test(text)) return false;
+
+    const previous = previousSpeakerLine(lines, line);
+    const hasMedicationContext = MEDICATION_NOUN_PATTERN.test(text)
+      || (previous?.speaker === "PSIQUIATRA"
+        && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text)));
+    if (!hasMedicationContext || isFamilySelfMedicationLine(lines, line)) return false;
+
+    if (line.speaker === "PACIENTE") return true;
+    return FAMILY_SPEAKER_LABELS.has(line.speaker)
+      && COLLATERAL_PATIENT_MEDICATION_PATTERN.test(text);
+  });
+
+  if (!denial) return;
+  const hasActiveHabitual = (assessment.medications?.habitual || [])
+    .some((med) => med?.status === "active");
+  if (hasActiveHabitual) return;
+
+  const section = assessment.sections?.tratamiento_habitual;
+  if (!section) return;
+  section.text = "No toma medicación habitual.";
+  section.evidence_status = "supported";
+  section.source_ids = sourceIdsForSpeaker(assessment, denial.speaker);
+
+  if (Array.isArray(assessment.missing_or_not_explored)) {
+    assessment.missing_or_not_explored = assessment.missing_or_not_explored.filter((item) => {
+      const topic = normalize(item?.topic);
+      return !/\b(?:tratamiento|medicacion)\s+habitual\b/.test(topic);
+    });
+  }
+  warnings.push("medication_habitual_explicit_none_restored");
+}
+
 const SUBJECTIVE_AGITATION_PATTERN = /\b(?:me\s+siento\s+(?:muy\s+)?agitad[oa]|se\s+siente\s+(?:muy\s+)?agitad[oa]|refiere\s+(?:encontrarse|estar)?\s*(?:muy\s+)?agitad[oa]|manifiesta\s+(?:encontrarse|estar)?\s*(?:muy\s+)?agitad[oa]|(?:estoy|esta|está)\s+(?:muy\s+)?agitad[oa]|nervios[oa]|nerviosismo|agitacion\s+subjetiva)\b/i;
 const OBSERVED_NO_MOTOR_ACTIVATION_PATTERN = /\b(?:sin\s+inquietud\s+motora|no\s+se\s+objetiva\s+inquietud\s+motora|sin\s+agitacion\s+psicomotriz|permanece\s+sentad[oa]|psicomotricidad\s+sin\s+alteraciones)\b/i;
 
@@ -570,6 +634,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
 
   syncMedicationSection(assessment, "habitual", "tratamiento_habitual", ["active"]);
   syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
+  restoreExplicitNoHabitualMedication(assessment, transcript, warnings);
 
   pruneEncounterPresenceFromSociofamily(assessment, warnings);
   pruneMedicationSupervisionFromSociofamily(assessment, warnings);
@@ -607,6 +672,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       medication_new_prescription_temporality_guard: true,
       medication_new_prescription_adherence_guard: true,
       medication_habitual_preexisting_evidence_guard: true,
+      medication_habitual_explicit_none_guard: true,
     },
   };
 }

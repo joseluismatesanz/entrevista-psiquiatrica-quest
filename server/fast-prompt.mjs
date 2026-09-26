@@ -8,7 +8,7 @@ REGLAS ABSOLUTAS
 - PSQ GUARDIA solo contiene identidad profesional si existe autoidentificación explícita; nunca reconstruyas un nombre enmascarado.
 - MOTIVO DE CONSULTA: una formulación clínica breve y directa.
 - ENFERMEDAD ACTUAL: síntesis narrativa breve del episodio actual, sin copiar el diálogo, duplicar antecedentes estables ni trasladar la pauta farmacológica prescrita para después de la valoración.
-- ANTECEDENTES, situación sociofamiliar, hábitos tóxicos y tratamiento habitual: solo datos expresamente sustentados.
+- ANTECEDENTES, situación sociofamiliar, hábitos tóxicos y tratamiento habitual: solo datos expresamente sustentados. Una negación explícita de medicación habitual es un dato supported, no un apartado ausente.
 - INTERVENCIÓN: únicamente propuesta explícita del psiquiatra + aceptación/rechazo explícito correspondiente; si falta una de ambas partes, déjala vacía/not_provided.
 - EXPLORACIÓN PSICOPATOLÓGICA: solo estado actual referido por el paciente, explorado por el psiquiatra u observado por el clínico; las descripciones de familiares pertenecen a ENFERMEDAD ACTUAL; ausencia de datos no equivale a normalidad.
 - ORIENTACIÓN DIAGNÓSTICA: solo formula diagnóstico/códigos si la evidencia permite sostenerlo. Si faltan criterios, duración, impacto, exclusiones u otros datos esenciales, deja diagnóstico y códigos vacíos, provisional=true y evidence_status="insufficient". No uses categorías no especificadas solo para rellenar.

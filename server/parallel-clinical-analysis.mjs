@@ -120,7 +120,7 @@ Devuelve exactamente el esquema solicitado.
 - ANTECEDENTES FAMILIARES PSIQUIÁTRICOS: conserva paciente y familiares/cuidadores como fuentes válidas; no mezcles discrepancias.
 - SITUACIÓN SOCIOFAMILIAR: convivencia, relaciones, apoyos, escolarización/empleo según edad; no conviertas contenido potencialmente delirante sobre identidad/filiación en hecho objetivo.
 - HÁBITOS TÓXICOS: nicotina, alcohol, cannabis y otras sustancias con patrón y discrepancias.
-- TRATAMIENTO HABITUAL: medicación vigente antes de la valoración y adherencia. Una entidad por fármaco; no inventes principio activo, dosis ni pauta. Si un familiar dice "yo tomo X", X es del familiar y no del paciente salvo evidencia explícita independiente de que el paciente también lo toma.
+- TRATAMIENTO HABITUAL: medicación vigente antes de la valoración y adherencia. Una entidad por fármaco; no inventes principio activo, dosis ni pauta. Si el paciente niega explícitamente tomar medicación habitual, conserva la negación como supported, no como not_provided/not_explored. Si un familiar dice "yo tomo X", X es del familiar y no del paciente salvo evidencia explícita independiente de que el paciente también lo toma.
 - missing_or_not_explored: solo ausencias clínicamente relevantes para riesgo, diagnóstico, tratamiento o seguimiento; no lista exhaustiva.
 - conflicts: conserva versiones incompatibles sin elegir una arbitrariamente.
 - Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.
