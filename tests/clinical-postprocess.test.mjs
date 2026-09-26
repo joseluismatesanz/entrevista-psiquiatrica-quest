@@ -417,6 +417,54 @@ test("V0.6 medicación: elimina un habitual activo sin evidencia previa inequív
   ));
 });
 
+test("V0.6 medicación: conserva la negación explícita de tratamiento habitual del Caso 3", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.sections.tratamiento_habitual = {
+    text: "",
+    evidence_status: "not_explored",
+    source_ids: [],
+  };
+  fixture.missing_or_not_explored = [{
+    topic: "Tratamiento habitual",
+    status: "not_explored",
+    note: "No explorado.",
+  }];
+
+  const transcript = [
+    "PSIQUIATRA: ¿Tomas medicación habitual?",
+    "PACIENTE: No tomo ninguna medicación.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.equal(
+    result.assessment.sections.tratamiento_habitual.text,
+    "No toma medicación habitual.",
+  );
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "supported");
+  assert.deepEqual(result.assessment.sections.tratamiento_habitual.source_ids, ["patient"]);
+  assert.deepEqual(result.assessment.missing_or_not_explored, []);
+  assert.ok(result.warnings.includes("medication_habitual_explicit_none_restored"));
+  assert.equal(result.meta.medication_habitual_explicit_none_guard, true);
+});
+
+test("V0.6 medicación: negar alcohol no se interpreta como ausencia de tratamiento habitual", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.sections.tratamiento_habitual = {
+    text: "",
+    evidence_status: "not_provided",
+    source_ids: [],
+  };
+
+  const result = applyClinicalPostprocessing(fixture, "PACIENTE: No tomo alcohol.");
+
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_habitual.evidence_status, "not_provided");
+  assert.doesNotMatch(result.warnings.join("\n"), /explicit_none_restored/);
+});
+
 test("V0.6 medicación: una confirmación posterior a la prescripción no convierte la pauta nueva en habitual", () => {
   const fixture = assessmentFixture();
   const sertralinaHabitual = med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana");

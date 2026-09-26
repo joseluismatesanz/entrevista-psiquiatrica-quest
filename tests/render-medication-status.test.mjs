@@ -112,3 +112,14 @@ test("renderer: no muestra mensajes internos de verificación de CIMA", () => {
   assert.equal(current, "clatipina 15 mg: antes de dormir");
   assert.doesNotMatch(current, /CIMA|correspondencia|no encontrada/i);
 });
+
+test("renderer: conserva la negación explícita cuando no hay medicación habitual estructurada", () => {
+  const input = assessment();
+  input.medications.habitual = [];
+  input.sections.tratamiento_habitual = section("No toma medicación habitual.", "supported");
+
+  const report = renderClinicalReport(input);
+  const habitual = report.split("TRATAMIENTO HABITUAL\n")[1].split("\n\nENFERMEDAD ACTUAL")[0];
+
+  assert.equal(habitual, "No toma medicación habitual.");
+});
