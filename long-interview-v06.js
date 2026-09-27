@@ -134,7 +134,7 @@
       detail.textContent = 'Procesando últimos bloques';
     } else {
       label.textContent = 'Iniciar entrevista';
-      detail.textContent = 'Máx. 30 min · bloques de 20 s';
+            detail.textContent = 'Hasta 30 min';
     }
   }
 
