@@ -70,7 +70,7 @@ test("organización: assets y llamada a borrador siguen conectados en versiones 
   assert.match(indexHtml, /organization-v055\.css/);
   assert.match(indexHtml, /organization-v055\.js/);
   assert.match(indexHtml, /Generar borrador de informe/);
-  assert.match(indexHtml, /PROTOTIPO CLÍNICO · V0\.(?:5\.[5-9]|6)/);
+  assert.match(indexHtml, /ASISTENTE CLÍNICO/);
   assert.match(organizationCss, /organization-attention/);
 });
 

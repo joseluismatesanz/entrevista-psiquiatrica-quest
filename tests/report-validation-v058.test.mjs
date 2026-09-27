@@ -74,9 +74,11 @@ test("V0.5.6 correo: entrega el mailto y destruye inmediatamente el estado clín
   assert.match(validationJs, /window\.location\.replace/);
 });
 
-test("V0.5.6 privacidad: la interfaz informa de Presidio y la verificación adicional", () => {
-  assert.match(indexHtml, /identificadores personales desidentificados con Microsoft Presidio/);
-  assert.match(indexHtml, /nombres verificados adicionalmente/);
+test("privacidad: la portada informa del resultado sin exponer documentación técnica", () => {
+  assert.match(indexHtml, /La información se desidentifica antes de generar el informe/);
+  assert.doesNotMatch(indexHtml, /Microsoft Presidio|nombres verificados adicionalmente/);
+  assert.doesNotMatch(indexHtml, /loadDemo|loadCase1|loadCase2|loadCase3|fixture-loader|fixture-case3/);
+  assert.doesNotMatch(indexHtml, /Ejemplo breve|Caso 1 completo|Caso 2 completo|Caso 3 · 3 fuentes/);
 });
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
