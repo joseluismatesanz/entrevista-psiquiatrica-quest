@@ -308,28 +308,6 @@
     return items;
   }
 
-  const engineBanner = document.createElement('section');
-  engineBanner.className = 'privacy-banner';
-  engineBanner.innerHTML = '<strong>Motor V0.5</strong><span>Comprobando backend… · borrador sujeto a validación clínica.</span>';
-  document.querySelector('.privacy-banner')?.insertAdjacentElement('afterend', engineBanner);
-
-  function updateEngineBanner(result = null) {
-    let status = 'Comprobando backend…';
-    const health = state.health;
-    if (health?.ok && health.model_transport_available !== 'missing') {
-      const audio = health.recording_enabled ? ` · audio ${health.transcription_model || 'activo'}` : '';
-      status = `Backend disponible · ${health.model_transport_available}${audio}`;
-    } else if (health?.ok) {
-      status = 'Backend activo, pero falta transporte de modelo';
-    } else if (health?.error) {
-      status = 'Backend no verificable';
-    }
-    if (result?.meta) {
-      status = `Structured Outputs activo · ${result.meta.model || 'modelo no informado'} · ${result.meta.transport || 'transporte no informado'} · store:false`;
-    }
-    engineBanner.innerHTML = `<strong>Motor V0.5</strong><span>${escapeHtml(status)} · borrador sujeto a validación clínica.</span>`;
-  }
-
   function renderReview(result) {
     const assessment = result.assessment;
     $('routingGrid').innerHTML = Object.entries(SECTION_TITLES)
@@ -362,18 +340,6 @@
     $('reportEditor').textContent = result.report;
     $('validateCheck').checked = false;
     $('copyReport').disabled = true;
-    updateEngineBanner(result);
-  }
-
-  async function checkBackendHealth() {
-    try {
-      const response = await fetch(`${baseUrl}/api/health`, { method: 'GET', cache: 'no-store', headers: { Accept: 'application/json' } });
-      const payload = await response.json().catch(() => ({}));
-      state.health = response.ok ? payload : { error: true };
-    } catch {
-      state.health = { error: true };
-    }
-    updateEngineBanner();
   }
 
   async function analyzeWithBackend() {
@@ -491,5 +457,4 @@
     if ($('reportEditor')) $('reportEditor').textContent = '';
   });
 
-  checkBackendHealth();
 })();

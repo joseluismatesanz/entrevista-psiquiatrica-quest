@@ -550,8 +550,8 @@
   const recorderCard = document.querySelector('.recorder-card');
   const sectionLabel = recorderCard?.querySelector('.section-label');
   const description = recorderCard?.querySelector('.muted');
-  if (sectionLabel) sectionLabel.textContent = 'ENTRADA DESDE MÓVIL · PILOTO V0.6';
-  if (description) description.textContent = 'Entrevista larga de prueba, hasta 30 minutos. El navegador rota bloques de aproximadamente 20 segundos y procesa hasta dos a la vez. Tras cada bloque seguro, la selección de evidencia clínica exacta se adelanta en segundo plano.';
+  if (sectionLabel) sectionLabel.textContent = 'ENTREVISTA CLÍNICA';
+  if (description) description.textContent = 'Graba una entrevista de hasta 30 minutos. La transcripción se organiza progresivamente mientras continúa la entrevista.';
   setButton('idle');
-  if ($('recordingStatus')) $('recordingStatus').textContent = 'Micrófono preparado para entrevista ficticia larga por bloques de 20 s.';
+  if ($('recordingStatus')) $('recordingStatus').textContent = 'Micrófono preparado.';
 })();

@@ -59,7 +59,7 @@ function analyze(){const text=$('caseText').value.trim();if(!text){$('sessionMes
 function wipeTransientState(message='Sesión destruida. No queda contenido clínico en la interfaz.'){$('caseText').value='';$('sourcesList').innerHTML='';$('missingList').innerHTML='';$('conflictList').innerHTML='';$('alertList').innerHTML='';$('routingGrid').innerHTML='';$('reportEditor').textContent='';$('validateCheck').checked=false;$('copyReport').disabled=true;Object.assign(state,{analyzed:false,sections:{},sources:[],missing:[],conflicts:[],alerts:[],report:''});$('sessionMessage').textContent=message;showScreen('input')}
 function showScreen(name){document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));const target=$(`screen-${name}`);if(target)target.classList.add('active');document.querySelectorAll('.step').forEach(el=>el.classList.toggle('active',el.dataset.step===name));if(name==='report'&&state.analyzed)$('reportEditor').textContent=buildReport(state.sections);window.scrollTo({top:0,behavior:'smooth'})}
 
-$('loadDemo').addEventListener('click',()=>{$('caseText').value=demoText;$('sessionMessage').textContent=''});
+$('loadDemo')?.addEventListener('click',()=>{$('caseText').value=demoText;$('sessionMessage').textContent=''});
 $('analyzeCase').addEventListener('click',analyze);
 $('recordButton').addEventListener('click',()=>alert('La captura real de audio permanece bloqueada en V0.3. En esta fase se valida primero la organización clínica del texto.'));
 $('destroyInput').addEventListener('click',()=>wipeTransientState());
