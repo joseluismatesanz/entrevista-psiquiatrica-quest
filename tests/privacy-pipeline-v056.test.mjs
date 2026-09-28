@@ -43,9 +43,10 @@ test("privacidad: cualquier texto sin prueba válida se desidentifica antes del 
   assert.match(analyzeApi, /person_name_redaction_failed/);
 });
 
-test("V0.5.6 privacidad: el cierre usa mailto institucional y destruye el estado local después de entregarlo", () => {
-  assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENT\}/);
-  assert.match(validationJs, /EMAIL_RECIPIENT = 'joseluis\.matesanz@salud-juntaex\.es'/);
-  assert.doesNotMatch(validationJs, /gmail\.com|\/api\/send-report/);
-  assert.match(validationJs, /link\.click\(\);[\s\S]*destroyEphemeralSession\(\)/);
+test("PSQ privacidad: el cierre no envía datos y solo destruye después de copiar y confirmar", () => {
+  assert.doesNotMatch(validationJs, /mailto:|EMAIL_RECIPIENT|gmail\.com|\/api\/send-report/);
+  assert.match(validationJs, /navigator\.clipboard\.writeText\(text\)/);
+  assert.match(validationJs, /!state\.validated \|\| !state\.copied/);
+  assert.match(validationJs, /Confirmar borrado/);
+  assert.match(validationJs, /requestSessionFinalization[\s\S]*destroyEphemeralSession\(\)/);
 });

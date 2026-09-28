@@ -3,45 +3,52 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#173a5e" />
+  <meta name="theme-color" content="#123b79" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Salud Mental" />
-  <title>Salud Mental · Asistente clínico</title>
+  <meta name="apple-mobile-web-app-title" content="PSQ Interview" />
+  <title>PSQ Interview · Asistente clínico</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" type="image/png" sizes="192x192" href="icons/app-icon-192.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/psq-icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/psq-apple-touch-icon.png" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="organization-v055.css" />
   <link rel="stylesheet" href="report-v056.css?v=20260909-4" />
+  <link rel="stylesheet" href="psq-theme.css?v=20260928-1" />
 </head>
 <body>
   <main class="app-shell">
     <header class="brand-header">
       <div class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 120 120" role="img">
-          <path d="M60 104C37 88 22 71 22 49c0-15 10-27 25-27 7 0 12 3 17 9 5-6 11-9 18-9 14 0 25 12 25 27 0 22-17 40-47 55Z" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M48 38c-9 4-13 12-10 20m23-29c-8 4-11 11-8 18m16-12c8 3 12 10 10 18M45 63c5-5 10-5 15 0m0 0c5-5 10-5 15 0M60 44v41" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
-        </svg>
+        <img src="assets/psq-glasses.png" alt="" />
       </div>
       <div class="brand-copy">
         <p class="eyebrow">ASISTENTE CLÍNICO</p>
-        <h1>Salud Mental</h1>
-        <p>Asistente de organización de entrevista psiquiátrica</p>
+        <h1>PSQ Interview</h1>
+        <p>Entrevista psiquiátrica estructurada con revisión profesional</p>
       </div>
       <div class="privacy-chip">● Sesión efímera</div>
     </header>
 
     <section class="privacy-banner">
-      <strong>Privacidad por diseño</strong>
-      <span>La información se desidentifica antes de generar el informe y se elimina de la interfaz al borrar o cerrar la sesión.</span>
+      <strong>Privacidad explicada</strong>
+      <span>El audio se procesa remotamente y no se conserva como grabación. El texto se desidentifica antes del análisis clínico. Durante el piloto, utiliza únicamente casos ficticios o expresamente autorizados.</span>
+    </section>
+
+    <section class="app-status-bar" aria-label="Estado de la aplicación">
+      <div class="connection-status" aria-live="polite">
+        <span id="connectionDot" class="connection-dot" aria-hidden="true"></span>
+        <span id="connectionLabel">Comprobando conexión…</span>
+      </div>
+      <p id="installHint" class="install-hint">PSQ Interview requiere conexión durante la entrevista.</p>
+      <button id="installApp" class="secondary install-button hidden" type="button">Instalar PSQ Interview</button>
     </section>
 
     <nav class="steps" aria-label="Flujo de trabajo">
       <button class="step active" data-step="input">1. Entrevista</button>
-      <button class="step" data-step="review">2. Organización</button>
-      <button class="step" data-step="report">3. Informe</button>
+      <button class="step" data-step="review" disabled aria-disabled="true">2. Revisión</button>
+      <button class="step" data-step="report" disabled aria-disabled="true">3. Informe</button>
     </nav>
 
     <section id="screen-input" class="screen active">
@@ -49,14 +56,14 @@
         <div>
           <p class="section-label">ENTREVISTA CLÍNICA</p>
           <h2>Entrevista clínica por audio</h2>
-          <p class="muted">Graba una entrevista de hasta 30 minutos. La transcripción se organiza progresivamente mientras continúa la entrevista.</p>
+          <p class="muted">Graba una entrevista de hasta 30 minutos. Mantén PSQ Interview abierta y la pantalla encendida durante la captura.</p>
         </div>
         <button id="recordButton" class="record-button" type="button" aria-pressed="false">
           <span class="record-dot"></span>
           <span id="recordButtonLabel">Iniciar entrevista</span>
           <small id="recordButtonStatus">Hasta 30 min</small>
         </button>
-        <p id="recordingStatus" class="muted small recorder-status">Micrófono preparado.</p>
+        <p id="recordingStatus" class="muted small recorder-status" aria-live="polite">Micrófono preparado.</p>
       </div>
 
       <div id="speakerMappingCard" class="card speaker-card hidden">
@@ -81,7 +88,7 @@
           <button id="destroyInput" class="danger secondary-danger" type="button">Borrar sesión</button>
           <button id="analyzeCase" class="primary" type="button">Organizar información clínica</button>
         </div>
-        <p id="sessionMessage" class="muted small"></p>
+        <p id="sessionMessage" class="muted small" aria-live="polite"></p>
       </div>
     </section>
 
@@ -144,20 +151,20 @@
           <button id="backToReview" class="secondary footer-back" data-go="review" aria-label="Volver a categorización" title="Volver a categorización">←</button>
           <button id="copyReport" class="primary" disabled>Copiar</button>
         </div>
-        <p class="muted small">El borrador no debe exportarse sin revisión profesional.</p>
+        <p class="muted small" aria-live="polite">El borrador no debe exportarse sin revisión profesional.</p>
       </div>
     </section>
   </main>
   <script src="config.js?v=20260912-long-6"></script>
   <script src="semantic-role-ui.js?v=20260911-long-2"></script>
   <script src="loader.js?v=20260911-long-2"></script>
-  <script src="long-interview-v06.js?v=20260919-evidence-sync-1"></script>
+  <script src="long-interview-v06.js?v=20260928-psq-45s-1"></script>
   <script src="long-interview-silent-block-v062.js?v=20260912-1"></script>
   <script src="long-interview-prefetch-gate-v061.js?v=20260919-evidence-sync-1"></script>
-  <script src="long-interview-context-v06.js?v=20260911-20s-2"></script>
+  <script src="long-interview-context-v06.js?v=20260928-45s-1"></script>
   <script src="organization-v055.js"></script>
   <script src="report-v056.js?v=20260909-3"></script>
-  <script src="report-validation-v058.js?v=20260909-10"></script>
-  <script src="pwa.js?v=20260927-1"></script>
+  <script src="report-validation-v058.js?v=20260928-1"></script>
+  <script src="pwa.js?v=20260928-1"></script>
 </body>
 </html>

@@ -1,65 +1,62 @@
-# Entrevista Psiquiátrica Quest
+# PSQ Interview
 
-Prototipo mobile-first para transformar entrevistas psiquiátricas en un borrador clínico estructurado con revisión profesional obligatoria.
+Aplicación web móvil para capturar una entrevista psiquiátrica, desidentificarla, separar las fuentes de información y preparar un borrador clínico sujeto a revisión profesional.
 
-## Estado actual — V0.4
+Este repositorio es independiente del proyecto cerrado **Salud Mental**.
 
-La rama de trabajo incorpora dos capas:
+## Flujo clínico
 
-1. **Frontend local determinista**, usado para validar organización, estilo clínico y UX.
-2. **Backend V0.4 text-only** con OpenAI Responses API + Structured Outputs, todavía sin despliegue productivo.
+1. **Entrevista:** grabación de hasta 30 minutos o pegado manual de texto.
+2. **Revisión:** categorización, fuentes, datos no explorados, discrepancias y alertas.
+3. **Informe:** edición por apartados, validación profesional, copia y borrado local confirmado.
 
-No hay grabación real en esta fase.
+La aplicación nunca debe convertir una ausencia de información en un hallazgo negativo ni atribuir a la paciente información aportada por un familiar.
 
-## Plantilla clínica
+## Privacidad y seguridad
 
-1. MOTIVO DE LA CONSULTA
-2. PSQ GUARDIA
-3. ALERGIAS / RAM
-4. ANTECEDENTES PERSONALES SOMÁTICOS
-5. ANTECEDENTES PERSONALES EN SALUD MENTAL
-6. ANTECEDENTES FAMILIARES PSIQUIÁTRICOS
-7. SITUACIÓN SOCIOFAMILIAR
-8. HÁBITOS TÓXICOS
-9. TRATAMIENTO HABITUAL
-10. ENFERMEDAD ACTUAL
-11. INTERVENCIÓN
-12. EXPLORACIÓN PSICOPATOLÓGICA
-13. ORIENTACIÓN DIAGNÓSTICA
-14. PLAN TERAPÉUTICO
-15. TRATAMIENTO ACTUAL
+- El audio se procesa por bloques y no se persiste como grabación en el navegador.
+- El texto se desidentifica antes del análisis clínico y conserva pruebas firmadas de privacidad.
+- Las rutas de privacidad fallan de forma cerrada si no pueden verificar la desidentificación.
+- No se usa `localStorage`, `sessionStorage` ni IndexedDB para contenido clínico.
+- El informe no se envía desde la aplicación ni contiene un destinatario incrustado.
+- Para finalizar, el profesional debe validar, copiar el informe y confirmar dos veces el borrado local.
+- Durante el piloto solo deben utilizarse casos ficticios o expresamente autorizados.
 
-La regla de redacción y routing vinculante está en `docs/CLINICAL_ROUTING_V0.4.md`.
+El despliegue institucional debe añadir control de acceso, política de retención, evaluación de impacto y acuerdos de tratamiento aplicables antes de usar datos identificables reales.
 
-## Backend V0.4
+## Uso móvil
 
-Flujo:
+PSQ Interview es instalable como PWA en Android y iPhone. La grabación:
 
-`texto -> Structured Outputs -> invariantes deterministas -> renderer por secciones -> borrador -> validación médica`
+- empieza al pulsar el botón una vez concedido el permiso del navegador;
+- mantiene la pantalla activa cuando el dispositivo lo permite;
+- procesa bloques de 45 segundos con reintentos y tiempo máximo por petición;
+- avisa si se pierde la conexión y evita iniciar una entrevista sin red;
+- descarta el audio al finalizar.
 
-Desarrollo local:
+El permiso del micrófono lo controla el sistema operativo y no puede omitirse la primera vez. Después de elegir **Permitir**, el navegador normalmente recuerda la decisión para ese sitio.
+
+## Desarrollo
+
+Requisitos: Node.js 22 o posterior y Python 3.
 
 ```bash
 cp .env.example .env
 npm install
 npm test
+npm run check
 npm run start:api
 ```
 
-Endpoint: `POST /api/analyze`.
+La clave de OpenAI, el secreto de las pruebas de privacidad y cualquier credencial permanecen siempre en variables de entorno del servidor.
 
-La API key nunca debe ir al navegador ni al repositorio. Ver `docs/OPENAI_BACKEND_V0.4.md`.
+## Publicación
 
-## Privacidad
+PSQ Interview debe publicarse como un proyecto y dominio independientes. Antes de promoverlo a producción:
 
-- repositorio público: solo fixtures ficticios;
-- sin API keys;
-- sin persistencia deliberada de entrevistas;
-- `store:false` en Responses API;
-- sin audio real;
-- sin localStorage/IndexedDB para contenido clínico;
-- borrador siempre sujeto a validación médica.
+1. ejecutar `npm test` y `npm run check`;
+2. verificar el flujo completo en Preview desde Android e iPhone;
+3. revisar permisos, variables y protección de acceso;
+4. realizar la promoción explícita del despliegue verificado.
 
-`store:false` no equivale por sí solo a Zero Data Retention. El uso con información identificable requiere controles institucionales de privacidad, seguridad y retención.
-
-**No usar con datos identificables de pacientes en esta fase.**
+No es un producto sanitario autónomo: el resultado es siempre un borrador y requiere revisión clínica profesional.

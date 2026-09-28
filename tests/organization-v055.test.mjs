@@ -75,7 +75,7 @@ test("organización: assets y llamada a borrador siguen conectados en versiones 
 });
 
 test("organización: health mantiene las capacidades en versiones posteriores", () => {
-  assert.match(healthApi, /version: "0\.(?:5\.[5-9]|6\.0)"/);
+  assert.match(healthApi, /version: "1\.0\.0"/);
   assert.match(healthApi, /organization_status_labels_enabled: true/);
   assert.match(healthApi, /organization_attention_summary_enabled: true/);
 });

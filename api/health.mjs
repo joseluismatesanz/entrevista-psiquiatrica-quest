@@ -57,13 +57,13 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
-    version: "0.6.0",
+    version: "1.0.0",
     mode: "long_interview_blocks",
     recording_enabled: true,
     transcription_enabled: true,
     transcription_model: AUDIO_TRANSCRIPTION_MODEL,
     max_audio_seconds: 1800,
-    audio_block_seconds: 20,
+    audio_block_seconds: 45,
     max_concurrent_audio_blocks: 2,
     incremental_audio_processing: true,
     incremental_clinical_evidence: true,

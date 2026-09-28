@@ -9,7 +9,7 @@ const [indexHtml, validationJs, packageJson] = await Promise.all([
 ]);
 
 test("V0.5.6 informe: la validación tiene una consecuencia real sobre la edición", () => {
-  assert.match(validationJs, /state = \{ validated: false \}/);
+  assert.match(validationJs, /validated: false/);
   assert.match(validationJs, /function setEditLocked/);
   assert.match(validationJs, /setEditLocked\(true\)/);
   assert.match(validationJs, /setEditLocked\(false\)/);
@@ -21,11 +21,10 @@ test("V0.5.6 informe: no puede validarse mientras una sección está abierta", (
   assert.match(validationJs, /validate\.disabled = isEditing\(\) \|\| state\.validated/);
 });
 
-test("V0.5.6 informe: copiar y envío-destrucción permanecen bloqueados hasta validar", () => {
+test("PSQ informe: copiar queda bloqueado hasta validar y finalizar hasta copiar", () => {
   assert.match(validationJs, /copy\.disabled = true/);
   assert.match(validationJs, /copy\.disabled = false/);
-  assert.match(validationJs, /email\.disabled = true/);
-  assert.match(validationJs, /email\.disabled = false/);
+  assert.match(validationJs, /finalize\.disabled = !state\.validated \|\| !state\.copied/);
   assert.match(validationJs, /check\.checked = true/);
   assert.match(validationJs, /check\.checked = false/);
 });
@@ -41,32 +40,30 @@ test("V0.5.6 informe: navegar fuera de un informe validado invalida su validaci�
   assert.match(validationJs, /setUnvalidated\('Has salido del informe validado/);
 });
 
-test("V0.5.6 informe: el correo usa el texto clínico validado y solo el destino institucional", () => {
-  assert.match(validationJs, /EMAIL_RECIPIENT/);
-  assert.match(validationJs, /joseluis\.matesanz@salud-juntaex\.es/);
-  assert.doesNotMatch(validationJs, /gmail\.com/);
+test("PSQ informe: la copia usa solo el texto clínico validado y no contiene destinatarios", () => {
   assert.match(validationJs, /getValidatedReportText/);
-  assert.match(validationJs, /mailto:/);
-  assert.doesNotMatch(validationJs, /\/api\/send-report/);
+  assert.match(validationJs, /navigator\.clipboard\.writeText\(text\)/);
+  assert.doesNotMatch(validationJs, /mailto:|EMAIL_RECIPIENT|@salud-juntaex\.es|gmail\.com|\/api\/send-report/);
 });
 
-test("V0.5.6 informe: Envío/Destruir entrega el correo al sistema y limpia la sesión local", () => {
-  assert.match(validationJs, /function sendAndDestroy/);
-  assert.match(validationJs, /link\.click\(\)/);
+test("PSQ informe: el cierre requiere una segunda pulsación y limpia la sesión local", () => {
+  assert.match(validationJs, /function requestSessionFinalization/);
+  assert.match(validationJs, /state\.pendingDestroy = true/);
+  assert.match(validationJs, /Confirmar borrado/);
   assert.match(validationJs, /destroyEphemeralSession\(\)/);
   assert.match(validationJs, /window\.location\.replace/);
 });
 
-test("V0.5.6 informe: el pie validado se reduce a flecha, re-edición, copia y envío-destrucción", () => {
+test("PSQ informe: el pie validado se reduce a flecha, re-edición, copia y cierre", () => {
   assert.match(indexHtml, />←<\/button>/);
   assert.match(validationJs, /Re-editar/);
   assert.match(indexHtml, />Copiar<\/button>/);
-  assert.match(validationJs, /@ Envío\/Destruir/);
+  assert.match(validationJs, /Finalizar y borrar/);
 });
 
 test("V0.5.6 informe: el navegador fuerza la carga de la nueva capa de validación y chequea desidentificación", () => {
   assert.match(indexHtml, /report-v056\.js\?v=20260909-3/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-10/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260928-1/);
   assert.match(packageJson, /node --check server\/person-name-redaction\.mjs/);
   assert.doesNotMatch(packageJson, /node --check api\/send-report\.mjs/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);

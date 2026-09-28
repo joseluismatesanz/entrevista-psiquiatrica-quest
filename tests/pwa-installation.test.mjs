@@ -8,9 +8,9 @@ const [index, manifestText, pwa, worker, vercel, icon192, icon512, appleIcon] = 
   readFile(new URL('../pwa.js', import.meta.url), 'utf8'),
   readFile(new URL('../service-worker.js', import.meta.url), 'utf8'),
   readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
-  readFile(new URL('../icons/app-icon-192.png', import.meta.url)),
-  readFile(new URL('../icons/app-icon-512.png', import.meta.url)),
-  readFile(new URL('../icons/apple-touch-icon.png', import.meta.url)),
+  readFile(new URL('../icons/psq-icon-192.png', import.meta.url)),
+  readFile(new URL('../icons/psq-icon-512.png', import.meta.url)),
+  readFile(new URL('../icons/psq-apple-touch-icon.png', import.meta.url)),
 ]);
 
 const manifest = JSON.parse(manifestText);
@@ -20,6 +20,8 @@ test('PWA: la portada declara instalación móvil y modo aplicación', () => {
   assert.match(index, /rel="apple-touch-icon"/);
   assert.match(index, /apple-mobile-web-app-capable" content="yes"/);
   assert.match(index, /src="pwa\.js\?v=/);
+  assert.match(index, /id="installApp"/);
+  assert.equal(manifest.short_name, 'PSQ Interview');
   assert.equal(manifest.display, 'standalone');
   assert.equal(manifest.start_url, '/');
   assert.ok(manifest.icons.some((icon) => icon.sizes === '192x192'));
@@ -31,6 +33,11 @@ test('PWA: la portada declara instalación móvil y modo aplicación', () => {
 
 test('PWA: registra el service worker sin persistir entrevistas ni llamadas clínicas', () => {
   assert.match(pwa, /serviceWorker\.register\('\/service-worker\.js'/);
+  assert.match(pwa, /beforeinstallprompt/);
+  assert.match(pwa, /Compartir → Añadir a pantalla de inicio/);
+  assert.match(pwa, /navigator\.onLine/);
+  assert.match(worker, /psq-interview-static-v1/);
+  assert.match(worker, /psq-icon-512\.png/);
   assert.match(worker, /request\.method !== 'GET'/);
   assert.match(worker, /url\.pathname\.startsWith\('\/api\/'\)/);
   assert.match(worker, /request\.mode === 'navigate'/);

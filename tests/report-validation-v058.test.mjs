@@ -15,21 +15,22 @@ test("V0.5.6 validación: se sustituye la casilla visible por un botón explíci
   assert.match(validationJs, /classList\.add\('hidden'\)/);
 });
 
-test("V0.5.6 validación: validar bloquea la edición y habilita copia y acción final", () => {
+test("PSQ validación: validar bloquea la edición y habilita la copia", () => {
   assert.match(validationJs, /function validateReport/);
   assert.match(validationJs, /state\.validated = true/);
   assert.match(validationJs, /copy\.disabled = false/);
-  assert.match(validationJs, /email\.disabled = false/);
+  assert.match(validationJs, /copy\.disabled = false/);
+  assert.match(validationJs, /finalize\.disabled = !state\.validated \|\| !state\.copied/);
   assert.match(validationJs, /setEditLocked\(true\)/);
   assert.match(validationJs, /Informe validado · edición bloqueada/);
 });
 
-test("V0.5.6 pie móvil: queda reducido a flecha, re-edición, copia y envío-destrucción", () => {
+test("PSQ pie móvil: queda reducido a flecha, re-edición, copia y cierre seguro", () => {
   assert.match(indexHtml, /id="backToReview"[^>]*>←<\/button>/);
   assert.match(indexHtml, /id="copyReport"[^>]*>Copiar<\/button>/);
   assert.doesNotMatch(indexHtml, /id="destroySession"/);
   assert.match(validationJs, /reopen\.textContent = 'Re-editar'/);
-  assert.match(validationJs, /email\.textContent = '@ Envío\/Destruir'/);
+  assert.match(validationJs, /finalize\.textContent = 'Finalizar y borrar'/);
   assert.doesNotMatch(validationJs, /Descargar TXT|downloadReportTxt|downloadValidatedTxt/);
   assert.match(reportCss, /\.validation-card \.footer-back/);
   assert.match(reportCss, /@media\(max-width:720px\)/);
@@ -57,25 +58,25 @@ test("V0.5.6 validación: salir del informe validado invalida la validación ant
   assert.match(validationJs, /\}, true\);/);
 });
 
-test("V0.5.6 correo: usa solo la cuenta institucional mediante mailto y no llama a backend de correo", () => {
-  assert.match(validationJs, /EMAIL_RECIPIENT = 'joseluis\.matesanz@salud-juntaex\.es'/);
-  assert.doesNotMatch(validationJs, /jlmatesanzperez@gmail\.com/);
-  assert.match(validationJs, /function sendAndDestroy/);
-  assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENT\}/);
-  assert.match(validationJs, /link\.click\(\)/);
-  assert.doesNotMatch(validationJs, /\/api\/send-report|RESEND_API_KEY/);
+test("PSQ exportación: no incrusta destinos ni envía el informe desde la aplicación", () => {
+  assert.doesNotMatch(validationJs, /EMAIL_RECIPIENT|mailto:|link\.click\(\)/);
+  assert.match(validationJs, /function copyValidatedReport/);
+  assert.match(validationJs, /navigator\.clipboard\.writeText\(text\)/);
+  assert.doesNotMatch(validationJs, /\/api\/send-report|RESEND_API_KEY|@salud-juntaex\.es|gmail\.com/);
 });
 
-test("V0.5.6 correo: entrega el mailto y destruye inmediatamente el estado clínico local", () => {
+test("PSQ cierre: exige copia y doble confirmación antes de destruir el estado clínico local", () => {
   assert.match(validationJs, /function destroyEphemeralSession/);
-  assert.match(validationJs, /reportEditor\.replaceChildren\(\)/);
+  assert.match(validationJs, /editor\(\)\?\.replaceChildren\(\)/);
   assert.match(validationJs, /field\.value = ''/);
-  assert.match(validationJs, /link\.click\(\);[\s\S]*destroyEphemeralSession\(\)/);
+  assert.match(validationJs, /!state\.validated \|\| !state\.copied/);
+  assert.match(validationJs, /Confirmar borrado/);
+  assert.match(validationJs, /requestSessionFinalization[\s\S]*destroyEphemeralSession\(\)/);
   assert.match(validationJs, /window\.location\.replace/);
 });
 
 test("privacidad: la portada informa del resultado sin exponer documentación técnica", () => {
-  assert.match(indexHtml, /La información se desidentifica antes de generar el informe/);
+  assert.match(indexHtml, /El texto se desidentifica antes del análisis clínico/);
   assert.doesNotMatch(indexHtml, /Microsoft Presidio|nombres verificados adicionalmente/);
   assert.doesNotMatch(indexHtml, /loadDemo|loadCase1|loadCase2|loadCase3|fixture-loader|fixture-case3/);
   assert.doesNotMatch(indexHtml, /Ejemplo breve|Caso 1 completo|Caso 2 completo|Caso 3 · 3 fuentes/);
@@ -83,6 +84,6 @@ test("privacidad: la portada informa del resultado sin exponer documentación t�
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
   assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-10/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20260928-1/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });

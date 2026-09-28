@@ -188,7 +188,7 @@ test("V0.6: filtro clínico conserva determinísticamente medicación y síntoma
   assert.match(result.clinical_transcript, /sertralina 50 mg/);
 });
 
-test("V0.6: arquitectura larga usa bloques de 20 s, concurrencia acotada y acelerador clínico firmado", async () => {
+test("PSQ Interview: arquitectura larga usa bloques de 45 s, concurrencia acotada y acelerador clínico firmado", async () => {
   const [longController, contextBridge, index, loader, vercel, health, pkg, analyzeApi, clinicalAnalyze] = await Promise.all([
     readFile(new URL("../long-interview-v06.js", import.meta.url), "utf8"),
     readFile(new URL("../long-interview-context-v06.js", import.meta.url), "utf8"),
@@ -201,7 +201,12 @@ test("V0.6: arquitectura larga usa bloques de 20 s, concurrencia acotada y acele
     readFile(new URL("../server/analyze.mjs", import.meta.url), "utf8"),
   ]);
 
-  assert.match(longController, /BLOCK_SECONDS = 20/);
+  assert.match(longController, /BLOCK_SECONDS = 45/);
+  assert.match(longController, /MAX_BLOCK_ATTEMPTS = 3/);
+  assert.match(longController, /fetchWithTimeout/);
+  assert.match(longController, /navigator\.wakeLock\.request\('screen'\)/);
+  assert.match(longController, /window\.addEventListener\('offline'/);
+  assert.match(longController, /if \(!navigator\.onLine\)/);
   assert.match(longController, /MAX_CONCURRENT_BLOCKS = 2/);
   assert.match(longController, /pumpBlockQueue/);
   assert.match(longController, /\/api\/extract-block-evidence/);
@@ -210,7 +215,7 @@ test("V0.6: arquitectura larga usa bloques de 20 s, concurrencia acotada y acele
   assert.match(contextBridge, /safeBlocks\.get\(blockIndex - 1\)/);
   assert.match(index, /Graba una entrevista de hasta 30 minutos/);
   assert.doesNotMatch(index, /bloques de aproximadamente 20 segundos|PILOTO V0\.6/);
-  assert.match(index, /20260911-20s-2/);
+  assert.match(index, /20260928-45s-1/);
   assert.match(loader, /transcribe\(\?:-block\)\?/);
   assert.match(vercel, /api\/extract-block-evidence\.mjs/);
   assert.match(health, /long_interview_blocks/);

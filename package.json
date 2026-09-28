@@ -1,9 +1,9 @@
 {
-  "name": "entrevista-psiquiatrica-quest",
-  "version": "0.6.0",
+  "name": "psq-interview",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Prototipo móvil con entrevista larga por bloques efímeros, transcripción diarizada, desidentificación de nombres, atribución semántica conservadora, verificación farmacológica CIMA y documentación psiquiátrica estructurada con revisión clínica obligatoria.",
+  "description": "PSQ Interview: asistente móvil de entrevista psiquiátrica con captura efímera, desidentificación, trazabilidad de fuentes y revisión clínica obligatoria.",
   "scripts": {
     "start:api": "node server/http.mjs",
     "test": "node --test tests/*.test.mjs",

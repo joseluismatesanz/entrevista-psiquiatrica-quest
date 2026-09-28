@@ -1,12 +1,14 @@
-const STATIC_CACHE = 'salud-mental-static-v1';
+const STATIC_CACHE = 'psq-interview-static-v1';
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/styles.css',
   '/organization-v055.css',
   '/report-v056.css?v=20260909-4',
-  '/icons/app-icon-192.png',
-  '/icons/app-icon-512.png',
-  '/icons/apple-touch-icon.png'
+  '/psq-theme.css?v=20260928-1',
+  '/assets/psq-glasses.png',
+  '/icons/psq-icon-192.png',
+  '/icons/psq-icon-512.png',
+  '/icons/psq-apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {

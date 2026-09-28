@@ -2,13 +2,16 @@
   const baseUrl = String(window.CLINICAL_API_URL || '').replace(/\/+$/, '');
   if (!baseUrl || typeof MediaRecorder === 'undefined') return;
 
-  const BLOCK_SECONDS = 20;
+  const BLOCK_SECONDS = 45;
   const MAX_SESSION_SECONDS = 30 * 60;
   const MAX_CONCURRENT_BLOCKS = 2;
   const MAX_BUFFERED_BLOCKS = 8;
   const EVIDENCE_WAIT_MS = 3500;
   const MAX_BLOCK_BYTES = 3_000_000;
   const MIN_BLOCK_BYTES = 1200;
+  const REQUEST_TIMEOUT_MS = 65_000;
+  const MAX_BLOCK_ATTEMPTS = 3;
+  const RETRY_BASE_MS = 900;
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -37,7 +40,46 @@
     analysisPrefetchStarted: false,
     finalizationStartedAt: 0,
     peakPendingBlocks: 0,
+    wakeLock: null,
+    requestControllers: new Set(),
   };
+
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function fetchWithTimeout(url, init = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    state.requestControllers.add(controller);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+      state.requestControllers.delete(controller);
+    }
+  }
+
+  function abortPendingRequests() {
+    for (const controller of state.requestControllers) controller.abort();
+    state.requestControllers.clear();
+  }
+
+  async function requestWakeLock() {
+    if (!state.active || document.visibilityState !== 'visible' || !navigator.wakeLock?.request) return;
+    try {
+      state.wakeLock = await navigator.wakeLock.request('screen');
+      state.wakeLock.addEventListener?.('release', () => { state.wakeLock = null; }, { once: true });
+    } catch {
+      state.wakeLock = null;
+    }
+  }
+
+  function releaseWakeLock() {
+    const lock = state.wakeLock;
+    state.wakeLock = null;
+    lock?.release?.().catch?.(() => {});
+  }
 
   function formatClock(seconds) {
     const safe = Math.max(0, Math.floor(seconds));
@@ -91,10 +133,14 @@
   }
 
   function resetState({ keepText = false } = {}) {
+    // Desactivar primero evita que el evento "ended" de la pista interprete un
+    // cierre intencionado como una interrupción del micrófono.
+    state.active = false;
     clearTimers();
     stopTracks();
+    releaseWakeLock();
+    abortPendingRequests();
     drainQueuedTasks();
-    state.active = false;
     state.finishing = false;
     state.failed = false;
     state.recorder = null;
@@ -134,23 +180,21 @@
       detail.textContent = 'Procesando últimos bloques';
     } else {
       label.textContent = 'Iniciar entrevista';
-            detail.textContent = 'Hasta 30 min';
+      detail.textContent = 'Hasta 30 min';
     }
   }
 
   function updateRecordingUi() {
     if (!state.active) return;
     const elapsed = (Date.now() - state.startedAt) / 1000;
-    const safe = state.processedBlocks.length;
-    const pending = state.pendingBlocks;
     const detail = $('recordButtonStatus');
     const status = $('recordingStatus');
     if (detail) detail.textContent = `${formatClock(elapsed)} / ${formatClock(MAX_SESSION_SECONDS)}`;
     if (status) {
-      const processing = state.inFlightBlocks;
-      const waiting = Math.max(0, pending - processing);
-      const evidence = state.evidencePending ? ` · ${state.evidencePending} clasificando` : '';
-      status.textContent = `Grabando · ${safe} bloque${safe === 1 ? '' : 's'} seguro${safe === 1 ? '' : 's'} · ${processing} transcribiendo${waiting ? ` · ${waiting} en cola` : ''}${evidence}.`;
+      const delayed = state.pendingBlocks >= Math.max(3, MAX_BUFFERED_BLOCKS - 3);
+      status.textContent = delayed
+        ? 'Grabando · la conexión está procesando con retraso. Mantén la aplicación abierta.'
+        : 'Grabando y protegiendo la transcripción · mantén la aplicación abierta.';
     }
   }
 
@@ -165,27 +209,41 @@
     }
   }
 
-  async function fetchBlock(blob, index, attempt = 1) {
+  async function fetchBlock(blob, index) {
     if (blob.size > MAX_BLOCK_BYTES) throw new Error(`El bloque ${index} supera el tamaño permitido.`);
     const audioBase64 = await blobToBase64(blob);
-    const response = await fetch(`${baseUrl}/api/transcribe-block`, {
-      method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        audio_base64: audioBase64,
-        mime_type: blob.type || state.mimeType || 'audio/webm',
-        long_interview_block: true,
-        block_index: index,
-      }),
+    const body = JSON.stringify({
+      audio_base64: audioBase64,
+      mime_type: blob.type || state.mimeType || 'audio/webm',
+      long_interview_block: true,
+      block_index: index,
     });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if (attempt < 2) return fetchBlock(blob, index, attempt + 1);
-      throw new Error(payload.message || `No se pudo procesar el bloque ${index}.`);
+
+    let lastError = null;
+    for (let attempt = 1; attempt <= MAX_BLOCK_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetchWithTimeout(`${baseUrl}/api/transcribe-block`, {
+          method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok) {
+          if (!String(payload.transcript || '').trim() || !String(payload.privacy_proof || '').trim()) {
+            throw new Error(`El bloque ${index} no devolvió una transcripción privada verificable.`);
+          }
+          return payload;
+        }
+        const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+        lastError = new Error(payload.message || `No se pudo procesar el bloque ${index}.`);
+        if (!retryable || attempt === MAX_BLOCK_ATTEMPTS) throw lastError;
+      } catch (error) {
+        lastError = error?.name === 'AbortError'
+          ? new Error(`El bloque ${index} agotó el tiempo de procesamiento.`)
+          : error;
+        if (attempt === MAX_BLOCK_ATTEMPTS || state.failed || !state.active && !state.finishing) throw lastError;
+      }
+      await wait(RETRY_BASE_MS * attempt);
     }
-    if (!String(payload.transcript || '').trim() || !String(payload.privacy_proof || '').trim()) {
-      throw new Error(`El bloque ${index} no devolvió una transcripción privada verificable.`);
-    }
-    return payload;
+    throw lastError || new Error(`No se pudo procesar el bloque ${index}.`);
   }
 
   function prefixedBlock(payload, index) {
@@ -231,7 +289,7 @@
 
   function startEvidenceExtraction(block) {
     state.evidencePending += 1;
-    const promise = fetch(`${baseUrl}/api/extract-block-evidence`, {
+    const promise = fetchWithTimeout(`${baseUrl}/api/extract-block-evidence`, {
       method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         block_index: block.index,
@@ -262,6 +320,7 @@
     if (state.failed) return;
     state.failed = true;
     drainQueuedTasks();
+    abortPendingRequests();
     console.error('Long-interview block failed without logging clinical content.', error);
     const message = $('sessionMessage');
     if (message) message.textContent = `No se pudo asegurar el bloque ${index}: ${error.message}. La entrevista se detendrá y no se generará ningún documento incompleto.`;
@@ -385,7 +444,7 @@
     const cache = window.__CLINICAL_ANALYSIS_PREFETCH;
     if (!(cache instanceof Map) || !transcript || cache.has(transcript)) return;
     state.analysisPrefetchStarted = true;
-    const pending = fetch(`${baseUrl}/api/analyze`, {
+    const pending = fetchWithTimeout(`${baseUrl}/api/analyze`, {
       method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transcript }),
     }).then(async (response) => ({
@@ -426,7 +485,14 @@
     const totalAudioMs = state.processedBlocks.reduce((sum, block) => sum + Number(block.performance_ms?.total_audio_pipeline || 0), 0);
     const closeMs = state.finalizationStartedAt ? Math.max(0, performance.now() - state.finalizationStartedAt) : 0;
     const status = $('recordingStatus');
-    if (status) status.textContent = `Entrevista cerrada · ${state.processedBlocks.length} bloques desidentificados · audio descartado. Servidor acumulado: ${(totalAudioMs / 1000).toFixed(1)} s durante la entrevista. Cierre tras Finalizar: ${(closeMs / 1000).toFixed(1)} s. Pico de cola: ${state.peakPendingBlocks}. Evidencia clínica preparada: ${state.evidenceByBlock.size}/${state.processedBlocks.length}.`;
+    window.__PSQ_DIAGNOSTICS = {
+      block_count: state.processedBlocks.length,
+      server_audio_ms: totalAudioMs,
+      close_ms: closeMs,
+      peak_queue: state.peakPendingBlocks,
+      evidence_count: state.evidenceByBlock.size,
+    };
+    if (status) status.textContent = 'Entrevista finalizada · audio descartado y transcripción desidentificada preparada para revisión.';
     const message = $('sessionMessage');
     if (message) message.textContent = 'Transcripción larga desidentificada lista. Revisa únicamente las fuentes críticas señaladas antes de organizar.';
   }
@@ -451,6 +517,7 @@
         if (blob) enqueueBlock(blob, index);
       }
       stopTracks();
+      releaseWakeLock();
       await Promise.all(state.taskPromises);
       if (state.failed) {
         invalidateVerifiedBlocks();
@@ -476,13 +543,25 @@
       if ($('recordingStatus')) $('recordingStatus').textContent = 'Este navegador no ofrece acceso al micrófono.';
       return;
     }
-    resetState({ keepText: false });
+    if (!navigator.onLine) {
+      if ($('recordingStatus')) $('recordingStatus').textContent = 'No hay conexión. Conéctate antes de iniciar la entrevista.';
+      return;
+    }
+    const previousText = $('caseText')?.value || '';
+    resetState({ keepText: true });
     try {
       state.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+      for (const track of state.stream.getAudioTracks?.() || []) {
+        track.addEventListener('ended', () => {
+          if (state.active && !state.finishing) markBlockFailure(state.blockIndex + 1, new Error('El micrófono se ha interrumpido.'));
+        }, { once: true });
+      }
       state.mimeType = chooseRecorderMimeType();
       state.active = true;
       state.startedAt = Date.now();
+      if ($('caseText')) $('caseText').value = '';
       setButton('recording');
+      requestWakeLock();
       startBlockRecorder();
       updateRecordingUi();
       state.uiTimer = setInterval(updateRecordingUi, 500);
@@ -490,7 +569,8 @@
       if ($('sessionMessage')) $('sessionMessage').textContent = '';
     } catch (error) {
       console.error('Long-interview microphone start failed without recording data.', error);
-      resetState({ keepText: false });
+      resetState({ keepText: true });
+      if ($('caseText')) $('caseText').value = previousText;
       setButton('idle');
       if ($('recordingStatus')) $('recordingStatus').textContent = 'No se pudo acceder al micrófono. Revisa el permiso del navegador.';
     }
@@ -546,6 +626,20 @@
   });
 
   window.addEventListener('pagehide', () => resetState({ keepText: false }));
+
+  document.addEventListener('visibilitychange', () => {
+    if (!state.active) return;
+    if (document.visibilityState === 'visible') {
+      requestWakeLock();
+      updateRecordingUi();
+    } else if ($('recordingStatus')) {
+      $('recordingStatus').textContent = 'Grabación activa · vuelve a PSQ Interview y mantén la pantalla encendida.';
+    }
+  });
+
+  window.addEventListener('offline', () => {
+    if (state.active && $('recordingStatus')) $('recordingStatus').textContent = 'Conexión perdida · la grabación continúa temporalmente en memoria. Vuelve a conectarte.';
+  });
 
   const recorderCard = document.querySelector('.recorder-card');
   const sectionLabel = recorderCard?.querySelector('.section-label');

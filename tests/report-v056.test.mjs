@@ -50,7 +50,7 @@ test("V0.5.6 informe: assets de pantalla 3 están conectados", () => {
 test("informe: la portada final oculta la versión interna y package/health siguen sincronizados", () => {
   assert.match(indexHtml, /ASISTENTE CLÍNICO/);
   assert.doesNotMatch(indexHtml, /PROTOTIPO CLÍNICO|PILOTO V0\.6/);
-  assert.match(packageJson, /"version": "0\.6\.0"/);
-  assert.match(healthApi, /version: "0\.6\.0"/);
+  assert.match(packageJson, /"version": "1\.0\.0"/);
+  assert.match(healthApi, /version: "1\.0\.0"/);
   assert.match(healthApi, /report_draft_pending_summary_enabled: true/);
 });

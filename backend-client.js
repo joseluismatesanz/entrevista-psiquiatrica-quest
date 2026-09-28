@@ -66,6 +66,13 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function setWorkflowNavigation(available) {
+    document.querySelectorAll('.step[data-step="review"], .step[data-step="report"]').forEach((button) => {
+      button.disabled = !available;
+      button.setAttribute('aria-disabled', available ? 'false' : 'true');
+    });
+  }
+
   function formatClock(seconds) {
     const safe = Math.max(0, Math.floor(seconds));
     return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
@@ -340,6 +347,7 @@
     $('reportEditor').textContent = result.report;
     $('validateCheck').checked = false;
     $('copyReport').disabled = true;
+    setWorkflowNavigation(true);
   }
 
   async function analyzeWithBackend() {
@@ -406,6 +414,7 @@
     $('sessionMessage').textContent = message;
     $('recordingStatus').textContent = 'Micrófono preparado para una prueba ficticia.';
     setRecordButton('idle');
+    setWorkflowNavigation(false);
     showScreen('input');
   }
 
@@ -456,5 +465,7 @@
     state.health = null;
     if ($('reportEditor')) $('reportEditor').textContent = '';
   });
+
+  setWorkflowNavigation(false);
 
 })();

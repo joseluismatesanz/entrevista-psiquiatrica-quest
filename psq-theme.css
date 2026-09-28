@@ -1,0 +1,178 @@
+:root {
+  --navy: #123b79;
+  --blue: #1f66bd;
+  --teal: #2e7d9f;
+  --teal-soft: #e1f1f6;
+  --ice: #eff6ff;
+  --line: #cbd9e8;
+  --muted: #596f7d;
+  --danger: #b63b45;
+  --warn: #98631c;
+  color: #142f4d;
+  background: #edf4fb;
+}
+
+body {
+  background: linear-gradient(180deg, #e8f2fb 0, #f7f9fc 42%, #edf3f8 100%);
+}
+
+.brand-mark {
+  width: 104px;
+  height: 72px;
+  background: linear-gradient(145deg, #e9f3ff, #f9fbff);
+  border-color: #ccdcf0;
+  overflow: hidden;
+}
+
+.brand-mark img {
+  display: block;
+  width: 92px;
+  height: auto;
+}
+
+.privacy-banner {
+  align-items: flex-start;
+  margin-bottom: 10px;
+  background: #eaf3ff;
+  border-color: #cbdcf0;
+  color: #35566f;
+}
+
+.privacy-banner strong {
+  color: #174e8f;
+  white-space: nowrap;
+}
+
+.app-status-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 9px 12px;
+  border: 1px solid #d4e0ec;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #476274;
+  font-size: 0.82rem;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #2f5d70;
+  font-weight: 800;
+}
+
+.connection-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #2d8b68;
+  box-shadow: 0 0 0 3px rgba(45, 139, 104, 0.12);
+}
+
+.connection-dot.offline {
+  background: #b63b45;
+  box-shadow: 0 0 0 3px rgba(182, 59, 69, 0.12);
+}
+
+.install-hint {
+  margin: 0;
+  text-align: center;
+}
+
+.install-button {
+  min-height: 38px;
+  padding: 8px 11px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.step {
+  min-height: 44px;
+  border-color: #d2deea;
+  background: #f8fbff;
+  color: #4f6877;
+}
+
+.step:disabled {
+  cursor: not-allowed;
+  color: #788b96;
+  background: #f2f5f8;
+  box-shadow: none;
+}
+
+.primary,
+.secondary,
+.danger {
+  min-height: 44px;
+}
+
+.report-section-empty p {
+  color: #596d76;
+}
+
+.report-edit-button,
+.report-section-cancel,
+.report-section-save {
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+#finalizeSession:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+#finalizeSession.confirm-destroy {
+  color: #fff;
+  background: #a82432;
+  border-color: #8e1f2b;
+}
+
+@media (max-width: 720px) {
+  .brand-header {
+    gap: 11px;
+  }
+
+  .brand-mark {
+    width: 78px;
+    height: 58px;
+  }
+
+  .brand-mark img {
+    width: 70px;
+  }
+
+  .brand-copy h1 {
+    font-size: 1.48rem;
+  }
+
+  .brand-copy > p:last-child {
+    font-size: 0.82rem;
+  }
+
+  .app-status-bar {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .install-hint {
+    text-align: left;
+  }
+
+  .install-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .steps {
+    background: #edf4f9;
+  }
+
+  textarea {
+    min-height: 320px;
+  }
+}
