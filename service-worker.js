@@ -1,12 +1,14 @@
-const STATIC_CACHE = 'salud-mental-static-v1';
+const STATIC_CACHE = 'salud-mental-static-v2-blue-glasses';
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/styles.css',
   '/organization-v055.css',
   '/report-v056.css?v=20260909-4',
-  '/icons/app-icon-192.png',
-  '/icons/app-icon-512.png',
-  '/icons/apple-touch-icon.png'
+  '/blue-glasses-theme.css?v=20260930-1',
+  '/assets/blue-glasses.png',
+  '/icons/blue-glasses-192.png',
+  '/icons/blue-glasses-512.png',
+  '/icons/blue-glasses-apple-touch.png'
 ];
 
 self.addEventListener('install', (event) => {

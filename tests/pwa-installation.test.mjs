@@ -2,15 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [index, manifestText, pwa, worker, vercel, icon192, icon512, appleIcon] = await Promise.all([
+const [index, manifestText, pwa, worker, vercel, theme, glasses, icon192, icon512, appleIcon] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../manifest.webmanifest', import.meta.url), 'utf8'),
   readFile(new URL('../pwa.js', import.meta.url), 'utf8'),
   readFile(new URL('../service-worker.js', import.meta.url), 'utf8'),
   readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
-  readFile(new URL('../icons/app-icon-192.png', import.meta.url)),
-  readFile(new URL('../icons/app-icon-512.png', import.meta.url)),
-  readFile(new URL('../icons/apple-touch-icon.png', import.meta.url)),
+  readFile(new URL('../blue-glasses-theme.css', import.meta.url), 'utf8'),
+  readFile(new URL('../assets/blue-glasses.png', import.meta.url)),
+  readFile(new URL('../icons/blue-glasses-192.png', import.meta.url)),
+  readFile(new URL('../icons/blue-glasses-512.png', import.meta.url)),
+  readFile(new URL('../icons/blue-glasses-apple-touch.png', import.meta.url)),
 ]);
 
 const manifest = JSON.parse(manifestText);
@@ -27,6 +29,16 @@ test('PWA: la portada declara instalación móvil y modo aplicación', () => {
   for (const icon of [icon192, icon512, appleIcon]) {
     assert.equal(icon.subarray(1, 4).toString(), 'PNG');
   }
+});
+
+test('identidad visual: usa las gafas y una gama azul sin alterar los controles', () => {
+  assert.match(index, /src="assets\/blue-glasses\.png"/);
+  assert.match(index, /href="blue-glasses-theme\.css\?v=/);
+  assert.match(index, /id="recordButton"/);
+  assert.match(theme, /\.record-button\s*\{/);
+  assert.match(theme, /background:\s*linear-gradient\([^;]*#2d7bd0[^;]*#13569c/);
+  assert.doesNotMatch(theme, /#c94040|#ad3030|185,\s*65,\s*65/);
+  assert.equal(glasses.subarray(1, 4).toString(), 'PNG');
 });
 
 test('PWA: registra el service worker sin persistir entrevistas ni llamadas clínicas', () => {
