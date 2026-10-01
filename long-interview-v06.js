@@ -9,6 +9,8 @@
   const EVIDENCE_WAIT_MS = 3500;
   const MAX_BLOCK_BYTES = 3_000_000;
   const MIN_BLOCK_BYTES = 1200;
+  const BLOCK_REQUEST_TIMEOUT_MS = 75_000;
+  const FINALIZATION_TIMEOUT_MS = 180_000;
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -37,6 +39,7 @@
     analysisPrefetchStarted: false,
     finalizationStartedAt: 0,
     peakPendingBlocks: 0,
+    sessionAbortController: null,
   };
 
   function formatClock(seconds) {
@@ -92,6 +95,7 @@
 
   function resetState({ keepText = false } = {}) {
     clearTimers();
+    state.sessionAbortController?.abort(new DOMException('Sesión finalizada.', 'AbortError'));
     stopTracks();
     drainQueuedTasks();
     state.active = false;
@@ -115,6 +119,7 @@
     state.analysisPrefetchStarted = false;
     state.finalizationStartedAt = 0;
     state.peakPendingBlocks = 0;
+    state.sessionAbortController = null;
     invalidateVerifiedBlocks();
     if (!keepText && $('caseText')) $('caseText').value = '';
   }
@@ -134,7 +139,7 @@
       detail.textContent = 'Procesando últimos bloques';
     } else {
       label.textContent = 'Iniciar entrevista';
-            detail.textContent = 'Hasta 30 min';
+      detail.textContent = 'Hasta 30 min';
     }
   }
 
@@ -165,21 +170,39 @@
     }
   }
 
+  function isRetriableStatus(status) {
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  function isRetriableRequestError(error) {
+    return error?.code === 'request_timeout' || error?.name === 'TypeError';
+  }
+
   async function fetchBlock(blob, index, attempt = 1) {
     if (blob.size > MAX_BLOCK_BYTES) throw new Error(`El bloque ${index} supera el tamaño permitido.`);
     const audioBase64 = await blobToBase64(blob);
-    const response = await fetch(`${baseUrl}/api/transcribe-block`, {
-      method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        audio_base64: audioBase64,
-        mime_type: blob.type || state.mimeType || 'audio/webm',
-        long_interview_block: true,
-        block_index: index,
-      }),
-    });
+    let response;
+    try {
+      response = await window.ClinicalRequest.fetchWithDeadline(`${baseUrl}/api/transcribe-block`, {
+        method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audio_base64: audioBase64,
+          mime_type: blob.type || state.mimeType || 'audio/webm',
+          long_interview_block: true,
+          block_index: index,
+        }),
+        signal: state.sessionAbortController?.signal,
+      }, {
+        timeoutMs: BLOCK_REQUEST_TIMEOUT_MS,
+        label: `La transcripción del bloque ${index}`,
+      });
+    } catch (error) {
+      if (attempt < 2 && !state.failed && isRetriableRequestError(error)) return fetchBlock(blob, index, attempt + 1);
+      throw error;
+    }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      if (attempt < 2) return fetchBlock(blob, index, attempt + 1);
+      if (attempt < 2 && isRetriableStatus(response.status)) return fetchBlock(blob, index, attempt + 1);
       throw new Error(payload.message || `No se pudo procesar el bloque ${index}.`);
     }
     if (!String(payload.transcript || '').trim() || !String(payload.privacy_proof || '').trim()) {
@@ -261,6 +284,7 @@
   function markBlockFailure(index, error) {
     if (state.failed) return;
     state.failed = true;
+    state.sessionAbortController?.abort(new DOMException('Procesamiento detenido tras un bloque fallido.', 'AbortError'));
     drainQueuedTasks();
     console.error('Long-interview block failed without logging clinical content.', error);
     const message = $('sessionMessage');
@@ -448,10 +472,14 @@
         state.recorderParts = [];
         const index = ++state.blockIndex;
         const blob = await stopRecorderToBlob(recorder, parts);
-        if (blob) enqueueBlock(blob, index);
+        if (blob && !state.failed) enqueueBlock(blob, index);
       }
       stopTracks();
-      await Promise.all(state.taskPromises);
+      if (state.failed) drainQueuedTasks();
+      await window.ClinicalRequest.waitWithDeadline(Promise.all(state.taskPromises), {
+        timeoutMs: FINALIZATION_TIMEOUT_MS,
+        label: 'El cierre de la entrevista',
+      });
       if (state.failed) {
         invalidateVerifiedBlocks();
         if ($('caseText')) $('caseText').value = '';
@@ -459,7 +487,9 @@
         return;
       }
       publishAggregate();
+      state.sessionAbortController = null;
     } catch (error) {
+      state.sessionAbortController?.abort(error);
       console.error('Long-interview finalization failed without logging clinical content.', error);
       invalidateVerifiedBlocks();
       if ($('caseText')) $('caseText').value = '';
@@ -478,6 +508,7 @@
     }
     resetState({ keepText: false });
     try {
+      state.sessionAbortController = new AbortController();
       state.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
       state.mimeType = chooseRecorderMimeType();
       state.active = true;

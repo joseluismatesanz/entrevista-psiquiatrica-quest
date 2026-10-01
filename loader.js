@@ -24,7 +24,7 @@
   }
 
   const script = document.createElement('script');
-  script.src = backendMode ? 'backend-client.js' : 'app.js';
+  script.src = backendMode ? 'backend-client.js?v=20261001-timeout-1' : 'app.js';
   script.async = false;
   script.dataset.engine = backendMode ? 'structured' : 'local';
   document.body.appendChild(script);

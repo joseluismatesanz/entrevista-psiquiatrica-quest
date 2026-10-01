@@ -5,6 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const MAX_AUDIO_SECONDS = 120;
   const MAX_AUDIO_BYTES = 3_000_000;
+  const TRANSCRIPTION_TIMEOUT_MS = 120_000;
   const state = {
     result: null,
     health: null,
@@ -168,7 +169,7 @@
       }
 
       const audioBase64 = await blobToBase64(blob);
-      const response = await fetch(`${baseUrl}/api/transcribe`, {
+      const response = await window.ClinicalRequest.fetchWithDeadline(`${baseUrl}/api/transcribe`, {
         method: 'POST',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
@@ -176,6 +177,9 @@
           audio_base64: audioBase64,
           mime_type: blob.type || 'audio/webm',
         }),
+      }, {
+        timeoutMs: TRANSCRIPTION_TIMEOUT_MS,
+        label: 'La transcripción',
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || `Error de transcripción (${response.status})`);
