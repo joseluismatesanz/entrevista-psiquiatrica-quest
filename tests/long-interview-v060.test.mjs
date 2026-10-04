@@ -202,7 +202,7 @@ test("V0.6: arquitectura larga usa bloques de 20 s, concurrencia acotada y acele
   ]);
 
   assert.match(longController, /BLOCK_SECONDS = 20/);
-  assert.match(longController, /MAX_CONCURRENT_BLOCKS = 2/);
+  assert.match(longController, /MAX_CONCURRENT_BLOCKS = 3/);
   assert.match(longController, /pumpBlockQueue/);
   assert.match(longController, /\/api\/extract-block-evidence/);
   assert.match(longController, /verified_evidence/);

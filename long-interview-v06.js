@@ -4,19 +4,22 @@
 
   const BLOCK_SECONDS = 20;
   const MAX_SESSION_SECONDS = 30 * 60;
-  const MAX_CONCURRENT_BLOCKS = 2;
-  const MAX_BUFFERED_BLOCKS = 8;
+  const MAX_CONCURRENT_BLOCKS = 3;
+  const MAX_BUFFERED_BLOCKS = 96;
   const EVIDENCE_WAIT_MS = 3500;
   const MAX_BLOCK_BYTES = 3_000_000;
   const MIN_BLOCK_BYTES = 1200;
-  const BLOCK_REQUEST_TIMEOUT_MS = 75_000;
-  const FINALIZATION_TIMEOUT_MS = 180_000;
+  const BLOCK_REQUEST_TIMEOUT_MS = 150_000;
+  const FINALIZATION_TIMEOUT_MS = 300_000;
+  const RECORDER_STOP_TIMEOUT_MS = 6_000;
+  const MAX_BLOCK_ATTEMPTS = 2;
+  const FINAL_RETRY_ATTEMPTS = 2;
+  const RETRY_BASE_DELAY_MS = 1_500;
 
   const $ = (id) => document.getElementById(id);
   const state = {
     active: false,
     finishing: false,
-    failed: false,
     stream: null,
     recorder: null,
     recorderParts: [],
@@ -28,6 +31,8 @@
     inFlightBlocks: 0,
     taskQueue: [],
     taskPromises: [],
+    failedBlocks: new Map(),
+    captureFailures: [],
     evidenceByBlock: new Map(),
     evidencePromises: [],
     evidencePending: 0,
@@ -100,7 +105,6 @@
     drainQueuedTasks();
     state.active = false;
     state.finishing = false;
-    state.failed = false;
     state.recorder = null;
     state.recorderParts = [];
     state.mimeType = '';
@@ -111,6 +115,8 @@
     state.inFlightBlocks = 0;
     state.taskQueue = [];
     state.taskPromises = [];
+    state.failedBlocks = new Map();
+    state.captureFailures = [];
     state.evidenceByBlock = new Map();
     state.evidencePromises = [];
     state.evidencePending = 0;
@@ -154,8 +160,9 @@
     if (status) {
       const processing = state.inFlightBlocks;
       const waiting = Math.max(0, pending - processing);
+      const recovery = state.failedBlocks.size ? ` · ${state.failedBlocks.size} por recuperar` : '';
       const evidence = state.evidencePending ? ` · ${state.evidencePending} clasificando` : '';
-      status.textContent = `Grabando · ${safe} bloque${safe === 1 ? '' : 's'} seguro${safe === 1 ? '' : 's'} · ${processing} transcribiendo${waiting ? ` · ${waiting} en cola` : ''}${evidence}.`;
+      status.textContent = `Grabando · ${safe} bloque${safe === 1 ? '' : 's'} seguro${safe === 1 ? '' : 's'} · ${processing} transcribiendo${waiting ? ` · ${waiting} en cola` : ''}${recovery}${evidence}.`;
     }
   }
 
@@ -178,37 +185,73 @@
     return error?.code === 'request_timeout' || error?.name === 'TypeError';
   }
 
-  async function fetchBlock(blob, index, attempt = 1) {
+  function waitBeforeRetry(attempt) {
+    const delayMs = Math.min(8_000, RETRY_BASE_DELAY_MS * (2 ** Math.max(0, attempt - 1)));
+    return new Promise((resolve, reject) => {
+      const signal = state.sessionAbortController?.signal;
+      if (signal?.aborted) return reject(signal.reason || new DOMException('Solicitud cancelada.', 'AbortError'));
+      let timer = null;
+      const cleanup = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener?.('abort', onAbort);
+      };
+      const onAbort = () => {
+        cleanup();
+        reject(signal.reason || new DOMException('Solicitud cancelada.', 'AbortError'));
+      };
+      timer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, delayMs);
+      signal?.addEventListener?.('abort', onAbort, { once: true });
+    });
+  }
+
+  async function fetchBlock(blob, index, { maxAttempts = MAX_BLOCK_ATTEMPTS } = {}) {
     if (blob.size > MAX_BLOCK_BYTES) throw new Error(`El bloque ${index} supera el tamaño permitido.`);
     const audioBase64 = await blobToBase64(blob);
-    let response;
-    try {
-      response = await window.ClinicalRequest.fetchWithDeadline(`${baseUrl}/api/transcribe-block`, {
-        method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          audio_base64: audioBase64,
-          mime_type: blob.type || state.mimeType || 'audio/webm',
-          long_interview_block: true,
-          block_index: index,
-        }),
-        signal: state.sessionAbortController?.signal,
-      }, {
-        timeoutMs: BLOCK_REQUEST_TIMEOUT_MS,
-        label: `La transcripción del bloque ${index}`,
-      });
-    } catch (error) {
-      if (attempt < 2 && !state.failed && isRetriableRequestError(error)) return fetchBlock(blob, index, attempt + 1);
-      throw error;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let response;
+      try {
+        response = await window.ClinicalRequest.fetchWithDeadline(`${baseUrl}/api/transcribe-block`, {
+          method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audio_base64: audioBase64,
+            mime_type: blob.type || state.mimeType || 'audio/webm',
+            long_interview_block: true,
+            block_index: index,
+          }),
+          signal: state.sessionAbortController?.signal,
+        }, {
+          timeoutMs: BLOCK_REQUEST_TIMEOUT_MS,
+          label: `La transcripción del bloque ${index}`,
+        });
+      } catch (error) {
+        lastError = error;
+        if (attempt >= maxAttempts || !isRetriableRequestError(error)) throw error;
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        lastError = new Error(payload.message || `No se pudo procesar el bloque ${index}.`);
+        if (attempt >= maxAttempts || !isRetriableStatus(response.status)) throw lastError;
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+      if (!String(payload.transcript || '').trim() || !String(payload.privacy_proof || '').trim()) {
+        lastError = new Error(`El bloque ${index} no devolvió una transcripción privada verificable.`);
+        if (attempt >= maxAttempts) throw lastError;
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+      return payload;
     }
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if (attempt < 2 && isRetriableStatus(response.status)) return fetchBlock(blob, index, attempt + 1);
-      throw new Error(payload.message || `No se pudo procesar el bloque ${index}.`);
-    }
-    if (!String(payload.transcript || '').trim() || !String(payload.privacy_proof || '').trim()) {
-      throw new Error(`El bloque ${index} no devolvió una transcripción privada verificable.`);
-    }
-    return payload;
+
+    throw lastError || new Error(`No se pudo procesar el bloque ${index}.`);
   }
 
   function prefixedBlock(payload, index) {
@@ -281,33 +324,40 @@
     return promise;
   }
 
-  function markBlockFailure(index, error) {
-    if (state.failed) return;
-    state.failed = true;
-    state.sessionAbortController?.abort(new DOMException('Procesamiento detenido tras un bloque fallido.', 'AbortError'));
-    drainQueuedTasks();
-    console.error('Long-interview block failed without logging clinical content.', error);
+  function storeProcessedBlock(payload, index) {
+    if (state.processedBlocks.some((block) => block.index === index)) return;
+    const block = prefixedBlock(payload, index);
+    state.processedBlocks.push(block);
+    state.processedBlocks.sort((a, b) => a.index - b.index);
+    state.failedBlocks.delete(index);
+    startEvidenceExtraction(block);
+  }
+
+  function rememberBlockFailure(blob, index, error) {
+    state.failedBlocks.set(index, { blob, index, error });
+    console.warn('Long-interview block retained in volatile memory for retry without logging clinical content.', {
+      blockIndex: index,
+      errorName: error?.name || 'Error',
+    });
     const message = $('sessionMessage');
-    if (message) message.textContent = `No se pudo asegurar el bloque ${index}: ${error.message}. La entrevista se detendrá y no se generará ningún documento incompleto.`;
-    if (state.active) setTimeout(() => finishLongRecording(), 0);
+    if (message && state.active) {
+      message.textContent = 'La grabación continúa. Hay un bloque pendiente que se volverá a intentar antes de cerrar la entrevista.';
+    }
   }
 
   function pumpBlockQueue() {
-    while (!state.failed && state.inFlightBlocks < MAX_CONCURRENT_BLOCKS && state.taskQueue.length) {
+    while (state.inFlightBlocks < MAX_CONCURRENT_BLOCKS && state.taskQueue.length) {
       const task = state.taskQueue.shift();
       state.inFlightBlocks += 1;
       updateRecordingUi();
       (async () => {
         try {
           const payload = await fetchBlock(task.blob, task.index);
-          const block = prefixedBlock(payload, task.index);
-          state.processedBlocks.push(block);
-          state.processedBlocks.sort((a, b) => a.index - b.index);
-          startEvidenceExtraction(block);
+          storeProcessedBlock(payload, task.index);
           task.resolve({ ok: true });
         } catch (error) {
           task.resolve({ ok: false });
-          markBlockFailure(task.index, error);
+          rememberBlockFailure(task.blob, task.index, error);
         } finally {
           state.inFlightBlocks = Math.max(0, state.inFlightBlocks - 1);
           state.pendingBlocks = Math.max(0, state.pendingBlocks - 1);
@@ -321,7 +371,7 @@
   function enqueueBlock(blob, index) {
     if (!blob || blob.size < MIN_BLOCK_BYTES) return null;
     if (state.pendingBlocks >= MAX_BUFFERED_BLOCKS) {
-      markBlockFailure(index, new Error('La cola de procesamiento no puede seguir el ritmo de la entrevista.'));
+      rememberBlockFailure(blob, index, new Error('La cola de procesamiento está temporalmente llena.'));
       return null;
     }
     let resolveTask;
@@ -335,6 +385,40 @@
     return promise;
   }
 
+  async function retryFailedBlocksAtClose() {
+    const retryQueue = [...state.failedBlocks.values()].sort((a, b) => a.index - b.index);
+    if (!retryQueue.length) return;
+    state.failedBlocks.clear();
+    let cursor = 0;
+    const workerCount = Math.min(MAX_CONCURRENT_BLOCKS, retryQueue.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (cursor < retryQueue.length) {
+        const item = retryQueue[cursor++];
+        const status = $('recordingStatus');
+        if (status) status.textContent = `Recuperando bloques pendientes antes de cerrar · ${Math.max(0, retryQueue.length - cursor + 1)} restantes…`;
+        try {
+          const payload = await fetchBlock(item.blob, item.index, { maxAttempts: FINAL_RETRY_ATTEMPTS });
+          storeProcessedBlock(payload, item.index);
+        } catch (error) {
+          rememberBlockFailure(item.blob, item.index, error);
+        }
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  async function settleAllBlocks() {
+    await Promise.all([...state.taskPromises]);
+    await retryFailedBlocksAtClose();
+    if (state.captureFailures.length) {
+      throw new Error('El navegador interrumpió al menos un bloque de audio y no puede garantizarse una entrevista completa.');
+    }
+    if (state.failedBlocks.size) {
+      const failed = [...state.failedBlocks.keys()].sort((a, b) => a - b).join(', ');
+      throw new Error(`No se pudieron verificar todos los bloques (pendientes: ${failed}).`);
+    }
+  }
+
   function startBlockRecorder() {
     if (!state.active || state.finishing || !state.stream) return;
     const recorder = makeRecorder();
@@ -342,6 +426,22 @@
     state.recorder = recorder;
     state.recorderParts = parts;
     recorder.addEventListener('dataavailable', (event) => { if (event.data?.size) parts.push(event.data); });
+    recorder.addEventListener('stop', () => {
+      // Algunos navegadores móviles detienen MediaRecorder sin que la pista del
+      // micrófono termine. Conservamos lo ya capturado y reiniciamos el bloque
+      // inmediatamente; las paradas deliberadas ya desacoplan state.recorder.
+      if (!state.active || state.finishing || state.recorder !== recorder) return;
+      if (state.blockTimer) clearTimeout(state.blockTimer);
+      state.blockTimer = null;
+      state.recorder = null;
+      state.recorderParts = [];
+      const type = recorder.mimeType || state.mimeType || parts[0]?.type || 'audio/webm';
+      const blob = parts.length ? new Blob(parts, { type }) : null;
+      const index = ++state.blockIndex;
+      if (blob) enqueueBlock(blob, index);
+      else state.captureFailures.push({ index, message: 'El grabador móvil se detuvo sin entregar audio.' });
+      if (state.active && !state.finishing) startBlockRecorder();
+    });
     recorder.start(1000);
     state.blockTimer = setTimeout(() => {
       state.rotationPromise = rotateBlock().finally(() => { state.rotationPromise = null; });
@@ -350,11 +450,33 @@
 
   function stopRecorderToBlob(recorder, parts) {
     return new Promise((resolve, reject) => {
-      if (!recorder || recorder.state === 'inactive') return resolve(null);
+      if (!recorder) return resolve(null);
       const type = recorder.mimeType || state.mimeType || parts[0]?.type || 'audio/webm';
-      recorder.addEventListener('error', () => reject(new Error('Falló el cierre de un bloque de audio.')), { once: true });
-      recorder.addEventListener('stop', () => resolve(new Blob(parts, { type })), { once: true });
-      try { recorder.stop(); } catch (error) { reject(error); }
+      if (recorder.state === 'inactive') return resolve(parts.length ? new Blob(parts, { type }) : null);
+      let settled = false;
+      let timer = null;
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        recorder.removeEventListener?.('error', onError);
+        recorder.removeEventListener?.('stop', onStop);
+      };
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        callback(value);
+      };
+      const onError = () => finish(reject, new Error('Falló el cierre de un bloque de audio.'));
+      const onStop = () => finish(resolve, parts.length ? new Blob(parts, { type }) : null);
+      recorder.addEventListener('error', onError, { once: true });
+      recorder.addEventListener('stop', onStop, { once: true });
+      timer = setTimeout(() => {
+        try { if (recorder.state !== 'inactive') recorder.stop(); } catch {}
+        if (parts.length) finish(resolve, new Blob(parts, { type }));
+        else finish(reject, new Error('El grabador no entregó el último bloque de audio a tiempo.'));
+      }, RECORDER_STOP_TIMEOUT_MS);
+      try { recorder.requestData?.(); } catch {}
+      try { recorder.stop(); } catch (error) { finish(reject, error); }
     });
   }
 
@@ -367,9 +489,18 @@
     state.recorder = null;
     state.recorderParts = [];
     const index = ++state.blockIndex;
-    const blob = await stopRecorderToBlob(recorder, parts);
-    if (blob) enqueueBlock(blob, index);
-    if (state.active && !state.finishing && !state.failed) startBlockRecorder();
+    try {
+      const blob = await stopRecorderToBlob(recorder, parts);
+      if (blob) enqueueBlock(blob, index);
+      else state.captureFailures.push({ index, message: 'El bloque de audio estaba vacío.' });
+    } catch (error) {
+      state.captureFailures.push({ index, message: error.message });
+      console.warn('Long-interview recorder rotation failed without logging clinical content.', {
+        blockIndex: index,
+        errorName: error?.name || 'Error',
+      });
+    }
+    if (state.active && !state.finishing) startBlockRecorder();
   }
 
   function aggregatePayload() {
@@ -465,35 +596,30 @@
     if ($('recordingStatus')) $('recordingStatus').textContent = 'Cerrando el último bloque y esperando solo la transcripción pendiente…';
     try {
       if (state.rotationPromise) await state.rotationPromise;
-      if (state.recorder?.state === 'recording') {
+      if (state.recorder && state.recorder.state !== 'inactive') {
         const recorder = state.recorder;
         const parts = state.recorderParts;
         state.recorder = null;
         state.recorderParts = [];
         const index = ++state.blockIndex;
         const blob = await stopRecorderToBlob(recorder, parts);
-        if (blob && !state.failed) enqueueBlock(blob, index);
+        if (blob) enqueueBlock(blob, index);
       }
       stopTracks();
-      if (state.failed) drainQueuedTasks();
-      await window.ClinicalRequest.waitWithDeadline(Promise.all(state.taskPromises), {
+      await window.ClinicalRequest.waitWithDeadline(settleAllBlocks(), {
         timeoutMs: FINALIZATION_TIMEOUT_MS,
-        label: 'El cierre de la entrevista',
+        label: 'El cierre completo de la entrevista',
       });
-      if (state.failed) {
-        invalidateVerifiedBlocks();
-        if ($('caseText')) $('caseText').value = '';
-        if ($('recordingStatus')) $('recordingStatus').textContent = 'Sesión detenida: al menos un bloque no pudo verificarse. No se conserva audio ni se genera un documento incompleto.';
-        return;
-      }
       publishAggregate();
       state.sessionAbortController = null;
     } catch (error) {
       state.sessionAbortController?.abort(error);
+      drainQueuedTasks();
       console.error('Long-interview finalization failed without logging clinical content.', error);
       invalidateVerifiedBlocks();
       if ($('caseText')) $('caseText').value = '';
       if ($('sessionMessage')) $('sessionMessage').textContent = `No se pudo cerrar la entrevista larga: ${error.message}`;
+      if ($('recordingStatus')) $('recordingStatus').textContent = 'No se conserva audio ni se genera un documento incompleto. Puedes iniciar una nueva entrevista.';
     } finally {
       state.finishing = false;
       setButton('idle');

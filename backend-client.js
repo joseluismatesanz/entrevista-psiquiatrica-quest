@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const MAX_AUDIO_SECONDS = 120;
   const MAX_AUDIO_BYTES = 3_000_000;
-  const TRANSCRIPTION_TIMEOUT_MS = 120_000;
+  const TRANSCRIPTION_TIMEOUT_MS = 150_000;
   const state = {
     result: null,
     health: null,

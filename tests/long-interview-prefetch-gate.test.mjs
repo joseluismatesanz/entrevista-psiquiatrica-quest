@@ -34,6 +34,6 @@ test("V0.6: la compuerta se carga después del controlador de bloques y usa revi
   const gatePosition = index.indexOf('long-interview-prefetch-gate-v061.js');
   const context = index.indexOf('long-interview-context-v06.js');
   assert.ok(controller >= 0 && gatePosition > controller && context > gatePosition);
-  assert.match(index, /long-interview-v06\.js\?v=20261001-timeout-1/);
+  assert.match(index, /long-interview-v06\.js\?v=20261004-recording-1/);
   assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20260919-evidence-sync-1/);
 });

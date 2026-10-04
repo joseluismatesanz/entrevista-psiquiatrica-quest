@@ -22,7 +22,7 @@ async function loadClientRequest() {
   return window.ClinicalRequest;
 }
 
-test('transporte: una petición que nunca responde se cancela y devuelve un error controlado', async () => {
+test('transporte: cancela una petición bloqueada y devuelve un error controlado', async () => {
   const request = await loadClientRequest();
   let aborted = false;
   const hangingFetch = (_input, init) => new Promise((_resolve, reject) => {
@@ -43,7 +43,7 @@ test('transporte: una petición que nunca responde se cancela y devuelve un erro
   assert.equal(aborted, true);
 });
 
-test('transporte: el límite global impide que el cierre espere indefinidamente', async () => {
+test('transporte: el cierre completo tampoco puede esperar indefinidamente', async () => {
   const request = await loadClientRequest();
   await assert.rejects(
     request.waitWithDeadline(new Promise(() => {}), {
@@ -54,7 +54,7 @@ test('transporte: el límite global impide que el cierre espere indefinidamente'
   );
 });
 
-test('transporte: una respuesta normal atraviesa la protección sin alterarse', async () => {
+test('transporte: conserva las respuestas normales sin alterarlas', async () => {
   const request = await loadClientRequest();
   const expected = { ok: true, status: 200 };
   const result = await request.fetchWithDeadline('/api/transcribe', {}, {
@@ -63,4 +63,3 @@ test('transporte: una respuesta normal atraviesa la protección sin alterarse', 
   });
   assert.equal(result, expected);
 });
-
