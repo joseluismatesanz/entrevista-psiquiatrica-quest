@@ -64,7 +64,7 @@ export default async function handler(req, res) {
     transcription_model: AUDIO_TRANSCRIPTION_MODEL,
     max_audio_seconds: 1800,
     audio_block_seconds: 20,
-    max_concurrent_audio_blocks: 2,
+    max_concurrent_audio_blocks: 3,
     incremental_audio_processing: true,
     incremental_clinical_evidence: true,
     incremental_clinical_evidence_loadable: blockEvidenceLoadable,

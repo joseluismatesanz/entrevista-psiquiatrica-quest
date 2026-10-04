@@ -214,6 +214,7 @@ test("V0.6: arquitectura larga usa bloques de 20 s, concurrencia acotada y acele
   assert.match(loader, /transcribe\(\?:-block\)\?/);
   assert.match(vercel, /api\/extract-block-evidence\.mjs/);
   assert.match(health, /long_interview_blocks/);
+  assert.match(health, /max_concurrent_audio_blocks:\s*3/);
   assert.match(pkg, /server\/clinical-block-filter\.mjs/);
   assert.match(pkg, /api\/extract-block-evidence\.mjs/);
   assert.match(analyzeApi, /verifyLongInterviewEvidence/);
