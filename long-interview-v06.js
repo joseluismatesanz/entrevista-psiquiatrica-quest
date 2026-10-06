@@ -49,6 +49,7 @@
     finalizationStartedAt: 0,
     peakPendingBlocks: 0,
     sessionAbortController: null,
+    wakeLock: null,
   };
 
   function formatClock(seconds) {
@@ -87,6 +88,35 @@
     state.stream = null;
   }
 
+  async function releaseWakeLock() {
+    const lock = state.wakeLock;
+    state.wakeLock = null;
+    if (!lock || lock.released) return;
+    try { await lock.release(); } catch {}
+  }
+
+  async function requestWakeLock() {
+    if (!(state.active || state.finishing) || document.visibilityState !== 'visible') return false;
+    if (!navigator.wakeLock?.request) return false;
+    if (state.wakeLock && !state.wakeLock.released) return true;
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      if (!(state.active || state.finishing)) {
+        try { await lock.release(); } catch {}
+        return false;
+      }
+      state.wakeLock = lock;
+      lock.addEventListener?.('release', () => {
+        if (state.wakeLock === lock) state.wakeLock = null;
+      }, { once: true });
+      updateRecordingUi();
+      return true;
+    } catch {
+      // Wake Lock es una mejora progresiva: nunca debe impedir la grabación.
+      return false;
+    }
+  }
+
   function invalidateVerifiedBlocks() {
     window.__LONG_INTERVIEW_VERIFIED_BLOCKS = null;
     window.__LONG_INTERVIEW_EVIDENCE = null;
@@ -104,6 +134,7 @@
 
   function resetState({ keepText = false } = {}) {
     clearTimers();
+    void releaseWakeLock();
     state.sessionAbortController?.abort(new DOMException('Sesión finalizada.', 'AbortError'));
     stopTracks();
     drainQueuedTasks();
@@ -168,7 +199,8 @@
       const waiting = Math.max(0, pending - processing);
       const recovery = state.failedBlocks.size ? ` · ${state.failedBlocks.size} por recuperar` : '';
       const evidence = state.evidencePending ? ` · ${state.evidencePending} clasificando` : '';
-      status.textContent = `Grabando · ${safe} bloque${safe === 1 ? '' : 's'} seguro${safe === 1 ? '' : 's'} · ${processing} transcribiendo${waiting ? ` · ${waiting} en cola` : ''}${recovery}${evidence}.`;
+      const screen = state.wakeLock && !state.wakeLock.released ? ' · pantalla activa' : '';
+      status.textContent = `Grabando · ${safe} bloque${safe === 1 ? '' : 's'} seguro${safe === 1 ? '' : 's'} · ${processing} transcribiendo${waiting ? ` · ${waiting} en cola` : ''}${recovery}${evidence}${screen}.`;
     }
   }
 
@@ -671,6 +703,7 @@
       if ($('sessionMessage')) $('sessionMessage').textContent = `No se pudo cerrar la entrevista larga: ${error.message}`;
       if ($('recordingStatus')) $('recordingStatus').textContent = 'No se conserva audio ni se genera un documento incompleto. Puedes iniciar una nueva entrevista.';
     } finally {
+      await releaseWakeLock();
       state.finishing = false;
       setButton('idle');
     }
@@ -691,6 +724,7 @@
       state.startedAt = Date.now();
       setButton('recording');
       startBlockRecorder();
+      void requestWakeLock();
       updateRecordingUi();
       state.uiTimer = setInterval(updateRecordingUi, 500);
       state.maxTimer = setTimeout(() => finishLongRecording(), MAX_SESSION_SECONDS * 1000);
@@ -750,6 +784,12 @@
   $('caseText')?.addEventListener('input', () => {
     const value = $('caseText')?.value?.trim() || '';
     if (state.finalTranscript && value !== state.finalTranscript) invalidateVerifiedBlocks();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && (state.active || state.finishing)) {
+      void requestWakeLock();
+    }
   });
 
   window.addEventListener('pagehide', () => resetState({ keepText: false }));
