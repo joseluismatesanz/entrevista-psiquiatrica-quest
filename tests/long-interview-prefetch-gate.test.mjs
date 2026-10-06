@@ -11,7 +11,7 @@ const [controller, gate, index] = await Promise.all([
 test("V0.6: preanálisis largo espera la finalización real y conserva proofs de bloques", () => {
   assert.match(controller, /__LONG_INTERVIEW_EVIDENCE_READY\s*=\s*Promise/);
   assert.match(controller, /\.allSettled\(\[\.\.\.state\.evidencePromises\]\)/);
-  assert.match(gate, /MAX_EVIDENCE_WAIT_MS\s*=\s*5000/);
+  assert.match(gate, /MAX_EVIDENCE_WAIT_MS\s*=\s*45_000/);
   assert.match(gate, /__LONG_INTERVIEW_EVIDENCE_READY/);
   assert.match(gate, /Promise\.race/);
   assert.match(gate, /return completeEvidenceFor\(blocks\)/);
@@ -35,5 +35,5 @@ test("V0.6: la compuerta se carga después del controlador de bloques y usa revi
   const context = index.indexOf('long-interview-context-v06.js');
   assert.ok(controller >= 0 && gatePosition > controller && context > gatePosition);
   assert.match(index, /long-interview-v06\.js\?v=20261006-wake-lock-1/);
-  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20260919-evidence-sync-1/);
+  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261006-analysis-recovery-1/);
 });

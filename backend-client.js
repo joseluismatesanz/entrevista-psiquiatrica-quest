@@ -6,6 +6,7 @@
   const MAX_AUDIO_SECONDS = 120;
   const MAX_AUDIO_BYTES = 3_000_000;
   const TRANSCRIPTION_TIMEOUT_MS = 150_000;
+  const ANALYSIS_TIMEOUT_MS = 225_000;
   const state = {
     result: null,
     health: null,
@@ -360,16 +361,25 @@
 
     const button = $('analyzeCase');
     const original = button.textContent;
+    const analysisStartedAt = Date.now();
+    let progressTimer = null;
     button.disabled = true;
-    button.textContent = 'Analizando con Structured Outputs…';
-    $('sessionMessage').textContent = '';
+    button.textContent = 'Organizando información clínica…';
+    $('sessionMessage').textContent = 'Preparando la organización clínica y el borrador del informe…';
+    progressTimer = setInterval(() => {
+      const elapsedSeconds = Math.max(1, Math.round((Date.now() - analysisStartedAt) / 1000));
+      $('sessionMessage').textContent = `Organizando la entrevista · ${elapsedSeconds} s. La transcripción permanece disponible y el proceso tiene un límite de seguridad.`;
+    }, 10_000);
 
     try {
-      const response = await fetch(`${baseUrl}/api/analyze`, {
+      const response = await window.ClinicalRequest.fetchWithDeadline(`${baseUrl}/api/analyze`, {
         method: 'POST',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript }),
+      }, {
+        timeoutMs: ANALYSIS_TIMEOUT_MS,
+        label: 'La organización clínica',
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || `Error del backend (${response.status})`);
@@ -385,6 +395,7 @@
       $('sessionMessage').textContent = `No se pudo completar el análisis: ${error.message}`;
       showScreen('input');
     } finally {
+      if (progressTimer) clearInterval(progressTimer);
       button.disabled = false;
       button.textContent = original;
     }

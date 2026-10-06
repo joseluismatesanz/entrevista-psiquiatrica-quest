@@ -2,7 +2,8 @@
   if (typeof window.fetch !== 'function') return;
 
   const inheritedFetch = window.fetch.bind(window);
-  const MAX_EVIDENCE_WAIT_MS = 5000;
+  const MAX_EVIDENCE_WAIT_MS = 45_000;
+  const ANALYSIS_PREFETCH_TIMEOUT_MS = 210_000;
   const POLL_MS = 100;
   const verifiedPrefetches = new Map();
 
@@ -21,6 +22,16 @@
       status: Number(snapshot?.status) || 503,
       statusText: String(snapshot?.statusText || ''),
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+  }
+
+  function waitForSnapshot(pending, signal) {
+    if (!signal) return pending;
+    if (signal.aborted) return Promise.reject(signal.reason || new DOMException('Solicitud cancelada.', 'AbortError'));
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason || new DOMException('Solicitud cancelada.', 'AbortError'));
+      signal.addEventListener('abort', abort, { once: true });
+      pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
     });
   }
 
@@ -116,23 +127,34 @@
       // instantánea antigua sin proofs/evidence.
       legacyCache?.delete(transcript);
 
-      const response = await inheritedFetch(`${String(window.CLINICAL_API_URL || '').replace(/\/+$/, '')}/api/analyze`, {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const snapshot = {
-        status: response.status,
-        statusText: response.statusText,
-        payload: await response.json().catch(() => ({})),
-      };
-      markReady(blocks, evidence);
-      return snapshot;
-    })().catch(() => ({
-      status: 503,
-      statusText: 'Verified prefetch failed',
-      payload: { message: 'No se pudo completar el análisis anticipado verificado.' },
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(new DOMException('Tiempo de análisis agotado.', 'TimeoutError')), ANALYSIS_PREFETCH_TIMEOUT_MS);
+      try {
+        const response = await inheritedFetch(`${String(window.CLINICAL_API_URL || '').replace(/\/+$/, '')}/api/analyze`, {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        const snapshot = {
+          status: response.status,
+          statusText: response.statusText,
+          payload: await response.json().catch(() => ({})),
+        };
+        markReady(blocks, evidence);
+        return snapshot;
+      } finally {
+        clearTimeout(timer);
+      }
+    })().catch((error) => ({
+      status: error?.name === 'TimeoutError' ? 504 : 503,
+      statusText: error?.name === 'TimeoutError' ? 'Verified prefetch timeout' : 'Verified prefetch failed',
+      payload: {
+        message: error?.name === 'TimeoutError'
+          ? 'La organización clínica agotó su tiempo de seguridad. La transcripción sigue disponible; vuelve a intentarlo.'
+          : 'No se pudo completar el análisis anticipado verificado.',
+      },
     }));
 
     verifiedPrefetches.set(transcript, pending);
@@ -161,7 +183,7 @@
     if (!current) return inheritedFetch(input, init);
 
     const pending = startVerifiedPrefetch(current.transcript, current.blocks);
-    const snapshot = await pending;
+    const snapshot = await waitForSnapshot(pending, init?.signal);
     verifiedPrefetches.delete(current.transcript);
     prefetchCache()?.delete(current.transcript);
     return responseFromSnapshot(snapshot);
