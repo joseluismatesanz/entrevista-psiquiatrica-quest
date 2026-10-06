@@ -1,6 +1,5 @@
 import { transcribeAudioPayload } from "../server/transcribe.mjs";
 import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
-import { redactPersonNamesInSegments } from "../server/person-name-redaction.mjs";
 import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
 import {
   deidentifySegmentsWithPresidio,
@@ -44,11 +43,15 @@ export default async function handler(req, res) {
   }
 
   const totalStartedAt = Date.now();
+  let blockIndex = null;
+  let stage = "request_validation";
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const longInterviewBlock = body.long_interview_block === true;
+    blockIndex = Number.isInteger(Number(body.block_index)) ? Number(body.block_index) : null;
     const previousSafeContext = verifiedPriorContext(body);
 
+    stage = "audio_transcription";
     const transcriptionStartedAt = Date.now();
     const acoustic = await transcribeAudioPayload(body, {
       allowEmptySegments: longInterviewBlock,
@@ -102,38 +105,42 @@ export default async function handler(req, res) {
     // Primera barrera: Presidio se ejecuta dentro del mismo despliegue y elimina
     // identificadores directos antes de enviar texto a cualquier modelo clínico.
     // Si la barrera falla, la petición completa falla cerrada.
+    stage = "presidio_deidentification";
     const presidioStartedAt = Date.now();
     const presidio = await deidentifySegmentsWithPresidio(acoustic.segments, {
       endpoint: presidioEndpointForRequest(req),
     });
     const presidioMs = Date.now() - presidioStartedAt;
 
-    // Segunda barrera: una sola llamada estructurada verifica nombres residuales
-    // y atribuye roles clínicos sobre texto que ya ha pasado por Presidio.
+    // Presidio es la única rutina que reescribe identificadores. Esta llamada
+    // estructurada atribuye roles sobre texto ya desidentificado sin volver a
+    // copiar ni transformar cada frase.
     // En V0.6 puede recibir únicamente contexto previo ya desidentificado y firmado,
     // para mantener continuidad de roles entre bloques. Si falla, se conserva el
     // camino anterior como fallback seguro.
     const privatePassStartedAt = Date.now();
     let processed;
     let fallbackUsed = false;
+    stage = "speaker_role_attribution";
     try {
       processed = await redactAndAttributeSegments(presidio.segments, { previousSafeContext });
     } catch {
       fallbackUsed = true;
-      const redaction = await redactPersonNamesInSegments(presidio.segments);
-      const attributed = await attributeClinicalSpeakerRoles(redaction.segments);
+      const attributed = await attributeClinicalSpeakerRoles(presidio.segments);
       processed = {
         transcript: attributed.transcript,
         segments: attributed.segments,
         participants: attributed.participants,
         review_items: attributed.review_items,
-        replacements: redaction.replacements,
+        replacements: presidio.replacements,
         meta: {
-          model: `${redaction.meta.model}+${attributed.meta.role_model}`,
+          model: attributed.meta.role_model,
           transport: attributed.meta.role_transport,
           store: false,
-          mask: redaction.meta.mask,
+          mask: "XXXXXXXXXXX",
           fail_closed: true,
+          presidio_required: true,
+          duplicate_name_rewrite_skipped: true,
           automatic_role_attribution: true,
           critical_review_count: attributed.meta.critical_review_count,
           previous_safe_context_used: false,
@@ -149,7 +156,7 @@ export default async function handler(req, res) {
         })
       : createPrivacyProof(processed.transcript);
 
-    return res.status(200).json({
+    const responsePayload = {
       ...acoustic,
       transcript: processed.transcript,
       acoustic_transcript: processed.segments.map((s) => `HABLANTE ${s.acoustic_speaker || s.speaker}: ${s.text}`).join("\n"),
@@ -162,9 +169,10 @@ export default async function handler(req, res) {
         silent_block: false,
         person_name_redaction_enabled: true,
         person_name_redaction_mask: processed.meta.mask,
-        person_name_redaction_replacements: processed.replacements,
+        person_name_redaction_replacements: presidio.replacements,
         person_name_redaction_store: false,
         person_name_redaction_fail_closed: true,
+        duplicate_name_redaction_skipped_after_presidio: true,
         presidio_enabled: true,
         presidio_engine: presidio.meta.engine,
         presidio_version: presidio.meta.version,
@@ -181,7 +189,8 @@ export default async function handler(req, res) {
         role_attribution_store: false,
         critical_role_review_count: processed.meta.critical_review_count,
         speaker_role_confirmation_required: processed.meta.critical_review_count > 0,
-        combined_privacy_attribution: !fallbackUsed,
+        combined_privacy_attribution: false,
+        presidio_role_attribution: !fallbackUsed,
         signed_privacy_proof_issued: Boolean(privacyProof),
         long_interview_block: longInterviewBlock,
         previous_safe_context_verified: Boolean(previousSafeContext),
@@ -196,8 +205,23 @@ export default async function handler(req, res) {
           total_audio_pipeline: Date.now() - totalStartedAt,
         },
       },
+    };
+    console.info("[transcribe] completed", {
+      blockIndex,
+      longInterviewBlock,
+      segmentCount: processed.segments.length,
+      totalMs: responsePayload.meta.performance_ms.total_audio_pipeline,
+      fallbackUsed,
     });
+    return res.status(200).json(responsePayload);
   } catch (error) {
+    console.error("[transcribe] failed", {
+      blockIndex,
+      stage,
+      errorName: error?.name || "TranscriptionError",
+      errorCode: error?.code || "",
+      totalMs: Date.now() - totalStartedAt,
+    });
     const status = error instanceof TypeError || error instanceof RangeError ? 400 : 502;
     return res.status(status).json({
       error: error.code || error.name || "TranscriptionError",

@@ -2,13 +2,15 @@
   const baseUrl = String(window.CLINICAL_API_URL || '').replace(/\/+$/, '');
   if (!baseUrl || typeof MediaRecorder === 'undefined') return;
 
-  const BLOCK_SECONDS = 20;
-  const MAX_SESSION_SECONDS = 30 * 60;
+  const BLOCK_SECONDS = 60;
+  const MAX_SESSION_SECONDS = 60 * 60;
   const MAX_CONCURRENT_BLOCKS = 3;
-  const MAX_BUFFERED_BLOCKS = 96;
+  const MAX_BUFFERED_BLOCKS = 128;
+  const MAX_CONCURRENT_EVIDENCE_BLOCKS = 1;
   const EVIDENCE_WAIT_MS = 3500;
+  const EVIDENCE_REQUEST_TIMEOUT_MS = 90_000;
   const MAX_BLOCK_BYTES = 3_000_000;
-  const MIN_BLOCK_BYTES = 1200;
+  const MIN_BLOCK_BYTES = 256;
   const BLOCK_REQUEST_TIMEOUT_MS = 150_000;
   const FINALIZATION_TIMEOUT_MS = 300_000;
   const RECORDER_STOP_TIMEOUT_MS = 6_000;
@@ -36,6 +38,8 @@
     evidenceByBlock: new Map(),
     evidencePromises: [],
     evidencePending: 0,
+    evidenceInFlight: 0,
+    evidenceQueue: [],
     rotationPromise: null,
     blockTimer: null,
     uiTimer: null,
@@ -120,6 +124,8 @@
     state.evidenceByBlock = new Map();
     state.evidencePromises = [];
     state.evidencePending = 0;
+    state.evidenceInFlight = 0;
+    state.evidenceQueue = [];
     state.rotationPromise = null;
     state.finalTranscript = '';
     state.analysisPrefetchStarted = false;
@@ -145,7 +151,7 @@
       detail.textContent = 'Procesando últimos bloques';
     } else {
       label.textContent = 'Iniciar entrevista';
-      detail.textContent = 'Hasta 30 min';
+      detail.textContent = 'Hasta 60 min';
     }
   }
 
@@ -295,32 +301,64 @@
     return evidence;
   }
 
-  function startEvidenceExtraction(block) {
-    state.evidencePending += 1;
-    const promise = fetch(`${baseUrl}/api/extract-block-evidence`, {
+  async function fetchEvidence(block) {
+    const response = await window.ClinicalRequest.fetchWithDeadline(`${baseUrl}/api/extract-block-evidence`, {
       method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         block_index: block.index,
         transcript: block.transcript,
         privacy_proof: block.privacy_proof,
       }),
-    }).then(async (response) => {
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || !String(payload.clinical_transcript || '').trim() || !String(payload.evidence_proof || '').trim()) return null;
-      const evidence = {
-        block_index: block.index,
-        clinical_transcript: String(payload.clinical_transcript).trim(),
-        evidence_proof: String(payload.evidence_proof),
-        performance_ms: payload?.meta?.performance_ms || {},
-      };
-      state.evidenceByBlock.set(block.index, evidence);
-      publishEvidenceWindow();
-      return evidence;
-    }).catch(() => null).finally(() => {
-      state.evidencePending = Math.max(0, state.evidencePending - 1);
-      updateRecordingUi();
+    }, {
+      timeoutMs: EVIDENCE_REQUEST_TIMEOUT_MS,
+      label: `La preparación clínica del bloque ${block.index}`,
     });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !String(payload.clinical_transcript || '').trim() || !String(payload.evidence_proof || '').trim()) return null;
+    return {
+      block_index: block.index,
+      clinical_transcript: String(payload.clinical_transcript).trim(),
+      evidence_proof: String(payload.evidence_proof),
+      performance_ms: payload?.meta?.performance_ms || {},
+    };
+  }
+
+  function pumpEvidenceQueue() {
+    // Esta extracción es una optimización opcional. Se limita a una petición y
+    // solo avanza cuando no hay audio esperando: la transcripción tiene prioridad.
+    while (
+      state.evidenceInFlight < MAX_CONCURRENT_EVIDENCE_BLOCKS
+      && state.evidenceQueue.length
+      && state.pendingBlocks === 0
+      && state.inFlightBlocks === 0
+    ) {
+      const task = state.evidenceQueue.shift();
+      state.evidenceInFlight += 1;
+      (async () => {
+        try {
+          const evidence = await fetchEvidence(task.block);
+          if (evidence) state.evidenceByBlock.set(task.block.index, evidence);
+          publishEvidenceWindow();
+          task.resolve(evidence);
+        } catch {
+          task.resolve(null);
+        } finally {
+          state.evidenceInFlight = Math.max(0, state.evidenceInFlight - 1);
+          state.evidencePending = Math.max(0, state.evidencePending - 1);
+          updateRecordingUi();
+          pumpEvidenceQueue();
+        }
+      })();
+    }
+  }
+
+  function startEvidenceExtraction(block) {
+    state.evidencePending += 1;
+    let resolveTask;
+    const promise = new Promise((resolve) => { resolveTask = resolve; });
     state.evidencePromises.push(promise);
+    state.evidenceQueue.push({ block, resolve: resolveTask });
+    pumpEvidenceQueue();
     return promise;
   }
 
@@ -363,13 +401,18 @@
           state.pendingBlocks = Math.max(0, state.pendingBlocks - 1);
           updateRecordingUi();
           pumpBlockQueue();
+          pumpEvidenceQueue();
         }
       })();
     }
   }
 
   function enqueueBlock(blob, index) {
-    if (!blob || blob.size < MIN_BLOCK_BYTES) return null;
+    if (!blob) return null;
+    if (blob.size < MIN_BLOCK_BYTES) {
+      state.captureFailures.push({ index, message: 'El bloque de audio recibido era demasiado pequeño para verificarse.' });
+      return null;
+    }
     if (state.pendingBlocks >= MAX_BUFFERED_BLOCKS) {
       rememberBlockFailure(blob, index, new Error('La cola de procesamiento está temporalmente llena.'));
       return null;
@@ -521,6 +564,7 @@
         automatic_role_attribution: true,
         long_interview: true,
         block_count: blocks.length,
+        expected_block_count: state.blockIndex,
         critical_role_review_count: reviewItems.length,
         speaker_role_confirmation_required: reviewItems.length > 0,
       },
@@ -556,6 +600,12 @@
   function publishAggregate() {
     const aggregate = aggregatePayload();
     if (!aggregate.transcript) throw new Error('No se obtuvo texto clínico de los bloques procesados.');
+    const expectedIndexes = Array.from({ length: state.blockIndex }, (_, position) => position + 1);
+    const processedIndexes = new Set(state.processedBlocks.map((block) => block.index));
+    const missingIndexes = expectedIndexes.filter((index) => !processedIndexes.has(index));
+    if (missingIndexes.length) {
+      throw new Error(`Faltan bloques de audio antes de publicar la transcripción (${missingIndexes.join(', ')}).`);
+    }
     state.finalTranscript = aggregate.transcript;
     const verifiedBlocks = [...state.processedBlocks].sort((a, b) => a.index - b.index).map((block) => ({
       block_index: block.index,
@@ -708,7 +758,7 @@
   const sectionLabel = recorderCard?.querySelector('.section-label');
   const description = recorderCard?.querySelector('.muted');
   if (sectionLabel) sectionLabel.textContent = 'ENTREVISTA CLÍNICA';
-  if (description) description.textContent = 'Graba una entrevista de hasta 30 minutos. La transcripción se organiza progresivamente mientras continúa la entrevista.';
+  if (description) description.textContent = 'Graba una entrevista de hasta 60 minutos. La transcripción se organiza progresivamente mientras continúa la entrevista.';
   setButton('idle');
   if ($('recordingStatus')) $('recordingStatus').textContent = 'Micrófono preparado.';
 })();

@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 const PROOF_VERSION = "v1";
 export const DEFAULT_PRIVACY_PROOF_TTL_MS = 10 * 60 * 1000;
-export const LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS = 45 * 60 * 1000;
+export const LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS = 2 * 60 * 60 * 1000;
 const MAX_CLOCK_SKEW_MS = 30 * 1000;
 
 function rootSecret(env = process.env) {

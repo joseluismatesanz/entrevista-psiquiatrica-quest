@@ -14,8 +14,10 @@ test("privacidad: el audio queda desidentificado antes de llegar al cliente y la
   assert.match(transcribeApi, /deidentifySegmentsWithPresidio\(acoustic\.segments,\s*\{/);
   assert.match(transcribeApi, /endpoint:\s*presidioEndpointForRequest\(req\)/);
   assert.match(transcribeApi, /redactAndAttributeSegments\(presidio\.segments(?:,\s*\{\s*previousSafeContext\s*\})?\)/);
-  assert.match(combinedPrivacy, /redacted_text/);
-  assert.match(combinedPrivacy, /residual_person_name/);
+  assert.match(combinedPrivacy, /presidio_replacements/);
+  assert.match(combinedPrivacy, /assignments/);
+  assert.doesNotMatch(combinedPrivacy, /redacted_text/);
+  assert.doesNotMatch(combinedPrivacy, /residual_person_name/);
   assert.match(combinedPrivacy, /PERSON_NAME_MASK/);
   assert.match(redactionModule, /PERSON_NAME_MASK = "XXXXXXXXXXX"/);
   assert.match(combinedPrivacy, /fail_closed: true/);
@@ -23,9 +25,11 @@ test("privacidad: el audio queda desidentificado antes de llegar al cliente y la
   assert.match(transcribeApi, /acoustic_transcript: processed\.segments/);
   assert.doesNotMatch(transcribeApi, /acoustic_transcript: acoustic\.transcript/);
   assert.match(transcribeApi, /createPrivacyProof\(processed\.transcript/);
-  // Si falla la llamada combinada, el fallback conserva la secuencia segura:
-  // primero redacta y solo después atribuye roles.
-  assert.match(transcribeApi, /redactPersonNamesInSegments\(presidio\.segments\)[\s\S]*attributeClinicalSpeakerRoles\(redaction\.segments\)/);
+  // Presidio es la única fase que reescribe nombres. El fallback conserva ese
+  // texto y repite únicamente la atribución de interlocutores.
+  assert.doesNotMatch(transcribeApi, /redactPersonNamesInSegments/);
+  assert.match(transcribeApi, /attributeClinicalSpeakerRoles\(presidio\.segments\)/);
+  assert.match(transcribeApi, /duplicate_name_redaction_skipped_after_presidio: true/);
 });
 
 test("privacidad: cualquier texto sin prueba válida se desidentifica antes del motor clínico; una prueba válida solo evita duplicar el mismo paso", () => {

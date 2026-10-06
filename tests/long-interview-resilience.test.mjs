@@ -10,7 +10,7 @@ const [controller, index, loader, shortFlow] = await Promise.all([
 ]);
 
 test('entrevista larga: una cola lenta no ordena detener el micrófono', () => {
-  assert.match(controller, /MAX_BUFFERED_BLOCKS\s*=\s*96/);
+  assert.match(controller, /MAX_BUFFERED_BLOCKS\s*=\s*128/);
   assert.match(controller, /MAX_CONCURRENT_BLOCKS\s*=\s*3/);
   assert.match(controller, /failedBlocks:\s*new Map\(\)/);
   assert.match(controller, /rememberBlockFailure\(task\.blob, task\.index, error\)/);
@@ -23,6 +23,15 @@ test('entrevista larga: recupera bloques fallidos antes de publicar el agregado'
   assert.match(controller, /await retryFailedBlocksAtClose\(\)/);
   assert.match(controller, /if \(state\.failedBlocks\.size\)/);
   assert.match(controller, /No se pudieron verificar todos los bloques/);
+  assert.match(controller, /const missingIndexes = expectedIndexes\.filter/);
+  assert.match(controller, /Faltan bloques de audio antes de publicar la transcripción/);
+});
+
+test('entrevista larga: la evidencia secundaria no compite con una cola de audio activa', () => {
+  assert.match(controller, /MAX_CONCURRENT_EVIDENCE_BLOCKS\s*=\s*1/);
+  assert.match(controller, /state\.pendingBlocks === 0/);
+  assert.match(controller, /state\.inFlightBlocks === 0/);
+  assert.match(controller, /pumpEvidenceQueue/);
 });
 
 test('entrevista larga: el cambio de bloque móvil tiene recuperación y límite', () => {
@@ -43,7 +52,7 @@ test('transcripción: las peticiones y el cierre tienen límites explícitos', (
 test('navegador: carga la protección antes de los controladores y evita caché antigua', () => {
   const timeoutLayer = index.indexOf('client-request-timeout.js?v=20261004-recording-1');
   const loaderPosition = index.indexOf('loader.js?v=20261004-recording-1');
-  const longPosition = index.indexOf('long-interview-v06.js?v=20261004-recording-1');
+  const longPosition = index.indexOf('long-interview-v06.js?v=20261006-hour-1');
   assert.ok(timeoutLayer >= 0 && loaderPosition > timeoutLayer && longPosition > loaderPosition);
   assert.match(loader, /backend-client\.js\?v=20261004-recording-1/);
 });

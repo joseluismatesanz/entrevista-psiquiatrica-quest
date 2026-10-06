@@ -79,6 +79,7 @@ function isSourceSensitive(text) {
 function normalizeSegments(segments) {
   return (Array.isArray(segments) ? segments : [])
     .map((segment, index) => ({
+      ...segment,
       id: String(segment?.id || `segment-${index + 1}`),
       speaker: String(segment?.speaker || "?").trim() || "?",
       start: Number.isFinite(Number(segment?.start)) ? Number(segment.start) : 0,

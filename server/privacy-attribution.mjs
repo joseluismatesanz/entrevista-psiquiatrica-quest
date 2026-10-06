@@ -12,12 +12,9 @@ const RoleSchema = z.enum([
   "family", "nurse", "police", "security", "other", "unknown",
 ]);
 
-const CombinedSchema = z.object({
-  items: z.array(z.object({
+const AttributionSchema = z.object({
+  assignments: z.array(z.object({
     segment_id: z.string(),
-    redacted_text: z.string(),
-    replacements: z.number().int().min(0),
-    residual_person_name: z.boolean(),
     role: RoleSchema,
     confidence: z.enum(["high", "medium", "low"]),
   }).strict()),
@@ -75,17 +72,10 @@ async function resolveClient(options = {}) {
 }
 
 function instructions() {
-  return `Procesa segmentos de una entrevista psiquiátrica realizando DOS tareas en la MISMA respuesta: desidentificar nombres de PERSONAS y atribuir rol clínico.
+  return `Atribuye el rol clínico de cada segmento de una entrevista psiquiátrica YA DESIDENTIFICADA por Presidio.
 
-PRIVACIDAD OBLIGATORIA:
-- Sustituye cada nombre, apellido, nombre compuesto, apodo identificativo o nombre de profesional/tercero por exactamente ${PERSON_NAME_MASK}.
-- Un nombre completo de varias palabras se sustituye por un solo ${PERSON_NAME_MASK}.
-- Conserva roles/títulos: "Dra. García" -> "Dra. ${PERSON_NAME_MASK}".
-- NO sustituyas medicamentos, diagnósticos, hospitales, centros, ciudades, países, calles, organismos, marcas ni fechas.
-- No reformules ninguna otra palabra.
-- residual_person_name=true si queda cualquier nombre/apellido de persona explícito. Si ocurre, la aplicación bloqueará la salida.
-
-ATRIBUCIÓN:
+REGLAS:
+- No copies, reformules ni devuelvas el texto. Devuelve únicamente segment_id, role y confidence.
 - Usa contenido verbal, orden de turnos y acoustic_speaker solo como pista secundaria; una misma letra acústica puede contener personas distintas.
 - psychiatrist: preguntas/exploración/síntesis/plan del clínico; patient: primera persona sobre síntomas/historia propia.
 - mother/father/sibling/caregiver/family solo si el contexto lo hace explícito.
@@ -96,15 +86,18 @@ ATRIBUCIÓN:
 - nurse/police/security solo si es explícito; unknown si no puede saberse razonablemente.
 - confidence=high solo con evidencia contextual clara.
 - No diagnostiques ni resumas.
-- Devuelve exactamente un item por segment_id y nunca devuelvas los nombres originales en campos auxiliares.`;
+- Devuelve exactamente una asignación por segment_id.`;
 }
 
 export async function redactAndAttributeSegments(inputSegments, options = {}) {
   const deduplication = deduplicateClearAdjacentOverlaps(inputSegments);
   const segments = deduplication.segments;
   if (!segments.length) throw new TypeError("No hay segmentos para procesar.");
+  if (segments.some((segment) => !Number.isFinite(Number(segment.presidio_replacements)))) {
+    throw new Error("La atribución de roles requiere segmentos previamente desidentificados por Presidio.");
+  }
   const runtime = await resolveClient(options);
-  const format = zodTextFormat(CombinedSchema, "privacy_attribution_v056");
+  const format = zodTextFormat(AttributionSchema, "presidio_role_attribution_v063");
   const context = priorContext(options);
   const inputText = `${context ? `CONTEXTO PREVIO DESIDENTIFICADO (solo referencia de continuidad):\n${context}\n\n` : ""}Segmentos JSON:\n${JSON.stringify(segments.map((s) => ({ segment_id: s.id, acoustic_speaker: s.speaker, text: s.text })))}`;
   const response = await runtime.client.responses.parse({
@@ -112,7 +105,7 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
     store: false,
     background: false,
     reasoning: { effort: "none" },
-    max_output_tokens: Math.max(1200, Math.min(12000, segments.length * 170)),
+    max_output_tokens: Math.max(800, Math.min(8000, segments.length * 80)),
     instructions: instructions(),
     input: [{ role: "user", content: [{ type: "input_text", text: inputText }] }],
     text: { format },
@@ -120,7 +113,7 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
   if (response.status !== "completed") throw new Error(`Procesamiento privado incompleto: ${response.status}`);
   const parsed = extractParsed(response);
   if (!parsed) throw new Error("No se obtuvo una salida estructurada del procesamiento privado.");
-  const byId = new Map((parsed.items || []).map((item) => [String(item.segment_id), item]));
+  const byId = new Map((parsed.assignments || []).map((item) => [String(item.segment_id), item]));
   if (byId.size !== segments.length) throw new Error("El procesamiento privado no devolvió todos los segmentos.");
 
   let replacements = 0;
@@ -129,10 +122,10 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
   const resolvedRoles = new Map();
   const attributedSegments = segments.map((segment, index) => {
     const item = byId.get(segment.id);
-    if (!item || item.residual_person_name) throw new Error("No se pudo verificar la eliminación de nombres personales.");
-    const text = String(item.redacted_text || "").trim();
-    if (!text) throw new Error("La desidentificación devolvió un fragmento vacío.");
-    replacements += Number(item.replacements) || 0;
+    if (!item) throw new Error("La atribución de roles no devolvió todos los segmentos.");
+    const text = String(segment.text || "").trim();
+    if (!text) throw new Error("Presidio devolvió un fragmento vacío.");
+    replacements += Number(segment.presidio_replacements) || 0;
 
     const proposedRole = ROLE_LABELS[item.role] ? item.role : "unknown";
     const previousRole = index > 0 ? resolvedRoles.get(segments[index - 1].id) : null;
@@ -156,7 +149,7 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
     return {
       ...segment,
       text,
-      person_name_replacements: Number(item.replacements) || 0,
+      person_name_replacements: Number(segment.presidio_replacements) || 0,
       acoustic_speaker: segment.speaker,
       role,
       role_label: ROLE_LABELS[role],
@@ -187,6 +180,8 @@ export async function redactAndAttributeSegments(inputSegments, options = {}) {
       store: false,
       mask: PERSON_NAME_MASK,
       fail_closed: true,
+      presidio_required: true,
+      duplicate_name_rewrite_skipped: true,
       automatic_role_attribution: true,
       critical_review_count: reviewItems.length,
       explicit_family_role_anchors: explicitFamilyRoleAnchors,

@@ -11,9 +11,10 @@ const [apiAnalyze, apiTranscribe, config, index] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
 ]);
 
-test("rendimiento: audio combina anonimización y atribución en una sola llamada normal", () => {
+test("rendimiento: audio anonimiza una vez con Presidio y mantiene una sola atribución de roles", () => {
   assert.match(apiTranscribe, /redactAndAttributeSegments/);
-  assert.match(apiTranscribe, /combined_privacy_attribution/);
+  assert.match(apiTranscribe, /duplicate_name_redaction_skipped_after_presidio/);
+  assert.doesNotMatch(apiTranscribe, /redactPersonNamesInSegments/);
   assert.match(apiTranscribe, /fallbackUsed/);
 });
 
@@ -57,12 +58,9 @@ test("privacidad combinada: conserva XXXXXXXXXXX y atribuye rol sin devolver nom
         return {
           status: "completed",
           output_parsed: {
-            items: [
+            assignments: [
               {
                 segment_id: "s1",
-                redacted_text: "Soy XXXXXXXXXXX y duermo mal.",
-                replacements: 1,
-                residual_person_name: false,
                 role: "patient",
                 confidence: "high",
               },
@@ -74,7 +72,7 @@ test("privacidad combinada: conserva XXXXXXXXXXX y atribuye rol sin devolver nom
   };
 
   const result = await redactAndAttributeSegments([
-    { id: "s1", speaker: "B", text: "Soy Carlos Pérez y duermo mal." },
+    { id: "s1", speaker: "B", text: "Soy XXXXXXXXXXX y duermo mal.", presidio_replacements: 1 },
   ], { client });
 
   assert.doesNotMatch(result.transcript, /Carlos|Pérez/);
@@ -83,31 +81,9 @@ test("privacidad combinada: conserva XXXXXXXXXXX y atribuye rol sin devolver nom
   assert.equal(result.meta.fail_closed, true);
 });
 
-test("privacidad combinada: falla cerrado si queda un nombre residual", async () => {
-  const client = {
-    responses: {
-      async parse() {
-        return {
-          status: "completed",
-          output_parsed: {
-            items: [
-              {
-                segment_id: "s1",
-                redacted_text: "Soy Carlos Pérez.",
-                replacements: 0,
-                residual_person_name: true,
-                role: "patient",
-                confidence: "high",
-              },
-            ],
-          },
-        };
-      },
-    },
-  };
-
+test("privacidad combinada: falla cerrado si se omite la prueba de paso por Presidio", async () => {
   await assert.rejects(
-    () => redactAndAttributeSegments([{ id: "s1", speaker: "B", text: "Soy Carlos Pérez." }], { client }),
-    /eliminación de nombres personales/
+    () => redactAndAttributeSegments([{ id: "s1", speaker: "B", text: "Soy Carlos Pérez." }]),
+    /previamente desidentificados por Presidio/
   );
 });

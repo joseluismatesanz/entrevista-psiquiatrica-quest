@@ -26,7 +26,9 @@ function combinedClient(items) {
         assert.equal(params.reasoning.effort, "none");
         return {
           status: "completed",
-          output_parsed: { items },
+          output_parsed: {
+            assignments: items.map(({ segment_id, role, confidence }) => ({ segment_id, role, confidence })),
+          },
           _request_id: "req_long_interview_test",
         };
       },
@@ -34,12 +36,16 @@ function combinedClient(items) {
   };
 }
 
+function presidioSegments(segments) {
+  return segments.map((segment) => ({ ...segment, presidio_replacements: 0 }));
+}
+
 test("V0.6: MADRE explícita prevalece también en la ruta combinada de privacidad + atribución", async () => {
   const segments = [
     { id: "s1", speaker: "A", text: "Y usted, ¿es su madre? ¿Qué piensa de cómo está estos días?" },
     { id: "s2", speaker: "B", text: "Está siempre muy agobiada y desde hace una semana duerme peor." },
   ];
-  const result = await redactAndAttributeSegments(segments, {
+  const result = await redactAndAttributeSegments(presidioSegments(segments), {
     client: combinedClient([
       { segment_id: "s1", redacted_text: segments[0].text, replacements: 0, residual_person_name: false, role: "psychiatrist", confidence: "high" },
       { segment_id: "s2", redacted_text: segments[1].text, replacements: 0, residual_person_name: false, role: "caregiver", confidence: "high" },
@@ -58,7 +64,7 @@ test("V0.6: la ruta combinada mantiene a la madre en preguntas consecutivas con 
     { id: "s3", speaker: "A", text: "¿Y toma alguna medicación usted, señora?" },
     { id: "s4", speaker: "B", text: "Ahora mismo estoy tomando lorazepam y sertralina." },
   ];
-  const result = await redactAndAttributeSegments(segments, {
+  const result = await redactAndAttributeSegments(presidioSegments(segments), {
     client: combinedClient([
       { segment_id: "s1", redacted_text: segments[0].text, replacements: 0, residual_person_name: false, role: "psychiatrist", confidence: "high" },
       { segment_id: "s2", redacted_text: segments[1].text, replacements: 0, residual_person_name: false, role: "patient", confidence: "high" },
@@ -79,7 +85,7 @@ test("V0.6: la continuidad de madre cruza bloques largos mediante el contexto pr
     { id: "s3", speaker: "A", text: "¿Y toma alguna medicación usted, señora?" },
     { id: "s4", speaker: "B", text: "Ahora mismo estoy tomando lorazepam y sertralina." },
   ];
-  const result = await redactAndAttributeSegments(segments, {
+  const result = await redactAndAttributeSegments(presidioSegments(segments), {
     previousSafeContext: "PSIQUIATRA: Y usted, ¿es su madre?\nMADRE: Sí, soy su madre y la veo muy agobiada.",
     client: combinedClient([
       { segment_id: "s3", redacted_text: segments[0].text, replacements: 0, residual_person_name: false, role: "psychiatrist", confidence: "high" },
@@ -102,28 +108,28 @@ test("V0.6: el contexto previo desidentificado se usa solo como referencia y no 
         prompt = params.input[0].content[0].text;
         return {
           status: "completed",
-          output_parsed: { items: [{ segment_id: "s1", redacted_text: segment.text, replacements: 0, residual_person_name: false, role: "mother", confidence: "high" }] },
+          output_parsed: { assignments: [{ segment_id: "s1", role: "mother", confidence: "high" }] },
         };
       },
     },
   };
-  const result = await redactAndAttributeSegments([segment], { client, previousSafeContext: prior });
+  const result = await redactAndAttributeSegments(presidioSegments([segment]), { client, previousSafeContext: prior });
   assert.match(prompt, /CONTEXTO PREVIO DESIDENTIFICADO/);
   assert.equal(result.transcript, `MADRE: ${segment.text}`);
   assert.doesNotMatch(result.transcript, /Desde ayer está peor/);
 });
 
-test("V0.6: una prueba de bloque sobrevive una entrevista de 30 minutos pero no más allá del margen largo", () => {
+test("V0.6: una prueba de bloque sobrevive una entrevista de 60 minutos y su cierre", () => {
   const transcript = "PACIENTE: Soy XXXXXXXXXXX y desde hace una semana duermo mal.";
   const token = createPrivacyProof(transcript, {
     env, now,
     ttlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
     maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
   });
-  const after31Minutes = now + 31 * 60 * 1000;
-  assert.equal(verifyPrivacyProof(transcript, token, { env, now: after31Minutes, maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS }), true);
-  assert.equal(verifyPrivacyProof(transcript, token, { env, now: after31Minutes }), false);
-  assert.equal(verifyPrivacyProof(transcript, token, { env, now: now + 46 * 60 * 1000, maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS }), false);
+  const after75Minutes = now + 75 * 60 * 1000;
+  assert.equal(verifyPrivacyProof(transcript, token, { env, now: after75Minutes, maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS }), true);
+  assert.equal(verifyPrivacyProof(transcript, token, { env, now: after75Minutes }), false);
+  assert.equal(verifyPrivacyProof(transcript, token, { env, now: now + 121 * 60 * 1000, maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS }), false);
 });
 
 test("V0.6: analyze solo acepta el atajo si TODOS los bloques firmados forman exactamente la transcripción visible", () => {
@@ -188,7 +194,7 @@ test("V0.6: filtro clínico conserva determinísticamente medicación y síntoma
   assert.match(result.clinical_transcript, /sertralina 50 mg/);
 });
 
-test("V0.6: arquitectura larga usa bloques de 20 s, concurrencia acotada y acelerador clínico firmado", async () => {
+test("V0.6: arquitectura de una hora usa bloques de 60 s y prioriza el audio sobre la evidencia", async () => {
   const [longController, contextBridge, index, loader, vercel, health, pkg, analyzeApi, clinicalAnalyze] = await Promise.all([
     readFile(new URL("../long-interview-v06.js", import.meta.url), "utf8"),
     readFile(new URL("../long-interview-context-v06.js", import.meta.url), "utf8"),
@@ -201,15 +207,18 @@ test("V0.6: arquitectura larga usa bloques de 20 s, concurrencia acotada y acele
     readFile(new URL("../server/analyze.mjs", import.meta.url), "utf8"),
   ]);
 
-  assert.match(longController, /BLOCK_SECONDS = 20/);
+  assert.match(longController, /BLOCK_SECONDS = 60/);
+  assert.match(longController, /MAX_SESSION_SECONDS = 60 \* 60/);
   assert.match(longController, /MAX_CONCURRENT_BLOCKS = 3/);
+  assert.match(longController, /MAX_CONCURRENT_EVIDENCE_BLOCKS = 1/);
+  assert.match(longController, /state\.pendingBlocks === 0/);
   assert.match(longController, /pumpBlockQueue/);
   assert.match(longController, /\/api\/extract-block-evidence/);
   assert.match(longController, /verified_evidence/);
   assert.match(longController, /MAX_BUFFERED_BLOCKS/);
   assert.match(contextBridge, /safeBlocks\.get\(blockIndex - 1\)/);
-  assert.match(index, /Graba una entrevista de hasta 30 minutos/);
-  assert.doesNotMatch(index, /bloques de aproximadamente 20 segundos|PILOTO V0\.6/);
+  assert.match(index, /Graba una entrevista de hasta 60 minutos/);
+  assert.doesNotMatch(index, /bloques de aproximadamente 60 segundos|PILOTO V0\.6/);
   assert.match(index, /20260911-20s-2/);
   assert.match(loader, /transcribe\(\?:-block\)\?/);
   assert.match(vercel, /api\/extract-block-evidence\.mjs/);
