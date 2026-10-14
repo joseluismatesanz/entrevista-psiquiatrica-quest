@@ -26,5 +26,5 @@ test("Wake Lock: se libera al finalizar y se recupera al volver a primer plano",
 
 test("Wake Lock: la política y la caché del navegador cargan la función nueva", () => {
   assert.match(vercel, /screen-wake-lock=\(self\)/);
-  assert.match(index, /long-interview-v06\.js\?v=20261006-wake-lock-1/);
+  assert.match(index, /long-interview-v06\.js\?v=20261015-transcription-recovery-1/);
 });

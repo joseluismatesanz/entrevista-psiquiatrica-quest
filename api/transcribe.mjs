@@ -13,6 +13,56 @@ import {
 
 export const SILENT_LONG_INTERVIEW_BLOCK = "SISTEMA: [BLOQUE_SILENCIOSO]";
 
+const BILLING_ERROR_CODES = new Set([
+  "billing_hard_limit_reached",
+  "credit_balance_exhausted",
+  "insufficient_funds",
+  "insufficient_quota",
+]);
+
+export function classifyTranscriptionError(error) {
+  const providerCode = String(error?.code || error?.error?.code || "").trim().toLowerCase();
+  const providerStatus = Number(error?.status || error?.statusCode || error?.response?.status || 0);
+  const rawMessage = String(error?.message || "");
+  const billingFailure = BILLING_ERROR_CODES.has(providerCode)
+    || /(?:no credits remaining|credit balance|insufficient (?:funds|quota)|billing hard limit)/i.test(rawMessage);
+
+  if (billingFailure) {
+    return {
+      status: 402,
+      error: "transcription_billing_required",
+      message: "La cuenta de transcripción configurada no tiene saldo disponible. Añade créditos en OpenAI y vuelve a intentarlo.",
+      retryable: false,
+      action_required: "add_openai_credits",
+    };
+  }
+
+  if (providerStatus === 429 || providerCode === "rate_limit_exceeded") {
+    return {
+      status: 429,
+      error: "transcription_rate_limited",
+      message: "El servicio de transcripción está temporalmente saturado. Se volverá a intentar de forma automática.",
+      retryable: true,
+    };
+  }
+
+  if (error instanceof TypeError || error instanceof RangeError) {
+    return {
+      status: 400,
+      error: providerCode || error.name || "invalid_audio",
+      message: rawMessage || "El bloque de audio no es válido.",
+      retryable: false,
+    };
+  }
+
+  return {
+    status: 502,
+    error: providerCode || error?.name || "TranscriptionError",
+    message: rawMessage || "No se pudo transcribir o desidentificar el audio.",
+    retryable: true,
+  };
+}
+
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
   res.setHeader("Pragma", "no-cache");
@@ -222,10 +272,7 @@ export default async function handler(req, res) {
       errorCode: error?.code || "",
       totalMs: Date.now() - totalStartedAt,
     });
-    const status = error instanceof TypeError || error instanceof RangeError ? 400 : 502;
-    return res.status(status).json({
-      error: error.code || error.name || "TranscriptionError",
-      message: error.message || "No se pudo transcribir o desidentificar el audio.",
-    });
+    const failure = classifyTranscriptionError(error);
+    return res.status(failure.status).json(failure);
   }
 }

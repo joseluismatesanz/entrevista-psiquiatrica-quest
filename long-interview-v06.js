@@ -17,6 +17,7 @@
   const MAX_BLOCK_ATTEMPTS = 2;
   const FINAL_RETRY_ATTEMPTS = 2;
   const RETRY_BASE_DELAY_MS = 1_500;
+  const SILENT_BLOCK_MARKER = 'SISTEMA: [BLOQUE_SILENCIOSO]';
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -50,6 +51,8 @@
     peakPendingBlocks: 0,
     sessionAbortController: null,
     wakeLock: null,
+    partialTranscript: '',
+    terminalError: null,
   };
 
   function formatClock(seconds) {
@@ -124,6 +127,12 @@
     window.__LONG_INTERVIEW_TRANSCRIPT = '';
   }
 
+  function clearPartialInterview() {
+    state.partialTranscript = '';
+    window.__LONG_INTERVIEW_PARTIAL_TRANSCRIPT = '';
+    window.__LONG_INTERVIEW_INCOMPLETE = false;
+  }
+
   function drainQueuedTasks() {
     while (state.taskQueue.length) {
       const task = state.taskQueue.shift();
@@ -163,7 +172,10 @@
     state.finalizationStartedAt = 0;
     state.peakPendingBlocks = 0;
     state.sessionAbortController = null;
+    state.partialTranscript = '';
+    state.terminalError = null;
     invalidateVerifiedBlocks();
+    clearPartialInterview();
     if (!keepText && $('caseText')) $('caseText').value = '';
   }
 
@@ -215,7 +227,8 @@
     }
   }
 
-  function isRetriableStatus(status) {
+  function isRetriableStatus(status, payload = {}) {
+    if (typeof payload?.retryable === 'boolean') return payload.retryable;
     return status === 408 || status === 425 || status === 429 || status >= 500;
   }
 
@@ -276,7 +289,10 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         lastError = new Error(payload.message || `No se pudo procesar el bloque ${index}.`);
-        if (attempt >= maxAttempts || !isRetriableStatus(response.status)) throw lastError;
+        lastError.code = String(payload.error || 'transcription_failed');
+        lastError.retryable = isRetriableStatus(response.status, payload);
+        lastError.actionRequired = String(payload.action_required || '');
+        if (attempt >= maxAttempts || !lastError.retryable) throw lastError;
         await waitBeforeRetry(attempt);
         continue;
       }
@@ -400,10 +416,41 @@
     state.processedBlocks.push(block);
     state.processedBlocks.sort((a, b) => a.index - b.index);
     state.failedBlocks.delete(index);
+    publishPartialTranscript();
     startEvidenceExtraction(block);
   }
 
+  function visibleProcessedTranscript() {
+    return [...state.processedBlocks]
+      .sort((a, b) => a.index - b.index)
+      .map((block) => block.transcript)
+      .filter((transcript) => transcript && transcript !== SILENT_BLOCK_MARKER)
+      .join('\n')
+      .trim();
+  }
+
+  function publishPartialTranscript() {
+    const transcript = visibleProcessedTranscript();
+    state.partialTranscript = transcript;
+    window.__LONG_INTERVIEW_PARTIAL_TRANSCRIPT = transcript;
+    window.__LONG_INTERVIEW_INCOMPLETE = true;
+    if (transcript && $('caseText')) $('caseText').value = transcript;
+    return transcript;
+  }
+
   function rememberBlockFailure(blob, index, error) {
+    if (state.terminalError) return;
+    if (error?.retryable === false) {
+      state.terminalError = error;
+      state.sessionAbortController?.abort(error);
+      drainQueuedTasks();
+      const message = $('sessionMessage');
+      if (message) message.textContent = error.message;
+      if (state.active && !state.finishing) {
+        setTimeout(() => { void finishLongRecording(); }, 0);
+      }
+      return;
+    }
     state.failedBlocks.set(index, { blob, index, error });
     console.warn('Long-interview block retained in volatile memory for retry without logging clinical content.', {
       blockIndex: index,
@@ -416,7 +463,7 @@
   }
 
   function pumpBlockQueue() {
-    while (state.inFlightBlocks < MAX_CONCURRENT_BLOCKS && state.taskQueue.length) {
+    while (!state.terminalError && state.inFlightBlocks < MAX_CONCURRENT_BLOCKS && state.taskQueue.length) {
       const task = state.taskQueue.shift();
       state.inFlightBlocks += 1;
       updateRecordingUi();
@@ -461,6 +508,7 @@
   }
 
   async function retryFailedBlocksAtClose() {
+    if (state.terminalError) return;
     const retryQueue = [...state.failedBlocks.values()].sort((a, b) => a.index - b.index);
     if (!retryQueue.length) return;
     state.failedBlocks.clear();
@@ -484,6 +532,7 @@
 
   async function settleAllBlocks() {
     await Promise.all([...state.taskPromises]);
+    if (state.terminalError) throw state.terminalError;
     await retryFailedBlocksAtClose();
     if (state.captureFailures.length) {
       throw new Error('El navegador interrumpió al menos un bloque de audio y no puede garantizarse una entrevista completa.');
@@ -646,6 +695,9 @@
     }));
     window.__LONG_INTERVIEW_TRANSCRIPT = aggregate.transcript;
     window.__LONG_INTERVIEW_VERIFIED_BLOCKS = verifiedBlocks;
+    window.__LONG_INTERVIEW_INCOMPLETE = false;
+    window.__LONG_INTERVIEW_PARTIAL_TRANSCRIPT = '';
+    state.partialTranscript = '';
     publishEvidenceWindow();
 
     // Todas las extracciones ya se han iniciado antes de publicar el agregado. La
@@ -685,7 +737,7 @@
         state.recorderParts = [];
         const index = ++state.blockIndex;
         const blob = await stopRecorderToBlob(recorder, parts);
-        if (blob) enqueueBlock(blob, index);
+        if (blob && !state.terminalError) enqueueBlock(blob, index);
       }
       stopTracks();
       await window.ClinicalRequest.waitWithDeadline(settleAllBlocks(), {
@@ -699,9 +751,14 @@
       drainQueuedTasks();
       console.error('Long-interview finalization failed without logging clinical content.', error);
       invalidateVerifiedBlocks();
-      if ($('caseText')) $('caseText').value = '';
-      if ($('sessionMessage')) $('sessionMessage').textContent = `No se pudo cerrar la entrevista larga: ${error.message}`;
-      if ($('recordingStatus')) $('recordingStatus').textContent = 'No se conserva audio ni se genera un documento incompleto. Puedes iniciar una nueva entrevista.';
+      const partialTranscript = publishPartialTranscript();
+      const preserved = partialTranscript
+        ? ` Se conservan ${state.processedBlocks.length} bloque${state.processedBlocks.length === 1 ? '' : 's'} ya transcrito${state.processedBlocks.length === 1 ? '' : 's'}.`
+        : '';
+      if ($('sessionMessage')) $('sessionMessage').textContent = `${error.message}${preserved}`;
+      if ($('recordingStatus')) $('recordingStatus').textContent = partialTranscript
+        ? 'Transcripción parcial conservada. No se puede organizar hasta completar o sustituir manualmente la entrevista.'
+        : 'El audio se ha descartado y no se ha generado una transcripción. Corrige el problema indicado antes de iniciar otra entrevista.';
     } finally {
       await releaseWakeLock();
       state.finishing = false;
@@ -721,6 +778,7 @@
       state.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
       state.mimeType = chooseRecorderMimeType();
       state.active = true;
+      window.__LONG_INTERVIEW_INCOMPLETE = true;
       state.startedAt = Date.now();
       setButton('recording');
       startBlockRecorder();
@@ -745,6 +803,16 @@
       try {
         const body = JSON.parse(init.body);
         const transcript = typeof body?.transcript === 'string' ? body.transcript.trim() : '';
+        const partial = String(window.__LONG_INTERVIEW_PARTIAL_TRANSCRIPT || '').trim();
+        if (window.__LONG_INTERVIEW_INCOMPLETE === true && transcript && transcript === partial) {
+          return new Response(JSON.stringify({
+            error: 'incomplete_long_interview',
+            message: 'La transcripción conservada está incompleta. Completa o sustituye el texto antes de organizar la información clínica.',
+          }), {
+            status: 409,
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+          });
+        }
         const expected = String(window.__LONG_INTERVIEW_TRANSCRIPT || '').trim();
         const blocks = window.__LONG_INTERVIEW_VERIFIED_BLOCKS;
         if (transcript && transcript === expected && Array.isArray(blocks) && blocks.length) {
@@ -783,6 +851,8 @@
 
   $('caseText')?.addEventListener('input', () => {
     const value = $('caseText')?.value?.trim() || '';
+    const partial = String(window.__LONG_INTERVIEW_PARTIAL_TRANSCRIPT || '').trim();
+    if (window.__LONG_INTERVIEW_INCOMPLETE === true && value !== partial) clearPartialInterview();
     if (state.finalTranscript && value !== state.finalTranscript) invalidateVerifiedBlocks();
   });
 
