@@ -18,6 +18,12 @@ test("rendimiento: audio anonimiza una vez con Presidio y mantiene una sola atri
   assert.match(apiTranscribe, /fallbackUsed/);
 });
 
+test("rendimiento: el texto pegado anonimiza una sola vez con Presidio", () => {
+  assert.match(apiAnalyze, /deidentifyTranscriptWithPresidio/);
+  assert.doesNotMatch(apiAnalyze, /redactPersonNamesInTranscript/);
+  assert.match(apiAnalyze, /duplicate_name_redaction_skipped_after_presidio/);
+});
+
 test("rendimiento: ruta rápida excluye señales clínicas complejas, no una mención farmacológica simple", () => {
   assert.match(apiAnalyze, /HIGH_COMPLEXITY_PATTERNS/);
   for (const token of ["suicid", "psicos", "agresi", "cannabis", "bipolar"]) {

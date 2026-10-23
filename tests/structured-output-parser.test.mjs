@@ -87,34 +87,24 @@ test("Producción usa responses.parse + Zod en lugar de JSON.parse manual", asyn
   assert.ok(result.meta.warnings.includes("psq_guardia_unsupported_identity_removed"));
 });
 
-test("JSON estructurado malformado provoca un único reintento y no genera informe parcial", async () => {
-  const assessment = validAssessment();
+test("JSON estructurado malformado falla tras una sola llamada y no duplica la espera", async () => {
   let calls = 0;
   const client = {
     responses: {
       async parse() {
         calls += 1;
-        if (calls === 1) {
-          throw new SyntaxError("Expected ',' or '}' after property value in JSON");
-        }
-        return {
-          status: "completed",
-          output: [],
-          output_parsed: assessment,
-          _request_id: "req_test_retry",
-        };
-
+        throw new SyntaxError("Expected ',' or '}' after property value in JSON");
       },
     },
   };
 
-  const result = await analyzeTranscript(
-    "PSIQUIATRA: ¿Qué ha ocurrido? PACIENTE: Me he hecho cortes superficiales en el antebrazo.",
-    { client, model: "gpt-5.6" }
+  await assert.rejects(
+    () => analyzeTranscript(
+      "PSIQUIATRA: ¿Qué ha ocurrido? PACIENTE: Me he hecho cortes superficiales en el antebrazo.",
+      { client, model: "gpt-5.6" }
+    ),
+    /Expected ',' or '}'/
   );
 
-  assert.equal(calls, 2);
-  assert.equal(result.meta.structured_output_attempts, 2);
-  assert.equal(result.meta.structured_output_parser, "responses.parse+zod");
-  assert.match(result.report, /CIE-10: F32\.1/);
+  assert.equal(calls, 1);
 });

@@ -281,7 +281,7 @@ def _keep_result(text, result):
         if normalized in CLINICAL_ROLE_LABELS or normalized in CLINICAL_NON_ENTITIES:
             return False
         # El NER español puede etiquetar síntomas aislados en minúscula como PERSON.
-        # La segunda barrera de nombres revisa después los nombres no capitalizados.
+        # Las presentaciones explícitas se cubren con reconocedores contextuales propios.
         if result.entity_type == "PERSON" and " " not in detected.strip() and detected.islower():
             return False
     if result.entity_type != "DATE_TIME":

@@ -38,13 +38,14 @@ test("privacidad: cualquier texto sin prueba válida se desidentifica antes del 
   assert.match(analyzeApi, /stage = "presidio_deidentification"/);
   assert.match(analyzeApi, /deidentifyTranscriptWithPresidio\(normalizedTranscript,\s*\{/);
   assert.match(analyzeApi, /endpoint:\s*presidioEndpointForRequest\(req\)/);
-  assert.match(analyzeApi, /stage = "person_name_redaction"/);
-  assert.match(analyzeApi, /redactPersonNamesInTranscript\(safeTranscript\)/);
+  assert.doesNotMatch(analyzeApi, /stage = "person_name_redaction"/);
+  assert.doesNotMatch(analyzeApi, /redactPersonNamesInTranscript\(safeTranscript\)/);
+  assert.match(analyzeApi, /mode: "presidio_single_pass"/);
   assert.match(analyzeApi, /const fastRoute = useFastClinicalRoute\(safeTranscript\)/);
   assert.match(analyzeApi, /analyzeTranscript\(safeTranscript,/);
   assert.match(analyzeApi, /deidentified_transcript: safeTranscript/);
   assert.match(analyzeApi, /privacy_proof_verified: privacyProofVerified/);
-  assert.match(analyzeApi, /person_name_redaction_failed/);
+  assert.doesNotMatch(analyzeApi, /person_name_redaction_failed/);
 });
 
 test("V0.5.6 privacidad: el cierre usa mailto institucional y destruye el estado local después de entregarlo", () => {

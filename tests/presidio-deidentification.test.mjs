@@ -111,7 +111,7 @@ test("Presidio: usa el host público verificado de la petición Vercel", () => {
   assert.equal(presidioEndpointForRequest({ headers: { host: "evil.example" } }), undefined);
 });
 
-test("Presidio: se ejecuta antes de la verificación LLM y del análisis clínico", async () => {
+test("Presidio: es la única reescritura del texto pegado antes del análisis clínico", async () => {
   const [transcribeApi, analyzeApi, presidioPython] = await Promise.all([
     readFile(new URL("../api/transcribe.mjs", import.meta.url), "utf8"),
     readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
@@ -124,12 +124,10 @@ test("Presidio: se ejecuta antes de la verificación LLM y del análisis clínic
   );
   assert.ok(
     analyzeApi.indexOf("deidentifyTranscriptWithPresidio(normalizedTranscript")
-      < analyzeApi.indexOf("redactPersonNamesInTranscript(safeTranscript)"),
-  );
-  assert.ok(
-    analyzeApi.indexOf("redactPersonNamesInTranscript(safeTranscript)")
       < analyzeApi.indexOf("analyzeTranscript(safeTranscript"),
   );
+  assert.doesNotMatch(analyzeApi, /redactPersonNamesInTranscript\(safeTranscript\)/);
+  assert.match(analyzeApi, /duplicate_name_redaction_skipped_after_presidio: !privacyProofVerified/);
   assert.match(transcribeApi, /presidio_fail_closed: true/);
   assert.match(analyzeApi, /presidio_deidentification_failed/);
   assert.match(presidioPython, /CLINICAL_NON_ENTITIES/);
