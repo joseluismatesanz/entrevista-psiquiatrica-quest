@@ -20,6 +20,7 @@ import { groundReportContentToTranscript } from "./report-content-grounding.mjs"
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
 import { verifyAssessmentMedications } from "./medication-verification.mjs";
+import { clinicalModelRequestOptions } from "./model-request-policy.mjs";
 
 function extractRefusal(response) {
   for (const item of response.output || []) {
@@ -55,13 +56,13 @@ function isRetryableStructuredError(error) {
   return /json|parse|parsed|structured output|schema/i.test(String(error.message || ""));
 }
 
-async function invokeStructured(client, params, schema = ClinicalAssessmentSchema) {
+async function invokeStructured(client, params, schema = ClinicalAssessmentSchema, requestOptions = clinicalModelRequestOptions()) {
   if (typeof client.responses?.parse === "function") {
-    const response = await client.responses.parse(params);
+    const response = await client.responses.parse(params, requestOptions);
     return { response, parsed: extractParsed(response), parser: "responses.parse+zod" };
   }
   if (typeof client.responses?.create === "function") {
-    const response = await client.responses.create(params);
+    const response = await client.responses.create(params, requestOptions);
     if (!response.output_text) return { response, parsed: null, parser: "test-create-fallback" };
     try {
       const parsed = schema.parse(JSON.parse(response.output_text));
@@ -73,7 +74,13 @@ async function invokeStructured(client, params, schema = ClinicalAssessmentSchem
   throw new TypeError("El cliente de modelo no expone Responses API.");
 }
 
-async function requestParsedAssessment(client, baseParams, instructionPrompt = SYSTEM_PROMPT, schema = ClinicalAssessmentSchema) {
+async function requestParsedAssessment(
+  client,
+  baseParams,
+  instructionPrompt = SYSTEM_PROMPT,
+  schema = ClinicalAssessmentSchema,
+  requestOptions = clinicalModelRequestOptions(),
+) {
   let lastError;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -82,7 +89,7 @@ async function requestParsedAssessment(client, baseParams, instructionPrompt = S
         instructions: attempt === 1
           ? instructionPrompt
           : `${instructionPrompt}\n\nREINTENTO TÉCNICO: devuelve únicamente una salida que cumpla exactamente el esquema estructurado. No añadas texto fuera de los campos del esquema.`,
-      }, schema);
+      }, schema, requestOptions);
       const refusal = extractRefusal(response);
       if (refusal) {
         const error = new Error(refusal);
@@ -173,7 +180,7 @@ async function runParallelClinicalModel(client, model, modelTranscript) {
       max_output_tokens: 7000,
       input: modelInput(modelTranscript),
       text: { format: historyFormat },
-    }, HISTORY_PROMPT, HistoryClinicalSchema)),
+    }, HISTORY_PROMPT, HistoryClinicalSchema, clinicalModelRequestOptions({ parallel: true }))),
     timed(() => requestParsedAssessment(client, {
       model,
       store: false,
@@ -182,7 +189,7 @@ async function runParallelClinicalModel(client, model, modelTranscript) {
       max_output_tokens: 7000,
       input: modelInput(modelTranscript),
       text: { format: acuteFormat },
-    }, ACUTE_PROMPT, AcuteClinicalSchema)),
+    }, ACUTE_PROMPT, AcuteClinicalSchema, clinicalModelRequestOptions({ parallel: true }))),
     timed(() => requestParsedAssessment(client, {
       model,
       store: false,
@@ -191,7 +198,7 @@ async function runParallelClinicalModel(client, model, modelTranscript) {
       max_output_tokens: 7000,
       input: modelInput(modelTranscript),
       text: { format: planFormat },
-    }, PLAN_PROMPT, PlanClinicalSchema)),
+    }, PLAN_PROMPT, PlanClinicalSchema, clinicalModelRequestOptions({ parallel: true }))),
   ]);
 
   return {

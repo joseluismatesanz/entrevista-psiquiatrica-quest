@@ -15,6 +15,7 @@ import { groundReportContentToTranscript } from "./report-content-grounding.mjs"
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
 import { verifyAssessmentMedications } from "./medication-verification.mjs";
+import { clinicalModelRequestOptions } from "./model-request-policy.mjs";
 
 function extractRefusal(response) {
   for (const item of response?.output || []) {
@@ -38,12 +39,13 @@ function extractParsed(response) {
 }
 
 async function invokeStructured(client, params, schema) {
+  const requestOptions = clinicalModelRequestOptions({ parallel: true });
   if (typeof client.responses?.parse === "function") {
-    const response = await client.responses.parse(params);
+    const response = await client.responses.parse(params, requestOptions);
     return { response, parsed: extractParsed(response), parser: "responses.parse+zod" };
   }
   if (typeof client.responses?.create === "function") {
-    const response = await client.responses.create(params);
+    const response = await client.responses.create(params, requestOptions);
     if (!response.output_text) return { response, parsed: null, parser: "test-create-fallback" };
     return { response, parsed: schema.parse(JSON.parse(response.output_text)), parser: "test-create-fallback" };
   }
