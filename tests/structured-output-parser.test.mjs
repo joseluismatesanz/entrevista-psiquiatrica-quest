@@ -53,10 +53,12 @@ function validAssessment() {
 test("Producción usa responses.parse + Zod en lugar de JSON.parse manual", async () => {
   const assessment = validAssessment();
   let captured;
+  let capturedRequestOptions;
   const client = {
     responses: {
-      async parse(params) {
+      async parse(params, requestOptions) {
         captured = params;
+        capturedRequestOptions = requestOptions;
         return {
           status: "completed",
           output: [],
@@ -76,6 +78,8 @@ test("Producción usa responses.parse + Zod en lugar de JSON.parse manual", asyn
   assert.equal(captured.background, false);
   assert.equal(captured.text.format.type, "json_schema");
   assert.equal(captured.text.format.strict, true);
+  assert.equal(capturedRequestOptions.timeout, 110_000);
+  assert.equal(capturedRequestOptions.maxRetries, 0);
   assert.equal(result.meta.structured_output_parser, "responses.parse+zod");
   assert.equal(result.meta.structured_output_attempts, 1);
   assert.doesNotMatch(result.report, /MIR MAtesanz/);

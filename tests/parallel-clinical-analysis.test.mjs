@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { mergeParallelClinicalAssessment } from "../server/parallel-clinical-analysis.mjs";
 import { ClinicalAssessmentSchema } from "../server/clinical-schema.mjs";
+import { selectClinicalAnalysisMode } from "../api/analyze.mjs";
 
 const [apiAnalyze, serverAnalyze] = await Promise.all([
   readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
@@ -141,10 +142,16 @@ test("V0.6.1 paralelo: fusiona historia + episodio/MSE + diagnóstico/plan en el
   assert.equal(merged.validation.clinician_validation_required, true);
 });
 
-test("V0.6.1 paralelo: solo se activa en ruta completa con evidencia incremental verificada", () => {
-  assert.match(apiAnalyze, /parallelFullMode\s*=\s*!fastRoute\s*&&\s*evidenceBundle\.verified/);
-  assert.match(apiAnalyze, /parallelMode:\s*true/);
-  assert.match(apiAnalyze, /parallel_full_close:\s*parallelFullMode/);
+test("V0.6.2 estabilidad: la entrevista larga compleja evita la cadena paralela 3+1", () => {
+  assert.equal(selectClinicalAnalysisMode({ fastRoute: false, evidenceVerified: true }), "verified_single_full");
+  assert.equal(selectClinicalAnalysisMode({ fastRoute: true, evidenceVerified: true }), "verified_fast_parallel");
+  assert.equal(selectClinicalAnalysisMode({ fastRoute: false, evidenceVerified: false }), "single_full");
+  assert.doesNotMatch(apiAnalyze, /parallelMode:\s*true/);
+  assert.match(apiAnalyze, /parallel_full_close:\s*false/);
+  assert.match(apiAnalyze, /clinical_analysis_mode:\s*analysisMode/);
+
+  // El motor paralelo se conserva como unidad interna compatible, pero ya no es
+  // la ruta HTTP de las entrevistas largas complejas.
   assert.match(serverAnalyze, /Promise\.all/);
   assert.match(serverAnalyze, /parallel_full_route:\s*parallelMode/);
   assert.match(serverAnalyze, /HistoryClinicalSchema/);

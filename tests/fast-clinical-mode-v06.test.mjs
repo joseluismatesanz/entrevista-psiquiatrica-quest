@@ -100,7 +100,9 @@ test("V0.6 seguridad: API solo activa el paralelo rápido con ruta rápida y evi
   const apiAnalyze = await readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8");
   const fastParallel = await readFile(new URL("../server/fast-parallel-analysis.mjs", import.meta.url), "utf8");
 
-  assert.match(apiAnalyze, /const fastMode = fastRoute && evidenceBundle\.verified/);
+  assert.match(apiAnalyze, /analysisMode = selectClinicalAnalysisMode/);
+  assert.match(apiAnalyze, /const fastMode = analysisMode === "verified_fast_parallel"/);
+  assert.match(apiAnalyze, /verified_single_full/);
   assert.match(apiAnalyze, /analyzeFastParallelTranscript/);
   assert.match(apiAnalyze, /fast_parallel_close: fastParallelClose/);
   assert.match(apiAnalyze, /fast_parallel_fallback_used: fastParallelFallbackUsed/);

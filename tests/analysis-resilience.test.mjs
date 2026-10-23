@@ -2,11 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [client, gate, loader, index] = await Promise.all([
+const [client, gate, loader, index, api, server, fastParallel] = await Promise.all([
   readFile(new URL('../backend-client.js', import.meta.url), 'utf8'),
   readFile(new URL('../long-interview-prefetch-gate-v061.js', import.meta.url), 'utf8'),
   readFile(new URL('../loader.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
+  readFile(new URL('../api/analyze.mjs', import.meta.url), 'utf8'),
+  readFile(new URL('../server/analyze.mjs', import.meta.url), 'utf8'),
+  readFile(new URL('../server/fast-parallel-analysis.mjs', import.meta.url), 'utf8'),
 ]);
 
 test('organización: la petición tiene límite y siempre recupera el botón', () => {
@@ -23,6 +26,14 @@ test('organización larga: espera evidencia compactada y no conserva un preanál
   assert.match(gate, /controller\.abort/);
   assert.match(gate, /signal:\s*controller\.signal/);
   assert.match(gate, /waitForSnapshot\(pending, init\?\.signal\)/);
+});
+
+test('organización larga: la ruta compleja es única y las llamadas del modelo tienen límite propio', () => {
+  assert.match(api, /verified_single_full/);
+  assert.doesNotMatch(api, /parallelMode:\s*true/);
+  assert.match(api, /clinical_analysis_mode:\s*analysisMode/);
+  assert.match(server, /clinicalModelRequestOptions/);
+  assert.match(fastParallel, /clinicalModelRequestOptions\(\{ parallel: true \}\)/);
 });
 
 test('navegador: fuerza la carga de la recuperación de análisis', () => {

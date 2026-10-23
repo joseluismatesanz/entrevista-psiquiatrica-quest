@@ -47,6 +47,12 @@ export function useFastClinicalRoute(transcript) {
   return true;
 }
 
+export function selectClinicalAnalysisMode({ fastRoute, evidenceVerified }) {
+  if (fastRoute && evidenceVerified) return "verified_fast_parallel";
+  if (evidenceVerified) return "verified_single_full";
+  return "single_full";
+}
+
 export function verifyLongInterviewBlocks(normalizedTranscript, rawBlocks, options = {}) {
   if (!Array.isArray(rawBlocks) || rawBlocks.length === 0) return { verified: false, count: 0, blocks: [] };
   if (rawBlocks.length > 100) return { verified: false, count: rawBlocks.length, blocks: [] };
@@ -121,6 +127,8 @@ export default async function handler(req, res) {
 
   let stage = "request_validation";
   const totalStartedAt = Date.now();
+  let analysisMode = "unselected";
+  let transcriptCharacters = 0;
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
@@ -134,6 +142,7 @@ export default async function handler(req, res) {
     }
 
     const normalizedTranscript = transcript.trim();
+    transcriptCharacters = normalizedTranscript.length;
     const singleProofVerified = verifyPrivacyProof(normalizedTranscript, body.privacy_proof);
     const blockProofs = verifyLongInterviewBlocks(normalizedTranscript, body.verified_blocks);
     const privacyProofVerified = singleProofVerified || blockProofs.verified;
@@ -193,8 +202,11 @@ export default async function handler(req, res) {
 
     stage = "clinical_analysis";
     const fastRoute = useFastClinicalRoute(safeTranscript);
-    const fastMode = fastRoute && evidenceBundle.verified;
-    const parallelFullMode = !fastRoute && evidenceBundle.verified;
+    analysisMode = selectClinicalAnalysisMode({
+      fastRoute,
+      evidenceVerified: evidenceBundle.verified,
+    });
+    const fastMode = analysisMode === "verified_fast_parallel";
     let fastParallelClose = false;
     let fastParallelFallbackUsed = false;
     const analysisStartedAt = Date.now();
@@ -220,10 +232,17 @@ export default async function handler(req, res) {
       result = await analyzeTranscript(safeTranscript, {
         ...(fastRoute ? { model: "gpt-5.6-luna" } : {}),
         ...(evidenceBundle.verified ? { modelTranscript: evidenceBundle.transcript } : {}),
-        ...(parallelFullMode ? { parallelMode: true } : {}),
       });
     }
     const clinicalAnalysisMs = Date.now() - analysisStartedAt;
+
+    console.info("[analyze] completed", {
+      stage,
+      analysisMode,
+      transcriptCharacters,
+      evidenceVerified: evidenceBundle.verified,
+      totalMs: Date.now() - totalStartedAt,
+    });
 
     return res.status(200).json({
       ...result,
@@ -258,7 +277,8 @@ export default async function handler(req, res) {
         verified_fast_mode: fastMode,
         fast_parallel_close: fastParallelClose,
         fast_parallel_fallback_used: fastParallelFallbackUsed,
-        parallel_full_close: parallelFullMode,
+        parallel_full_close: false,
+        clinical_analysis_mode: analysisMode,
         request_performance_ms: {
           presidio_deidentification: presidioMs,
           person_name_redaction: redactionMs,
@@ -268,6 +288,13 @@ export default async function handler(req, res) {
       },
     });
   } catch (error) {
+    console.error("[analyze] failed", {
+      stage,
+      analysisMode,
+      transcriptCharacters,
+      errorName: safeErrorName(error),
+      totalMs: Date.now() - totalStartedAt,
+    });
     const isClientError = error instanceof SyntaxError || error instanceof TypeError;
     const status = stage === "load_clinical_engine" ? 500 : (isClientError ? 400 : 502);
     return res.status(status).json({
