@@ -26,7 +26,7 @@ test("privacidad: sin secreto estable no se emite prueba y se conserva la vía c
   assert.equal(verifyPrivacyProof(transcript, "v1.123.fake", { env: {}, now }), false);
 });
 
-test("rendimiento: transcribe emite prueba y analyze solo omite la segunda redacción si la verifica", async () => {
+test("rendimiento: transcribe emite prueba y analyze evita toda redacción duplicada", async () => {
   const [transcribeApi, analyzeApi, config] = await Promise.all([
     readFile(new URL("../api/transcribe.mjs", import.meta.url), "utf8"),
     readFile(new URL("../api/analyze.mjs", import.meta.url), "utf8"),
@@ -36,8 +36,9 @@ test("rendimiento: transcribe emite prueba y analyze solo omite la segunda redac
   assert.match(transcribeApi, /createPrivacyProof\(processed\.transcript\)/);
   assert.match(transcribeApi, /privacy_proof: privacyProof/);
   assert.match(analyzeApi, /verifyPrivacyProof\(normalizedTranscript, body\.privacy_proof\)/);
-  assert.match(analyzeApi, /if \(!privacyProofVerified\)[\s\S]*redactPersonNamesInTranscript/);
-  assert.match(analyzeApi, /duplicate_redaction_skipped: privacyProofVerified/);
+  assert.match(analyzeApi, /if \(!privacyProofVerified\)[\s\S]*deidentifyTranscriptWithPresidio/);
+  assert.doesNotMatch(analyzeApi, /redactPersonNamesInTranscript/);
+  assert.match(analyzeApi, /duplicate_redaction_skipped: true/);
   assert.match(config, /privacyProofs\.set\(transcript, proof\)/);
   assert.match(config, /privacy_proof: proof/);
   assert.match(config, /Cualquier edición cambia el texto/);

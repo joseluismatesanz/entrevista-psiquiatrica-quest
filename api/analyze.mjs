@@ -163,6 +163,7 @@ export default async function handler(req, res) {
       mask: "XXXXXXXXXXX",
       model: blockProofs.verified ? "verified-upstream-audio-blocks" : "verified-upstream-audio",
       replacements: 0,
+      mode: "verified_upstream",
     };
 
     if (!privacyProofVerified) {
@@ -179,17 +180,11 @@ export default async function handler(req, res) {
         entityCounts: presidio.entityCounts,
         upstreamVerified: false,
       };
-
-      stage = "person_name_redaction";
-      const redactionStartedAt = Date.now();
-      const { redactPersonNamesInTranscript } = await import("../server/person-name-redaction.mjs");
-      const redaction = await redactPersonNamesInTranscript(safeTranscript);
-      redactionMs = Date.now() - redactionStartedAt;
-      safeTranscript = redaction.transcript;
       redactionMeta = {
-        mask: redaction.meta.mask,
-        model: redaction.meta.model,
-        replacements: redaction.replacements,
+        mask: "XXXXXXXXXXX",
+        model: `presidio:${presidio.meta.model}`,
+        replacements: presidio.replacements,
+        mode: "presidio_single_pass",
       };
     }
 
@@ -253,6 +248,7 @@ export default async function handler(req, res) {
         person_name_redaction_mask: redactionMeta.mask,
         person_name_redaction_model: redactionMeta.model,
         person_name_redaction_replacements: redactionMeta.replacements,
+        person_name_redaction_mode: redactionMeta.mode,
         person_name_redaction_store: false,
         person_name_redaction_fail_closed: true,
         presidio_enabled: true,
@@ -266,7 +262,8 @@ export default async function handler(req, res) {
         presidio_store: false,
         presidio_fail_closed: true,
         privacy_proof_verified: privacyProofVerified,
-        duplicate_redaction_skipped: privacyProofVerified,
+        duplicate_redaction_skipped: true,
+        duplicate_name_redaction_skipped_after_presidio: !privacyProofVerified,
         long_interview_block_proofs_verified: blockProofs.verified,
         long_interview_verified_block_count: blockProofs.verified ? blockProofs.count : 0,
         long_interview_evidence_verified: evidenceBundle.verified,
@@ -298,9 +295,9 @@ export default async function handler(req, res) {
     const isClientError = error instanceof SyntaxError || error instanceof TypeError;
     const status = stage === "load_clinical_engine" ? 500 : (isClientError ? 400 : 502);
     return res.status(status).json({
-      error: stage === "load_clinical_engine" ? "clinical_engine_unavailable" : stage === "presidio_deidentification" ? "presidio_deidentification_failed" : stage === "person_name_redaction" ? "person_name_redaction_failed" : safeErrorName(error),
+      error: stage === "load_clinical_engine" ? "clinical_engine_unavailable" : stage === "presidio_deidentification" ? "presidio_deidentification_failed" : safeErrorName(error),
       stage,
-      message: stage === "load_clinical_engine" ? "No se pudo cargar el motor clínico en el backend." : stage === "presidio_deidentification" ? "No se pudo verificar la desidentificación con Presidio. No se ha generado ningún documento." : stage === "person_name_redaction" ? "No se pudo verificar la desidentificación de nombres personales. No se ha generado ningún documento." : safeErrorMessage(error),
+      message: stage === "load_clinical_engine" ? "No se pudo cargar el motor clínico en el backend." : stage === "presidio_deidentification" ? "No se pudo verificar la desidentificación con Presidio. No se ha generado ningún documento." : safeErrorMessage(error),
     });
   }
 }

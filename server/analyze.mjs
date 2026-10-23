@@ -50,12 +50,6 @@ function structuredOutputError(message, cause) {
   return error;
 }
 
-function isRetryableStructuredError(error) {
-  if (!error) return false;
-  if (error.name === "StructuredOutputParseError" || error.name === "SyntaxError" || error.name === "ZodError") return true;
-  return /json|parse|parsed|structured output|schema/i.test(String(error.message || ""));
-}
-
 async function invokeStructured(client, params, schema = ClinicalAssessmentSchema, requestOptions = clinicalModelRequestOptions()) {
   if (typeof client.responses?.parse === "function") {
     const response = await client.responses.parse(params, requestOptions);
@@ -81,35 +75,23 @@ async function requestParsedAssessment(
   schema = ClinicalAssessmentSchema,
   requestOptions = clinicalModelRequestOptions(),
 ) {
-  let lastError;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      const { response, parsed, parser } = await invokeStructured(client, {
-        ...baseParams,
-        instructions: attempt === 1
-          ? instructionPrompt
-          : `${instructionPrompt}\n\nREINTENTO TÉCNICO: devuelve únicamente una salida que cumpla exactamente el esquema estructurado. No añadas texto fuera de los campos del esquema.`,
-      }, schema, requestOptions);
-      const refusal = extractRefusal(response);
-      if (refusal) {
-        const error = new Error(refusal);
-        error.name = "ModelRefusalError";
-        throw error;
-      }
-      if (response.status !== "completed") {
-        const error = new Error(`Respuesta incompleta del modelo: ${response.status}`);
-        error.name = "IncompleteModelResponseError";
-        throw error;
-      }
-      if (!parsed) throw structuredOutputError("El modelo no devolvió una salida estructurada validable.");
-      return { parsed, response, attempts: attempt, parser };
-    } catch (error) {
-      lastError = error;
-      if (attempt < 2 && isRetryableStructuredError(error)) continue;
-      throw error;
-    }
+  const { response, parsed, parser } = await invokeStructured(client, {
+    ...baseParams,
+    instructions: instructionPrompt,
+  }, schema, requestOptions);
+  const refusal = extractRefusal(response);
+  if (refusal) {
+    const error = new Error(refusal);
+    error.name = "ModelRefusalError";
+    throw error;
   }
-  throw lastError || structuredOutputError("No se pudo obtener una salida estructurada válida.");
+  if (response.status !== "completed") {
+    const error = new Error(`Respuesta incompleta del modelo: ${response.status}`);
+    error.name = "IncompleteModelResponseError";
+    throw error;
+  }
+  if (!parsed) throw structuredOutputError("El modelo no devolvió una salida estructurada validable.");
+  return { parsed, response, attempts: 1, parser };
 }
 
 function modelInput(text) {

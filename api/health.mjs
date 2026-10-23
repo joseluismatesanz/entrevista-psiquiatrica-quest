@@ -73,6 +73,8 @@ export default async function handler(req, res) {
     verified_long_analysis_mode: "single_full",
     clinical_model_request_timeout_seconds: 110,
     clinical_model_automatic_retries: 0,
+    clinical_structured_output_automatic_retries: 0,
+    pasted_text_deidentification_mode: "presidio_single_pass",
     duplicate_name_redaction_skipped_after_presidio: true,
     signed_block_privacy_proofs: true,
     signed_clinical_evidence: true,
