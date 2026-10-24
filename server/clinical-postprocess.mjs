@@ -44,7 +44,8 @@ const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\
 const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
 const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
 const CLINICIAN_MAINTENANCE_PATTERN = /\b(?:mantener|mantengo|mantenemos|mantenga|continuar|continua|contin\u00fao|seguimos\s+con|seguir\s+con|sin\s+cambios|misma\s+pauta|resto\s+del\s+tratamiento)\b/i;
-const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|a\u00f1adir|a\u00f1ado|a\u00f1adimos|empezar|comenzar|sustituir|cambiar|cambio|cambiamos|aumentar|incrementar|subir|reducir|disminuir|bajar|ajustar|titular)\b/i;
+const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|anadir|anado|anadimos|empezar|comenzar|sustituir|cambiar|cambio|cambiamos|aumentar|aumento|aumentamos|incrementar|incremento|incrementamos|subir|subo|subimos|reducir|reduzco|reducimos|disminuir|disminuyo|disminuimos|bajar|bajo|bajamos|ajustar|ajusto|ajustamos|titular|titulo|titulamos)\b/i;
+const CLINICIAN_DISCONTINUATION_PATTERN = /\b(?:retirar|retiro|retiramos|suspender|suspendo|suspendemos|suprimir|suprimo|suprimimos|quitar|quito|quitamos|dejar\s+de\s+tomar|no\s+continuar|sustituir|sustituyo|sustituimos)\b/i;
 const FAMILY_ADDRESS_PATTERN = /\b(?:señora|senora|madre|padre|familiar|cuidador(?:a)?)\b/i;
 const FORMAL_ADDRESS_PATTERN = /\busted\b/i;
 const MEDICATION_QUESTION_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?|toma(?:r|s)?|tomando)\b/i;
@@ -167,6 +168,16 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     return false;
   });
 
+  const habitualPatientEvidenceLine = (med) => lines.find((line) => {
+    const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
+    if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
+    if (line.speaker === "PACIENTE") return !isFamilySelfMedicationLine(lines, line);
+    if (!FAMILY_SPEAKER_LABELS.has(line.speaker)) return false;
+    const text = normalize(line.text);
+    return !FAMILY_SELF_MEDICATION_PATTERN.test(text)
+      && COLLATERAL_PATIENT_MEDICATION_PATTERN.test(text);
+  });
+
   const hasClinicianMaintenanceEvidence = (med) => lines.some((line) =>
     line.speaker === "PSIQUIATRA"
     && lineMentionsMedication(line, med)
@@ -181,6 +192,53 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     && lineMentionsMedication(line, med)
     && CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
   );
+
+  const lineExplicitlyDiscontinuesMedication = (line, med) => {
+    if (line.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
+    const text = normalize(line.text);
+    const medicationIndex = medicationCandidateNames(med)
+      .map((name) => text.indexOf(name))
+      .filter((index) => index >= 0)
+      .sort((a, b) => a - b)[0];
+    if (!Number.isInteger(medicationIndex)) return false;
+
+    const before = text.slice(0, medicationIndex);
+    const lastIndex = (pattern) => {
+      let index = -1;
+      for (const match of before.matchAll(pattern)) index = match.index;
+      return index;
+    };
+    const stopIndex = lastIndex(/\b(?:retirar|retiro|retiramos|suspender|suspendo|suspendemos|suprimir|suprimo|suprimimos|quitar|quito|quitamos|dejar\s+de\s+tomar|no\s+continuar|sustituir|sustituyo|sustituimos)\b/gi);
+    if (stopIndex < 0) return false;
+    const startOrModifyIndex = lastIndex(/\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|anadir|anado|anadimos|empezar|comenzar|mantener|mantengo|mantenemos|subir|subo|subimos|aumentar|aumento|aumentamos|incrementar|incremento|incrementamos|reducir|reduzco|reducimos|disminuir|disminuyo|disminuimos|bajar|bajo|bajamos|ajustar|ajusto|ajustamos|titular|titulo|titulamos)\b/gi);
+    if (startOrModifyIndex > stopIndex) return false;
+
+    // En "sustituir A por B", solo A se retira; B es la nueva incorporación.
+    const replacementIndex = lastIndex(/\bpor\b/gi);
+    return replacementIndex < stopIndex;
+  };
+
+  const hasExplicitDiscontinuation = (med) => lines.some((line) =>
+    CLINICIAN_DISCONTINUATION_PATTERN.test(normalize(line.text))
+    && lineExplicitlyDiscontinuesMedication(line, med)
+  );
+
+  const priorSnapshot = (med) => {
+    const prior = { ...med, status: "active" };
+    const evidence = habitualPatientEvidenceLine(med);
+    if (!evidence || !hasExplicitTreatmentChange(med)) return prior;
+
+    const text = normalize(evidence.text);
+    const candidate = medicationCandidateNames(med).find((name) => text.includes(name));
+    const start = candidate ? text.indexOf(candidate) + candidate.length : 0;
+    const nearby = text.slice(start, start + 100);
+    const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\b/i);
+    if (dose) prior.dose = `${dose[1]} ${dose[2]}`;
+
+    const schedules = nearby.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia)\b/gi);
+    if (schedules?.length) prior.schedule = [...new Set(schedules)].join(" y ");
+    return prior;
+  };
 
   const hasCurrentPatientEvidence = (med) => lines.some((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
@@ -255,18 +313,20 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   // se recupera como habitual sin eliminarla de la pauta final.
   for (const med of current) {
     const preexisting = hasPreexistingEvidence(med);
-    const changedNow = hasExplicitTreatmentChange(med);
-
-    if (preexisting && !changedNow && !retainedHabitual.some((existing) => overlaps(existing, med))) {
-      retainedHabitual.push({ ...med, status: "active" });
+    if (preexisting && !retainedHabitual.some((existing) => overlaps(existing, med))) {
+      retainedHabitual.push(priorSnapshot(med));
       const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
       warnings.push(`medication_preexisting_recovered_current_to_habitual:${name}`);
     }
-
   }
 
   assessment.medications.habitual = retainedHabitual;
-  assessment.medications.current = current;
+  assessment.medications.current = current.filter((med) => {
+    if (!hasExplicitDiscontinuation(med)) return true;
+    const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
+    warnings.push(`medication_explicitly_discontinued_removed_from_current:${name}`);
+    return false;
+  });
 
   // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
   // Si el único respaldo del fármaco es una prescripción del psiquiatra posterior

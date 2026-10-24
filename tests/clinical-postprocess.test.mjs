@@ -334,6 +334,40 @@ test("V0.6 medicación: conserva la foto previa y la pauta final tras retirar, m
   );
 });
 
+test("V0.6 medicación: recupera fluoxetina y mirtazapina como habituales y las excluye tras sustituirlas", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Venlafaxina", "Venlafaxina", "active", "225 mg", "por la mañana"),
+    med("de praxis", "de praxis", "active", "100 mg", "por la noche"),
+    med("Rivotril", "Clonazepam (Rivotril)", "active", "0,5 mg", "a demanda"),
+    med("Fluoxetina", "Fluoxetina", "active", "20 mg", "por la mañana"),
+    med("Mirtazapina", "Mirtazapina", "active", "15 mg", "por la noche"),
+  ];
+
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento está tomando ahora mismo?",
+    "PACIENTE: Tomo fluoxetina 20 mg por la mañana y mirtazapina 15 mg por la noche.",
+    "PACIENTE: Sí, fluoxetina 20 mg por la mañana y mirtazapina 15 mg por la noche.",
+    "PSIQUIATRA: Vamos a sustituir la fluoxetina y la mirtazapina por venlafaxina 225 mg por la mañana y de praxis 100 mg por la noche.",
+    "PSIQUIATRA: Retiramos fluoxetina y mirtazapina y añadimos Rivotril 0,5 mg si lo necesita.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Fluoxetina:20 mg", "Mirtazapina:15 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => item.raw_name),
+    ["Venlafaxina", "de praxis", "Rivotril"],
+  );
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg/);
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Fluoxetina|Mirtazapina/);
+});
+
 
 test("V0.6 medicación: una pauta nueva no hereda adherencia expresada antes de prescribirla", () => {
   const fixture = assessmentFixture();
