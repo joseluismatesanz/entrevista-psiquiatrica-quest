@@ -356,16 +356,51 @@ test("V0.6 medicación: recupera fluoxetina y mirtazapina como habituales y las 
   const result = applyClinicalPostprocessing(fixture, transcript);
 
   assert.deepEqual(
-    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Fluoxetina:20 mg", "Mirtazapina:15 mg"],
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`.toLowerCase()),
+    ["fluoxetina:20 mg", "mirtazapina:15 mg"],
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => item.raw_name),
     ["Venlafaxina", "de praxis", "Rivotril"],
   );
-  assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg/);
-  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg/i);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg/i);
   assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Fluoxetina|Mirtazapina/);
+});
+
+test("V0.6 medicación: recupera el habitual aunque los fármacos previos ya no lleguen en ninguna lista", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
+    med("de praxis", "de praxis", "active", "100 mg", "por la noche"),
+    med("Clonazepam", "Clonazepam", "active", "0,5 mg", "a demanda"),
+  ];
+  fixture.sections.plan_terapeutico = {
+    text: "Sustituir fluoxetina 20 mg por sertralina 50 mg por la mañana. Sustituir mirtazapina 15 mg nocturna por de praxis 100 mg por la noche. Añadir clonazepam 0,5 mg como rescate.",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+
+  const transcript = [
+    "PACIENTE: He repetido varias veces la medicación que tomo.",
+    "PSIQUIATRA: Sustituir fluoxetina 20 mg por sertralina 50 mg por la mañana.",
+    "PSIQUIATRA: Sustituir mirtazapina 15 mg nocturna por de praxis 100 mg por la noche.",
+    "PSIQUIATRA: Añadir clonazepam 0,5 mg como rescate.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`),
+    ["fluoxetina:20 mg", "mirtazapina:15 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => item.raw_name),
+    ["Sertralina", "de praxis", "Clonazepam"],
+  );
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /fluoxetina 20 mg/i);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /mirtazapina 15 mg/i);
 });
 
 

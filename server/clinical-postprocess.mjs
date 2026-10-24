@@ -145,6 +145,72 @@ function medicationPlanCutoffIndex(lines, med, planAnchorIndex) {
   return Math.min(planAnchorIndex, firstExplicitPrescription?.index ?? Number.POSITIVE_INFINITY);
 }
 
+function substitutionPriorMedicationPhrases(value) {
+  const phrases = [];
+  for (const clause of String(value || "").split(/[.;\n]+/)) {
+    const match = clause.match(/\bsustituir\s+(.+?)\s+por\s+/i);
+    if (!match) continue;
+    for (const part of match[1].split(/\s+y\s+|\s*,\s*/i)) {
+      const cleaned = part
+        .replace(/^\s*(?:el|la|los|las)\s+/i, "")
+        .replace(/\s+(?:nocturn[oa]|matutin[oa])\s*$/i, "")
+        .trim();
+      if (cleaned) phrases.push(cleaned);
+    }
+  }
+  return phrases;
+}
+
+function medicationFromPriorSubstitutionPhrase(phrase, sourceIds = []) {
+  const doseMatch = phrase.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\b/i);
+  const rawName = phrase
+    .slice(0, doseMatch?.index ?? phrase.length)
+    .replace(/\s+(?:de|en|por)\s+la\s*$/i, "")
+    .trim();
+  if (!rawName || rawName.split(/\s+/).length > 4) return null;
+  return {
+    raw_name: rawName,
+    display_name: rawName,
+    active_ingredient_known: false,
+    role: "psychiatric",
+    dose: doseMatch ? `${doseMatch[1]} ${doseMatch[2]}` : "",
+    schedule: /\bnocturn[oa]\b/i.test(phrase) ? "por la noche" : "",
+    route: "",
+    prn: false,
+    adherence_status: "unknown",
+    adherence_text: "",
+    status: "active",
+    source_ids: [...new Set(sourceIds)],
+  };
+}
+
+function recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings) {
+  const habitual = Array.isArray(assessment.medications?.habitual)
+    ? assessment.medications.habitual
+    : [];
+  const plan = assessment.sections?.plan_terapeutico;
+  const sourceIds = Array.isArray(plan?.source_ids) ? plan.source_ids : [];
+  const phrases = [
+    ...substitutionPriorMedicationPhrases(transcript),
+    ...substitutionPriorMedicationPhrases(plan?.text),
+  ];
+
+  for (const phrase of phrases) {
+    const recovered = medicationFromPriorSubstitutionPhrase(phrase, sourceIds);
+    if (!recovered) continue;
+    const wanted = normalize(recovered.raw_name);
+    const existing = habitual.find((med) => medicationCandidateNames(med).includes(wanted));
+    if (existing) {
+      if (!clean(existing.dose) && recovered.dose) existing.dose = recovered.dose;
+      if (!clean(existing.schedule) && recovered.schedule) existing.schedule = recovered.schedule;
+      continue;
+    }
+    habitual.push(recovered);
+    warnings.push(`medication_habitual_recovered_from_explicit_substitution:${recovered.raw_name}`);
+  }
+  assessment.medications.habitual = habitual;
+}
+
 function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   const lines = speakerLines(transcript);
   if (!lines.length) return;
@@ -231,7 +297,8 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     const text = normalize(evidence.text);
     const candidate = medicationCandidateNames(med).find((name) => text.includes(name));
     const start = candidate ? text.indexOf(candidate) + candidate.length : 0;
-    const nearby = text.slice(start, start + 100);
+    const nearby = text.slice(start, start + 100)
+      .split(/\s+y\s+(?=[a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2}\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b)/i)[0];
     const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\b/i);
     if (dose) prior.dose = `${dose[1]} ${dose[2]}`;
 
@@ -313,10 +380,15 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   // se recupera como habitual sin eliminarla de la pauta final.
   for (const med of current) {
     const preexisting = hasPreexistingEvidence(med);
-    if (preexisting && !retainedHabitual.some((existing) => overlaps(existing, med))) {
+    const existingHabitual = retainedHabitual.find((existing) => overlaps(existing, med));
+    if (preexisting && !existingHabitual) {
       retainedHabitual.push(priorSnapshot(med));
       const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
       warnings.push(`medication_preexisting_recovered_current_to_habitual:${name}`);
+    } else if (preexisting && existingHabitual) {
+      const prior = priorSnapshot(med);
+      if (!clean(existingHabitual.dose) && clean(prior.dose)) existingHabitual.dose = prior.dose;
+      if (!clean(existingHabitual.schedule) && clean(prior.schedule)) existingHabitual.schedule = prior.schedule;
     }
   }
 
@@ -419,9 +491,18 @@ function enforceHabitualMedicationEvidence(assessment, transcript, warnings) {
   const retained = habitual.filter((med) => {
     if (med?.status !== "active") return true;
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
-    const supported = lines.some((line) =>
+    const supportedByPreconsultation = lines.some((line) =>
       lineSupportsPreexistingMedication(lines, line, med, medicationPlanIndex)
     );
+    const wantedNames = medicationCandidateNames(med);
+    const supportedByExplicitSubstitution = [
+      ...substitutionPriorMedicationPhrases(transcript),
+      ...substitutionPriorMedicationPhrases(assessment.sections?.plan_terapeutico?.text),
+    ].some((phrase) => {
+      const normalizedPhrase = normalize(phrase);
+      return wantedNames.some((name) => normalizedPhrase.includes(name));
+    });
+    const supported = supportedByPreconsultation || supportedByExplicitSubstitution;
     if (!supported) {
       const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
       warnings.push(`medication_habitual_pruned_without_preexisting_evidence:${name}`);
@@ -708,6 +789,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
 
+  recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
   pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);
 
   for (const med of assessment.medications?.habitual || []) {
