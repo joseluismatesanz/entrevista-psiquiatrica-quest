@@ -28,7 +28,7 @@ REGLAS POR APARTADO
    A) JUICIO SUSTENTADO: solo cuando la entrevista aporta información suficiente para una formulación diagnóstica de trabajo razonablemente sustentada. Entonces diagnostic_judgment.primary_diagnosis, cie10_code y dsm5_code deben contener diagnóstico/códigos coherentes; provisional puede ser true si procede; incluye diferencial cuando corresponda.
    B) INFORMACIÓN INSUFICIENTE: si la entrevista es breve, faltan criterios sindrómicos esenciales, duración, impacto funcional, exclusión de sustancias/causas orgánicas u otros datos necesarios para sostener un diagnóstico. En ese caso NO elijas una categoría "no especificada" solo para rellenar el esquema. Deja primary_diagnosis="", cie10_code="", dsm5_code="", provisional=true; explica en basis_summary por qué no hay base suficiente; deja sections.orientacion_diagnostica con evidence_status="insufficient". La ausencia de diagnóstico es preferible a un cierre artificial.
 14. PLAN TERAPÉUTICO: deja claro ingreso/no ingreso, unidad si procede, cambios farmacológicos, pruebas, seguimiento/Equipo de Salud Mental exacto si se menciona, seguridad, medidas no farmacológicas y sustancias.
-15. TRATAMIENTO ACTUAL: SOLO medicación iniciada o cuya dosis/pauta se modifica durante esta valoración y, cuando sea clínicamente relevante, dosis administradas una sola vez durante el episodio actual. La medicación previa que se mantiene sin cambios pertenece exclusivamente a TRATAMIENTO HABITUAL y no debe repetirse aquí.
+15. TRATAMIENTO ACTUAL: tratamiento final tras la valoración. Incluye solo medicación activa al alta/ingreso y, cuando sea clínicamente relevante, dosis administradas una sola vez durante el episodio actual. No arrastres medicación histórica.
 
 MEDICACIÓN
 - Preferir principio activo/genérico solo cuando sea conocido por la transcripción o inequívoco. No inventes el principio activo a partir de una marca dudosa.
@@ -36,7 +36,7 @@ MEDICACIÓN
 - Si el nombre es dudoso, conserva literalmente raw_name en el informe sin añadir frases como "principio activo no confirmado" o "no establecido en la transcripción"; registra la necesidad de revisión únicamente en safety_review.
 - Mantén dosis, vía, PRN y pauta exactamente hasta donde estén documentadas.
 - Adherencia debe quedar explícita cuando se haya preguntado/obtenido.
-- Separa tratamiento habitual, medicación nueva o modificada en la consulta, tratamiento histórico y dosis administrada una sola vez. Mantener sin cambios una medicación previa no la convierte en tratamiento actual.
+- Separa tratamiento habitual, histórico y dosis administrada una sola vez.
 - La medicación que un familiar refiere tomar para sí mismo NO pertenece al tratamiento del paciente. Ejemplo: MADRE: "yo tomo lorazepam" es medicación de la madre, no del paciente. Solo incorpora un fármaco al paciente si existe evidencia explícita dirigida al paciente (paciente que lo toma, familiar que dice que el paciente lo toma, o psiquiatra que se lo prescribe).
 - status="active": medicación vigente.
 - status="historical": medicación pasada o no confirmada como vigente.
