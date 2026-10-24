@@ -403,6 +403,39 @@ test("V0.6 medicación: recupera el habitual aunque los fármacos previos ya no 
   assert.match(result.assessment.sections.tratamiento_habitual.text, /mirtazapina 15 mg/i);
 });
 
+test("V0.6 medicación: resuelve dos sustituciones encadenadas en una sola frase", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Venlafaxina", "Venlafaxina", "active", "225 mg", "por la mañana"),
+    med("Trazodona", "Trazodona", "active", "100 mg", "por la noche"),
+    med("cronacepan", "cronacepan", "active", "0,5 mg", "si precisa"),
+    med("Fluoxetina", "Fluoxetina", "active", "20 mg", "por la mañana"),
+    med("Mirtazapina", "Mirtazapina", "active", "15 mg", "por la noche"),
+  ];
+  fixture.sections.plan_terapeutico = {
+    text: "Sustituir fluoxetina por venlafaxina 225 mg en una toma matutina y mirtazapina por trazodona 100 mg por la noche. Añadir cronacepan 0,5 mg si precisa.",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+
+  const transcript = [
+    "PSIQUIATRA: Sustituir fluoxetina por venlafaxina 225 mg en una toma matutina y mirtazapina por trazodona 100 mg por la noche.",
+    "PSIQUIATRA: Añadir cronacepan 0,5 mg si precisa.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`.toLowerCase()),
+    ["fluoxetina:20 mg", "mirtazapina:15 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => item.raw_name),
+    ["Venlafaxina", "Trazodona", "cronacepan"],
+  );
+});
+
 
 test("V0.6 medicación: una pauta nueva no hereda adherencia expresada antes de prescribirla", () => {
   const fixture = assessmentFixture();
