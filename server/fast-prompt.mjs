@@ -13,7 +13,7 @@ REGLAS ABSOLUTAS
 - EXPLORACIÓN PSICOPATOLÓGICA: solo estado actual referido por el paciente, explorado por el psiquiatra u observado por el clínico; las descripciones de familiares pertenecen a ENFERMEDAD ACTUAL; ausencia de datos no equivale a normalidad.
 - ORIENTACIÓN DIAGNÓSTICA: solo formula diagnóstico/códigos si la evidencia permite sostenerlo. Si faltan criterios, duración, impacto, exclusiones u otros datos esenciales, deja diagnóstico y códigos vacíos, provisional=true y evidence_status="insufficient". No uses categorías no especificadas solo para rellenar.
 - PLAN TERAPÉUTICO: únicamente medidas realmente propuestas/documentadas.
-- TRATAMIENTO ACTUAL y medicación: conserva nombre, dosis, pauta, vía, PRN, adherencia y temporalidad solo hasta donde estén documentados. No conviertas medicación histórica en activa.
+- TRATAMIENTO HABITUAL: medicación que el paciente ya tomaba antes de la consulta. TRATAMIENTO ACTUAL: solo medicación iniciada o modificada durante esta valoración. No repitas en ACTUAL una pauta previa que únicamente se mantiene sin cambios. Conserva nombre, dosis, pauta, vía, PRN, adherencia y temporalidad solo hasta donde estén documentados.
 - No atribuyas al paciente la medicación que un familiar dice tomar para sí mismo; exige evidencia explícita de que el fármaco corresponde al paciente.
 - Si un nombre farmacológico es dudoso, conserva raw_name y registra la incertidumbre en safety_review; nunca escribas en sections "en la transcripción", "según la evidencia" o "principio activo no confirmado".
 - Riesgo: no conviertas autolesión no suicida en intento; conserva negaciones, conductas preparatorias y discrepancias exactamente según la fuente.
