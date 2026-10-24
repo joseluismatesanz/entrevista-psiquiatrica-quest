@@ -436,6 +436,33 @@ test("V0.6 medicación: resuelve dos sustituciones encadenadas en una sola frase
   );
 });
 
+test("V0.6 medicación: propaga el nombre confirmado por CIMA a todo el informe", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  const venlafaxina = med("Ven la fascina", "Venlafaxina", "active", "225 mg", "por la mañana");
+  venlafaxina.active_ingredient_known = true;
+  venlafaxina.medication_verification = { status: "confirmed" };
+  fixture.medications.current = [venlafaxina];
+  fixture.sections.plan_terapeutico = {
+    text: "Sustituir fluoxetina 20 mg por «Ven la fascina» 225 mg por la mañana.",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+  fixture.sections.enfermedad_actual = {
+    text: "Se acuerda iniciar ven la fascina por respuesta insuficiente al tratamiento previo.",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+
+  const transcript = "PSIQUIATRA: Vamos a iniciar Ven la fascina 225 mg por la mañana.";
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.match(result.assessment.sections.plan_terapeutico.text, /«Venlafaxina» 225 mg/);
+  assert.match(result.assessment.sections.enfermedad_actual.text, /iniciar Venlafaxina/);
+  assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /Ven la fascina/i);
+  assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: por la mañana");
+});
+
 
 test("V0.6 medicación: una pauta nueva no hereda adherencia expresada antes de prescribirla", () => {
   const fixture = assessmentFixture();
