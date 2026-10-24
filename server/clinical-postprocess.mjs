@@ -43,6 +43,8 @@ const FAMILY_SELF_MEDICATION_PATTERN = /\b(?:yo\s+)?(?:ahora\s+mismo\s+)?(?:esto
 const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma)\b/i;
 const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
 const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
+const CLINICIAN_MAINTENANCE_PATTERN = /\b(?:mantener|mantengo|mantenemos|mantenga|continuar|continua|contin\u00fao|seguimos\s+con|seguir\s+con|sin\s+cambios|misma\s+pauta|resto\s+del\s+tratamiento)\b/i;
+const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|a\u00f1adir|a\u00f1ado|a\u00f1adimos|empezar|comenzar|sustituir|cambiar|cambio|cambiamos|aumentar|incrementar|subir|reducir|disminuir|bajar|ajustar|titular)\b/i;
 const FAMILY_ADDRESS_PATTERN = /\b(?:señora|senora|madre|padre|familiar|cuidador(?:a)?)\b/i;
 const FORMAL_ADDRESS_PATTERN = /\busted\b/i;
 const MEDICATION_QUESTION_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?|toma(?:r|s)?|tomando)\b/i;
@@ -165,6 +167,21 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     return false;
   });
 
+  const hasClinicianMaintenanceEvidence = (med) => lines.some((line) =>
+    line.speaker === "PSIQUIATRA"
+    && lineMentionsMedication(line, med)
+    && CLINICIAN_MAINTENANCE_PATTERN.test(normalize(line.text))
+  );
+
+  const hasPreexistingEvidence = (med) =>
+    hasHabitualPatientEvidence(med) || hasClinicianMaintenanceEvidence(med);
+
+  const hasExplicitTreatmentChange = (med) => lines.some((line) =>
+    line.speaker === "PSIQUIATRA"
+    && lineMentionsMedication(line, med)
+    && CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
+  );
+
   const hasCurrentPatientEvidence = (med) => lines.some((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (!lineMentionsMedication(line, med)) return false;
@@ -218,7 +235,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
 
   const retainedHabitual = [];
   for (const med of habitual) {
-    const onlyNewPrescription = !hasHabitualPatientEvidence(med) && hasCurrentPatientEvidence(med);
+    const onlyNewPrescription = !hasPreexistingEvidence(med) && hasCurrentPatientEvidence(med);
     if (!onlyNewPrescription) {
       retainedHabitual.push(med);
       continue;
@@ -232,13 +249,39 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   }
 
   assessment.medications.habitual = retainedHabitual;
-  assessment.medications.current = current;
+
+  // El modelo puede devolver en "actual" toda la pauta final, incluyendo f\u00e1rmacos
+  // que el paciente ya tomaba y que el psiquiatra simplemente mantiene. Recuperamos
+  // esas entidades como tratamiento habitual y dejamos en "actual" solo lo iniciado
+  // o modificado durante esta consulta.
+  const retainedCurrent = [];
+  for (const med of current) {
+    const preexisting = hasPreexistingEvidence(med);
+    const changedNow = hasExplicitTreatmentChange(med);
+
+    if (preexisting && !changedNow && !retainedHabitual.some((existing) => overlaps(existing, med))) {
+      retainedHabitual.push({ ...med, status: "active" });
+      const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
+      warnings.push(`medication_preexisting_recovered_current_to_habitual:${name}`);
+    }
+
+    if (!preexisting || changedNow) {
+      retainedCurrent.push(med);
+      continue;
+    }
+
+    const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
+    warnings.push(`medication_unchanged_maintenance_removed_from_current:${name}`);
+  }
+
+  assessment.medications.habitual = retainedHabitual;
+  assessment.medications.current = retainedCurrent;
 
   // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
   // Si el único respaldo del fármaco es una prescripción del psiquiatra posterior
   // al anclaje del nuevo plan, se elimina cualquier adherencia arrastrada por el modelo.
   for (const med of assessment.medications.current || []) {
-    const newlyPrescribed = !hasHabitualPatientEvidence(med) && hasCurrentPatientEvidence(med);
+    const newlyPrescribed = !hasPreexistingEvidence(med) && hasCurrentPatientEvidence(med);
     if (!newlyPrescribed) continue;
     if (med.adherence_status !== "unknown" || clean(med.adherence_text)) {
       med.adherence_status = "unknown";

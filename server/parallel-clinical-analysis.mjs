@@ -137,7 +137,7 @@ Devuelve exactamente el esquema solicitado.
 - EXPLORACIÓN PSICOPATOLÓGICA: únicamente estado actual referido por el paciente, explorado por el psiquiatra u observado por el clínico. Las descripciones de familiares pertenecen a ENFERMEDAD ACTUAL. Ausencia de datos no equivale a normalidad.
 - ORIENTACIÓN DIAGNÓSTICA: solo diagnóstico de trabajo si hay criterios suficientes. Si faltan duración, síndrome, impacto funcional, sustancias/causas médicas u otros datos esenciales, deja diagnóstico y códigos vacíos y marca insufficient; no uses categorías no especificadas para rellenar.
 - PLAN TERAPÉUTICO: ingreso/no ingreso, unidad, cambios farmacológicos, pruebas, seguimiento, seguridad y medidas no farmacológicas solo cuando estén sustentados.
-- TRATAMIENTO ACTUAL: medicación final tras la valoración; separa dosis puntual administered_once de tratamiento activo.
+- TRATAMIENTO ACTUAL: solo medicación iniciada o modificada durante esta valoración; separa dosis puntual administered_once. La medicación previa mantenida sin cambios pertenece exclusivamente a TRATAMIENTO HABITUAL.
 - RIESGO: NSSI no es automáticamente intento suicida; conserva conducta preparatoria, heteroagresividad y discrepancias de fuentes.
 - MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Si el nombre es dudoso, conserva raw_name y lleva la advertencia a safety_review; no escribas en sections expresiones como "en la transcripción", "según la evidencia" o "principio activo no confirmado".
 - missing_or_not_explored: solo ausencias con posible impacto clínico real.
@@ -168,7 +168,7 @@ Eres un asistente de documentación clínica psiquiátrica. Extrae SOLO juicio d
 Devuelve exactamente el esquema solicitado.
 - ORIENTACIÓN DIAGNÓSTICA: solo diagnóstico de trabajo si hay criterios suficientes. Si faltan duración, síndrome, impacto funcional, sustancias/causas médicas u otros datos esenciales, deja diagnóstico y códigos vacíos y marca insufficient; no uses categorías no especificadas para rellenar.
 - PLAN TERAPÉUTICO: ingreso/no ingreso, unidad, cambios farmacológicos, pruebas, seguimiento, seguridad y medidas no farmacológicas solo cuando estén sustentados.
-- TRATAMIENTO ACTUAL: medicación final tras la valoración. Separa medicación habitual de tratamiento final y dosis puntual administered_once.
+- TRATAMIENTO ACTUAL: solo medicación iniciada o modificada durante esta valoración. La medicación previa mantenida sin cambios pertenece exclusivamente a TRATAMIENTO HABITUAL. Separa las dosis puntuales administered_once.
 - MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Conserva marcas/nombres cuando no exista equivalencia inequívoca y lleva la incertidumbre a safety_review, nunca a la redacción clínica de sections. La medicación que un familiar refiere tomar para sí mismo no debe incorporarse al paciente; una prescripción explícita del psiquiatra dirigida al paciente sí pertenece al tratamiento actual.
 - missing_or_not_explored: solo ausencias que puedan cambiar diagnóstico, tratamiento o seguimiento.
 - conflicts: conserva versiones incompatibles sin resolverlas sin base.
