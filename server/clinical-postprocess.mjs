@@ -566,6 +566,36 @@ function medicationLine(med) {
   return line.replace(/\.\./g, ".").trim();
 }
 
+function canonicalizeVerifiedMedicationNamesInSections(assessment, warnings) {
+  const replacements = [];
+  for (const group of [assessment.medications?.habitual, assessment.medications?.current]) {
+    for (const med of group || []) {
+      const rawName = clean(med?.raw_name);
+      const displayName = clean(med?.display_name);
+      if (!rawName || !displayName || normalize(rawName) === normalize(displayName)) continue;
+      if (med?.medication_verification?.status !== "confirmed") continue;
+      replacements.push({ rawName, displayName });
+    }
+  }
+
+  replacements.sort((left, right) => right.rawName.length - left.rawName.length);
+  for (const section of Object.values(assessment.sections || {})) {
+    if (!section?.text) continue;
+    for (const { rawName, displayName } of replacements) {
+      const escaped = rawName
+        .split(/\s+/)
+        .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("\\s+");
+      const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu");
+      const updated = section.text.replace(pattern, displayName);
+      if (updated !== section.text) {
+        section.text = updated;
+        warnings.push(`medication_verified_name_propagated_to_sections:${rawName}->${displayName}`);
+      }
+    }
+  }
+}
+
 function syncMedicationSection(assessment, group, sectionKey, statuses) {
   const list = assessment.medications?.[group] || [];
   const allowed = new Set(statuses);
@@ -826,6 +856,11 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   // Guarda final: tras CIMA, correcciones de temporalidad y enriquecimiento de
   // adherencia, solo puede quedar como habitual una pauta inequívocamente previa.
   enforceHabitualMedicationEvidence(assessment, transcript, warnings);
+
+  // CIMA verifica las entidades farmacológicas estructuradas antes de este paso.
+  // Propagamos el nombre canónico a todos los apartados para que el plan y la
+  // narrativa no conserven una variante fonética que ya fue corregida.
+  canonicalizeVerifiedMedicationNamesInSections(assessment, warnings);
 
   syncMedicationSection(assessment, "habitual", "tratamiento_habitual", ["active"]);
   syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
