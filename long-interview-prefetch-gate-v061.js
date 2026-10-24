@@ -2,7 +2,7 @@
   if (typeof window.fetch !== 'function') return;
 
   const inheritedFetch = window.fetch.bind(window);
-  const MAX_EVIDENCE_WAIT_MS = 45_000;
+  const MAX_EVIDENCE_WAIT_MS = 5_000;
   const ANALYSIS_PREFETCH_TIMEOUT_MS = 210_000;
   const POLL_MS = 100;
   const verifiedPrefetches = new Map();
