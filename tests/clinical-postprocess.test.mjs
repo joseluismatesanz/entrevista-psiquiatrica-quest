@@ -261,7 +261,7 @@ test("V0.6 medicación: una nueva pauta del psiquiatra no queda como tratamiento
   assert.equal(result.meta.medication_new_prescription_temporality_guard, true);
 });
 
-test("V0.6 medicación: recupera como habitual la pauta previa y deja en actual solo lo introducido en consulta", () => {
+test("V0.6 medicación: recupera la pauta previa como habitual y conserva la pauta final completa en actual", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [];
   fixture.medications.current = [
@@ -294,17 +294,44 @@ test("V0.6 medicación: recupera como habitual la pauta previa y deja en actual 
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => item.raw_name),
-    ["Fluoxetina"],
+    ["Fluoxetina", "Anafranil", "Catapresan", "Olanzapina", "Clonazepam", "Mirtazapina"],
   );
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clomipramina \(Anafranil\)/);
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonidina \(Catapresan\)/);
-  assert.equal(result.assessment.sections.tratamiento_actual.text, "Fluoxetina 20 mg: por la mañana y al mediodía");
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Fluoxetina 20 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Clomipramina \(Anafranil\)/);
   assert.ok(result.warnings.some((warning) =>
     warning.startsWith("medication_preexisting_recovered_current_to_habitual:")
   ));
-  assert.ok(result.warnings.some((warning) =>
-    warning.startsWith("medication_unchanged_maintenance_removed_from_current:")
-  ));
+});
+
+test("V0.6 medicación: conserva la foto previa y la pauta final tras retirar, modificar y añadir", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
+    med("Lorazepam", "Lorazepam", "active", "1 mg", "por la noche"),
+  ];
+  fixture.medications.current = [
+    med("Sertralina", "Sertralina", "active", "100 mg", "por la mañana"),
+    med("Fluoxetina", "Fluoxetina", "active", "20 mg", "al mediodía"),
+  ];
+
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente antes de venir a consulta?",
+    "PACIENTE: Tomo sertralina 50 mg por la mañana y lorazepam 1 mg por la noche.",
+    "PSIQUIATRA: Desde hoy retiramos el lorazepam, subimos la sertralina a 100 mg por la mañana y añadimos fluoxetina 20 mg al mediodía.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Sertralina:50 mg", "Lorazepam:1 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Sertralina:100 mg", "Fluoxetina:20 mg"],
+  );
 });
 
 
