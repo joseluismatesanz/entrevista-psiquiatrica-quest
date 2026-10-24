@@ -21,7 +21,7 @@ test('organización: la petición tiene límite y siempre recupera el botón', (
 });
 
 test('organización larga: espera evidencia compactada y no conserva un preanálisis infinito', () => {
-  assert.match(gate, /MAX_EVIDENCE_WAIT_MS\s*=\s*45_000/);
+  assert.match(gate, /MAX_EVIDENCE_WAIT_MS\s*=\s*5_000/);
   assert.match(gate, /ANALYSIS_PREFETCH_TIMEOUT_MS\s*=\s*210_000/);
   assert.match(gate, /controller\.abort/);
   assert.match(gate, /signal:\s*controller\.signal/);
@@ -39,5 +39,5 @@ test('organización larga: la ruta compleja es única y las llamadas del modelo 
 test('navegador: fuerza la carga de la recuperación de análisis', () => {
   assert.match(loader, /backend-client\.js\?v=20261006-analysis-recovery-1/);
   assert.match(index, /loader\.js\?v=20261006-analysis-recovery-1/);
-  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261006-analysis-recovery-1/);
+  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261024-recording-gate-1/);
 });
