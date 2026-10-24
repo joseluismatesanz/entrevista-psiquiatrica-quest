@@ -250,11 +250,9 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
 
   assessment.medications.habitual = retainedHabitual;
 
-  // El modelo puede devolver en "actual" toda la pauta final, incluyendo f\u00e1rmacos
-  // que el paciente ya tomaba y que el psiquiatra simplemente mantiene. Recuperamos
-  // esas entidades como tratamiento habitual y dejamos en "actual" solo lo iniciado
-  // o modificado durante esta consulta.
-  const retainedCurrent = [];
+  // "Habitual" es la fotograf\u00eda previa a la consulta; "actual" es la pauta final
+  // resultante. Por eso una medicaci\u00f3n mantenida debe aparecer en ambos apartados:
+  // se recupera como habitual sin eliminarla de la pauta final.
   for (const med of current) {
     const preexisting = hasPreexistingEvidence(med);
     const changedNow = hasExplicitTreatmentChange(med);
@@ -265,17 +263,10 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
       warnings.push(`medication_preexisting_recovered_current_to_habitual:${name}`);
     }
 
-    if (!preexisting || changedNow) {
-      retainedCurrent.push(med);
-      continue;
-    }
-
-    const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
-    warnings.push(`medication_unchanged_maintenance_removed_from_current:${name}`);
   }
 
   assessment.medications.habitual = retainedHabitual;
-  assessment.medications.current = retainedCurrent;
+  assessment.medications.current = current;
 
   // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
   // Si el único respaldo del fármaco es una prescripción del psiquiatra posterior
