@@ -150,7 +150,12 @@ function substitutionPriorMedicationPhrases(value) {
   for (const clause of String(value || "").split(/[.;\n]+/)) {
     const match = clause.match(/\bsustituir\s+(.+?)\s+por\s+/i);
     if (!match) continue;
-    for (const part of match[1].split(/\s+y\s+|\s*,\s*/i)) {
+    const priorParts = [match[1]];
+    const remainder = clause.slice((match.index ?? 0) + match[0].length);
+    for (const chained of remainder.matchAll(/\s+y\s+((?:el|la|los|las)\s+)?([^,.;]+?)\s+por\s+(?!la\b|el\b|una?\b)/gi)) {
+      priorParts.push(`${chained[1] || ""}${chained[2]}`);
+    }
+    for (const part of priorParts.flatMap((item) => item.split(/\s+y\s+|\s*,\s*/i))) {
       const cleaned = part
         .replace(/^\s*(?:el|la|los|las)\s+/i, "")
         .replace(/\s+(?:nocturn[oa]|matutin[oa])\s*$/i, "")
@@ -250,8 +255,22 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     && CLINICIAN_MAINTENANCE_PATTERN.test(normalize(line.text))
   );
 
+  const explicitSubstitutionPriors = [
+    ...substitutionPriorMedicationPhrases(transcript),
+    ...substitutionPriorMedicationPhrases(assessment.sections?.plan_terapeutico?.text),
+  ];
+  const hasExplicitSubstitutionPriorEvidence = (med) => {
+    const names = medicationCandidateNames(med);
+    return explicitSubstitutionPriors.some((phrase) => {
+      const normalizedPhrase = normalize(phrase);
+      return names.some((name) => normalizedPhrase.includes(name));
+    });
+  };
+
   const hasPreexistingEvidence = (med) =>
-    hasHabitualPatientEvidence(med) || hasClinicianMaintenanceEvidence(med);
+    hasHabitualPatientEvidence(med)
+    || hasClinicianMaintenanceEvidence(med)
+    || hasExplicitSubstitutionPriorEvidence(med);
 
   const hasExplicitTreatmentChange = (med) => lines.some((line) =>
     line.speaker === "PSIQUIATRA"
@@ -287,7 +306,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   const hasExplicitDiscontinuation = (med) => lines.some((line) =>
     CLINICIAN_DISCONTINUATION_PATTERN.test(normalize(line.text))
     && lineExplicitlyDiscontinuesMedication(line, med)
-  );
+  ) || hasExplicitSubstitutionPriorEvidence(med);
 
   const priorSnapshot = (med) => {
     const prior = { ...med, status: "active" };
