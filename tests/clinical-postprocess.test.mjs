@@ -261,6 +261,52 @@ test("V0.6 medicación: una nueva pauta del psiquiatra no queda como tratamiento
   assert.equal(result.meta.medication_new_prescription_temporality_guard, true);
 });
 
+test("V0.6 medicación: recupera como habitual la pauta previa y deja en actual solo lo introducido en consulta", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Fluoxetina", "Fluoxetina", "active", "20 mg", "por la mañana y al mediodía"),
+    med("Anafranil", "Clomipramina (Anafranil)", "active", "225 mg/día", "150 mg por la mañana y 75 mg en la comida"),
+    med("Catapresan", "Clonidina (Catapresan)", "active", "", ""),
+    med("Olanzapina", "Olanzapina", "active", "15 mg/día", "5 mg por la mañana y 10 mg por la noche"),
+    med("Clonazepam", "Clonazepam", "active", "1 mg", "por la noche"),
+    med("Mirtazapina", "Mirtazapina", "active", "15 mg", "por la noche"),
+  ];
+  fixture.sections.tratamiento_habitual = { text: "", evidence_status: "not_provided", source_ids: [] };
+  fixture.sections.tratamiento_actual = {
+    text: "Fluoxetina, Anafranil, Catapresan, olanzapina, clonazepam y mirtazapina.",
+    evidence_status: "supported",
+    source_ids: ["patient", "psychiatrist"],
+  };
+
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente antes de venir a consulta?",
+    "PACIENTE: Tomo Anafranil 225 mg al día, Catapresan, olanzapina 15 mg al día, clonazepam 1 mg por la noche y mirtazapina 15 mg por la noche.",
+    "PSIQUIATRA: Vamos a introducir fluoxetina 20 mg por la mañana y 20 mg al mediodía.",
+    "PSIQUIATRA: Mantenga sin cambios el resto del tratamiento que ya tomaba.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => item.raw_name),
+    ["Anafranil", "Catapresan", "Olanzapina", "Clonazepam", "Mirtazapina"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => item.raw_name),
+    ["Fluoxetina"],
+  );
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Clomipramina \(Anafranil\)/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonidina \(Catapresan\)/);
+  assert.equal(result.assessment.sections.tratamiento_actual.text, "Fluoxetina 20 mg: por la mañana y al mediodía");
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_preexisting_recovered_current_to_habitual:")
+  ));
+  assert.ok(result.warnings.some((warning) =>
+    warning.startsWith("medication_unchanged_maintenance_removed_from_current:")
+  ));
+});
+
 
 test("V0.6 medicación: una pauta nueva no hereda adherencia expresada antes de prescribirla", () => {
   const fixture = assessmentFixture();
