@@ -1,0 +1,19 @@
+PSIQUIATRA: Te han traído a Urgencias dos agentes porque estabas entrando en la calzada y gritando a conductores.
+PACIENTE: Un coche negro me sigue y las cámaras de la calle están conectadas. También oigo voces que dicen que no confíe en nadie.
+PSIQUIATRA: ¿Cuánto has dormido?
+PACIENTE: Dos o tres horas por noche y una noche nada.
+PSIQUIATRA: ¿Has consumido drogas?
+PACIENTE: No.
+ENFERMERA: El cribado de orina es positivo para cannabis y anfetaminas.
+PACIENTE: Vale, tomé speed ayer y el día anterior y fumo uno o dos porros por la noche.
+PSIQUIATRA: ¿Antecedentes médicos y medicación?
+PACIENTE: Tengo asma desde pequeño. Uso salbutamol, dos inhalaciones si me falta el aire. No tomo ahora medicación psiquiátrica.
+ENFERMERA: En historia consta ingreso en Unidad de Agudos en noviembre de 2024 por episodio psicótico en contexto de cannabis y falta de sueño.
+PSIQUIATRA: ¿Antecedentes psiquiátricos en tu familia biológica?
+PACIENTE: Mi madre tuvo depresión, un hermano de mi padre tiene esquizofrenia y mi padre bebía mucho.
+PSIQUIATRA: Te propongo medicación oral para bajar la agitación.
+PACIENTE: No voy a tomar nada.
+PSIQUIATRA: Te planteo ingreso en Unidad de Agudos.
+PACIENTE: No quiero ingresar.
+PSIQUIATRA: Durante la entrevista aumenta la agitación pese a desescalada y reducción de estímulos. Intenta salir, golpea la pared y lanza una silla sin alcanzar a nadie. Se activa protocolo de contención mecánica con enfermería, auxiliares y seguridad; la policía permanece solo en custodia. Se administra olanzapina 10 mg intramuscular y posteriormente se retira la contención tras reevaluación médica y mejoría.
+PACIENTE: Ahora sigo desconfiando un poco, pero las voces son más bajas. No quiero morir ni hacer daño a nadie.

@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClinicalPsychiatricAssessmentDraft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sources",
+    "sections",
+    "missing_or_not_explored",
+    "conflicts",
+    "safety_review",
+    "validation"
+  ],
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "kind"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["patient", "mother", "father", "caregiver", "family", "clinician_observation", "other"]
+          }
+        }
+      }
+    },
+    "sections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motivo_consulta",
+        "psq_guardia",
+        "alergias_ram",
+        "antecedentes_somaticos",
+        "antecedentes_salud_mental",
+        "antecedentes_familiares_psiquiatricos",
+        "situacion_sociofamiliar",
+        "habitos_toxicos",
+        "tratamiento_habitual",
+        "enfermedad_actual",
+        "intervencion",
+        "exploracion_psicopatologica",
+        "orientacion_diagnostica",
+        "plan_terapeutico",
+        "tratamiento_actual"
+      ],
+      "properties": {
+        "motivo_consulta": { "$ref": "#/$defs/section" },
+        "psq_guardia": { "$ref": "#/$defs/section" },
+        "alergias_ram": { "$ref": "#/$defs/section" },
+        "antecedentes_somaticos": { "$ref": "#/$defs/section" },
+        "antecedentes_salud_mental": { "$ref": "#/$defs/section" },
+        "antecedentes_familiares_psiquiatricos": { "$ref": "#/$defs/section" },
+        "situacion_sociofamiliar": { "$ref": "#/$defs/section" },
+        "habitos_toxicos": { "$ref": "#/$defs/section" },
+        "tratamiento_habitual": { "$ref": "#/$defs/section" },
+        "enfermedad_actual": { "$ref": "#/$defs/section" },
+        "intervencion": { "$ref": "#/$defs/section" },
+        "exploracion_psicopatologica": { "$ref": "#/$defs/section" },
+        "orientacion_diagnostica": { "$ref": "#/$defs/section" },
+        "plan_terapeutico": { "$ref": "#/$defs/section" },
+        "tratamiento_actual": { "$ref": "#/$defs/section" }
+      }
+    },
+    "missing_or_not_explored": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "status", "note"],
+        "properties": {
+          "topic": { "type": "string" },
+          "status": { "type": "string", "enum": ["not_explored", "not_provided", "insufficient"] },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "accounts"],
+        "properties": {
+          "topic": { "type": "string" },
+          "accounts": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source_id", "statement"],
+              "properties": {
+                "source_id": { "type": "string" },
+                "statement": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "safety_review": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "evidence", "needs_clinician_review"],
+        "properties": {
+          "topic": { "type": "string" },
+          "evidence": { "type": "string" },
+          "needs_clinician_review": { "const": true }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_draft", "clinician_validation_required"],
+      "properties": {
+        "is_draft": { "const": true },
+        "clinician_validation_required": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "evidence_status", "source_ids"],
+      "properties": {
+        "text": { "type": "string" },
+        "evidence_status": {
+          "type": "string",
+          "enum": ["supported", "not_explored", "not_provided", "insufficient"]
+        },
+        "source_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

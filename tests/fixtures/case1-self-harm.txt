@@ -1,0 +1,15 @@
+PSIQUIATRA: ¿Por qué venís hoy?
+PACIENTE: Ayer me hice varios cortes superficiales en el antebrazo izquierdo después de discutir con mi madre. No quería morirme, quería dejar de sentirme tan agobiada.
+MADRE: Dijo que no quería seguir viviendo y lleva unas seis semanas más triste, aislada y durmiendo mal.
+PSIQUIATRA: ¿Has pensado en matarte o en cómo hacerlo?
+PACIENTE: El domingo abrí el cajón donde están las pastillas y las miré, pero no tomé ninguna. Ahora no quiero morirme y no tengo intención ni plan.
+PSIQUIATRA: ¿Antecedentes médicos?
+PACIENTE: Migrañas y me operaron de apendicitis sobre los once o doce años.
+PSIQUIATRA: ¿Qué tratamiento tomas y con qué regularidad?
+PACIENTE: Sertralina 50 mg por la mañana, pero estas últimas semanas la tomo unos cuatro días de siete. Melatonina por la noche algunas veces.
+PSIQUIATRA: ¿Antecedentes psiquiátricos en tu familia?
+PACIENTE: Mi abuela materna ha tenido depresión y un tío paterno tiene trastorno bipolar.
+MADRE: Una vecina tiene una hija con anorexia.
+PSIQUIATRA: ¿Oyes voces o ves cosas que otros no?
+PACIENTE: No.
+PSIQUIATRA: Mantendremos sertralina 50 mg por la mañana, con administración supervisada, retomaremos psicoterapia y revisión en una semana.
