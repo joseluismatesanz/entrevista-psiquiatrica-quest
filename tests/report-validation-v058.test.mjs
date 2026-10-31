@@ -21,8 +21,9 @@ test("correo: borra el estado efímero tras entregar el contenido al sistema", (
   assert.match(sendJs, /window\.location\.replace/);
 });
 
-test("correo: se habilita en cuanto existe transcripción o informe", () => {
-  assert.match(sendJs, /button\.disabled = !availableText\(\)\.text/);
+test("correo: está habilitado desde el inicio y se actualiza con transcripción o informe", () => {
+  assert.match(indexHtml, /id="prepareReportEmail"[^>]*>Envío \/ Borrar<\/button>/);
+  assert.match(sendJs, /button\.disabled = false/);
   assert.match(sendJs, /clinical-transcription-ready/);
   assert.match(sendJs, /clinical-report-ready/);
   assert.match(sendJs, /transcriptField\(\)\?\.addEventListener\('input', syncSendAction\)/);

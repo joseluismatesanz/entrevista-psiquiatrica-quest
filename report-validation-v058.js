@@ -18,7 +18,7 @@
     if (report) return { text: report, kind: 'Informe clínico' };
     const transcript = transcriptField()?.value.trim() || '';
     if (transcript) return { text: transcript, kind: 'Transcripción clínica' };
-    return { text: '', kind: 'Documento clínico' };
+    return { text: '', kind: 'Informe clínico' };
   }
 
   function syncSendAction() {
@@ -27,7 +27,7 @@
     button.textContent = 'Envío / Borrar';
     button.setAttribute('aria-label', 'Enviar por correo el contenido disponible y borrar la sesión');
     button.setAttribute('title', 'Envío / Borrar');
-    button.disabled = !availableText().text;
+    button.disabled = false;
   }
 
   function destroyEphemeralSession() {
@@ -48,12 +48,8 @@
 
   function sendAndDestroy() {
     const content = availableText();
-    if (!content.text) {
-      syncSendAction();
-      return;
-    }
     const subject = content.kind;
-    const body = `${content.kind}\n\n${content.text}`;
+    const body = content.text ? `${content.kind}\n\n${content.text}` : '';
     const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     const button = emailButton();
     if (button) {
