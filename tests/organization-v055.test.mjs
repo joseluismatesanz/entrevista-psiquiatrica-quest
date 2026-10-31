@@ -69,7 +69,7 @@ test("V0.5.5 organización: seguridad clínica no se cuenta automáticamente com
 test("organización: assets y llamada a borrador siguen conectados en versiones posteriores", () => {
   assert.match(indexHtml, /organization-v055\.css/);
   assert.match(indexHtml, /organization-v055\.js/);
-  assert.match(indexHtml, /Generar borrador de informe/);
+  assert.match(indexHtml, /Info Clínica/);
   assert.match(indexHtml, /ASISTENTE CLÍNICO/);
   assert.match(organizationCss, /organization-attention/);
 });

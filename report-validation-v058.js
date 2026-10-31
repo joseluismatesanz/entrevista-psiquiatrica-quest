@@ -2,118 +2,29 @@
   const state = { validated: false };
   const EMAIL_RECIPIENT = 'joseluis.matesanz@salud-juntaex.es';
 
-  function checkbox() {
-    return document.getElementById('validateCheck');
-  }
-
-  function copyButton() {
-    return document.getElementById('copyReport');
-  }
-
-  function editor() {
-    return document.getElementById('reportEditor');
-  }
-
-  function validationHint() {
-    return document.querySelector('.validation-card .muted.small');
-  }
-
-  function badge() {
-    return document.querySelector('#screen-report .draft-badge');
-  }
-
-  function eyebrow() {
-    return document.querySelector('#screen-report .report-heading .section-label');
-  }
-
-  function isEditing() {
-    return Boolean(editor()?.querySelector('.report-section-editing'));
-  }
+  const checkbox = () => document.getElementById('validateCheck');
+  const editor = () => document.getElementById('reportEditor');
+  const emailButton = () => document.getElementById('prepareReportEmail');
+  const validationHint = () => document.querySelector('.validation-card .muted.small');
+  const badge = () => document.querySelector('#screen-report .draft-badge');
+  const eyebrow = () => document.querySelector('#screen-report .report-heading .section-label');
+  const isEditing = () => Boolean(editor()?.querySelector('.report-section-editing'));
 
   function setHint(message) {
     const hint = validationHint();
     if (hint) hint.textContent = message;
   }
 
-  function configureCompactFooter(actions) {
-    const back = actions?.querySelector('[data-go="review"]');
-    if (back) {
-      back.id = 'backToReview';
-      back.textContent = '←';
-      back.classList.add('footer-back');
-      back.setAttribute('aria-label', 'Volver a categorización');
-      back.setAttribute('title', 'Volver a categorización');
-    }
-
-    const copy = copyButton();
-    if (copy) copy.textContent = 'Copiar';
-
-    const legacyDestroy = document.getElementById('destroySession');
-    legacyDestroy?.remove();
-
-    return { back, copy };
-  }
-
-  function ensureActionButtons() {
-    const actions = document.querySelector('.validation-card .actions');
-    if (!actions) return {};
-
-    const { back, copy } = configureCompactFooter(actions);
-
-    let validate = document.getElementById('validateReport');
-    if (!validate) {
-      validate = document.createElement('button');
-      validate.id = 'validateReport';
-      validate.type = 'button';
-      validate.className = 'primary';
-      validate.textContent = 'Validar informe';
-      if (back) back.after(validate);
-      else actions.prepend(validate);
-    }
-
-    let reopen = document.getElementById('reopenReport');
-    if (!reopen) {
-      reopen = document.createElement('button');
-      reopen.id = 'reopenReport';
-      reopen.type = 'button';
-      reopen.className = 'secondary hidden';
-      reopen.textContent = 'Re-editar';
-      if (back) back.after(reopen);
-      else actions.prepend(reopen);
-    }
-
-    let email = document.getElementById('prepareReportEmail');
-    if (!email) {
-      email = document.createElement('button');
-      email.id = 'prepareReportEmail';
-      email.type = 'button';
-      email.className = 'primary';
-      email.textContent = '@ Envío/Destruir';
-      email.disabled = true;
-      email.setAttribute('aria-label', 'Preparar envío del informe y destruir sesión');
-      email.setAttribute('title', 'Envío/Destruir');
-      actions.append(email);
-    }
-
-    return { validate, reopen, email, back, copy };
-  }
-
-  function hideLegacyValidationCheckbox() {
-    const checkline = document.querySelector('.validation-card .checkline');
-    if (checkline) checkline.classList.add('hidden');
-    const check = checkbox();
-    if (check) {
-      check.checked = false;
-      check.disabled = false;
-      check.setAttribute('aria-hidden', 'true');
-      check.tabIndex = -1;
-    }
+  function configureSingleSendAction() {
+    const button = emailButton();
+    if (!button) return;
+    button.textContent = 'Envío / Borrar';
+    button.setAttribute('aria-label', 'Enviar el informe validado y borrar la sesión');
+    button.setAttribute('title', 'Envío / Borrar');
   }
 
   function setEditLocked(locked) {
-    const reportEditor = editor();
-    reportEditor?.classList.toggle('report-locked', locked);
-
+    editor()?.classList.toggle('report-locked', locked);
     document.querySelectorAll('.report-edit-button').forEach((button) => {
       button.disabled = locked;
       button.classList.toggle('hidden', locked);
@@ -121,104 +32,62 @@
     });
   }
 
-  function syncValidateAvailability() {
-    const { validate } = ensureActionButtons();
-    if (validate) validate.disabled = isEditing() || state.validated;
-  }
-
-  function setUnvalidated(message = 'Revisa el borrador y pulsa «Validar informe» cuando esté listo.') {
+  function setUnvalidated(message = 'Revisa el borrador y marca la validación clínica para habilitar «Envío / Borrar».') {
     state.validated = false;
-
     const check = checkbox();
-    const copy = copyButton();
-    const { validate, reopen, email } = ensureActionButtons();
-
+    const email = emailButton();
     if (check) check.checked = false;
-    if (copy) copy.disabled = true;
     if (email) email.disabled = true;
-    if (validate) validate.classList.remove('hidden');
-    if (reopen) reopen.classList.add('hidden');
-
     setEditLocked(false);
     if (badge()) badge().textContent = 'Pendiente de validación profesional';
     if (eyebrow()) eyebrow().textContent = 'DOCUMENTO CLÍNICO PENDIENTE DE REVISIÓN';
     setHint(message);
-    syncValidateAvailability();
   }
 
   function validateReport() {
+    const check = checkbox();
     if (isEditing()) {
+      if (check) check.checked = false;
       setHint('Finaliza la edición abierta antes de validar el informe.');
-      syncValidateAvailability();
       return;
     }
-
     state.validated = true;
-
-    const check = checkbox();
-    const copy = copyButton();
-    const { validate, reopen, email } = ensureActionButtons();
-
-    if (check) check.checked = true;
-    if (copy) copy.disabled = false;
-    if (email) email.disabled = false;
-    if (validate) validate.classList.add('hidden');
-    if (reopen) reopen.classList.remove('hidden');
-
+    if (emailButton()) emailButton().disabled = false;
     setEditLocked(true);
     if (badge()) badge().textContent = 'Informe validado · edición bloqueada';
     if (eyebrow()) eyebrow().textContent = 'DOCUMENTO CLÍNICO VALIDADO';
     setHint(`Informe validado · destino: ${EMAIL_RECIPIENT}`);
   }
 
-  function reopenEditing() {
-    setUnvalidated('Edición reabierta. Cualquier cambio requerirá una nueva validación antes de copiar o enviar el informe.');
-  }
-
-  function invalidateBeforeLeavingReport() {
-    if (!state.validated) return;
-    setUnvalidated('Has salido del informe validado. Al volver, deberás validarlo de nuevo antes de copiarlo o enviarlo.');
-  }
-
   function resetValidation() {
-    hideLegacyValidationCheckbox();
-    setUnvalidated('Revisa el borrador y pulsa «Validar informe» cuando esté listo.');
+    configureSingleSendAction();
+    document.querySelector('.validation-card .checkline')?.classList.remove('hidden');
+    const check = checkbox();
+    if (check) {
+      check.disabled = false;
+      check.removeAttribute('aria-hidden');
+      check.tabIndex = 0;
+    }
+    setUnvalidated();
   }
 
   function getValidatedReportText() {
     if (!state.validated || isEditing()) return '';
-    if (typeof window.getClinicalReportText === 'function') {
-      return window.getClinicalReportText().trim();
-    }
+    if (typeof window.getClinicalReportText === 'function') return window.getClinicalReportText().trim();
     return (editor()?.innerText || editor()?.textContent || '').trim();
   }
 
   function destroyEphemeralSession() {
     window.__CLINICAL_SESSION_DESTROYING = true;
+    window.__CLINICAL_REPORT_AVAILABLE = false;
     state.validated = false;
-
-    document.querySelectorAll('textarea').forEach((field) => {
-      field.value = '';
-    });
-    document.querySelectorAll('input[type="text"], input[type="search"]').forEach((field) => {
-      field.value = '';
-    });
-
-    const reportEditor = editor();
-    if (reportEditor) reportEditor.replaceChildren();
-
+    document.querySelectorAll('textarea').forEach((field) => { field.value = ''; });
+    document.querySelectorAll('input[type="text"], input[type="search"]').forEach((field) => { field.value = ''; });
+    editor()?.replaceChildren();
     ['routingGrid', 'sourcesList', 'missingList', 'conflictList', 'alertList', 'reportPendingBanner'].forEach((id) => {
-      const element = document.getElementById(id);
-      if (element) element.replaceChildren();
+      document.getElementById(id)?.replaceChildren();
     });
-
-    const copy = copyButton();
-    const email = document.getElementById('prepareReportEmail');
-    if (copy) copy.disabled = true;
-    if (email) email.disabled = true;
-
-    // El mailto ya contiene una copia independiente del texto. Tras entregarlo al
-    // sistema, limpiamos la interfaz y recargamos la sesión efímera.
+    if (emailButton()) emailButton().disabled = true;
     setTimeout(() => {
       const cleanUrl = `${window.location.pathname}${window.location.search}`;
       window.location.replace(cleanUrl);
@@ -226,25 +95,21 @@
   }
 
   function sendAndDestroy() {
-    const emailButton = document.getElementById('prepareReportEmail');
+    const button = emailButton();
     const text = getValidatedReportText();
-
     if (!text) {
-      if (emailButton) emailButton.disabled = true;
-      setHint('El informe debe estar validado antes del envío.');
+      if (button) button.disabled = true;
+      setHint('El informe debe estar revisado y validado antes del envío.');
       return;
     }
-
     const subject = 'Informe clínico validado';
     const body = `Informe clínico validado\n\n${text}`;
     const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-    if (emailButton) {
-      emailButton.disabled = true;
-      emailButton.textContent = 'Abriendo correo…';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Abriendo correo…';
     }
     setHint('Abriendo el correo institucional y destruyendo la sesión local…');
-
     const link = document.createElement('a');
     link.href = mailto;
     link.style.display = 'none';
@@ -252,59 +117,32 @@
     document.body.append(link);
     link.click();
     link.remove();
-
     destroyEphemeralSession();
   }
 
+  checkbox()?.addEventListener('change', (event) => {
+    if (event.target.checked) validateReport();
+    else setUnvalidated();
+  });
+
   document.addEventListener('click', (event) => {
-    if (event.target.closest?.('#validateReport')) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      validateReport();
-      return;
-    }
-
-    if (event.target.closest?.('#reopenReport')) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      reopenEditing();
-      return;
-    }
-
     if (event.target.closest?.('#prepareReportEmail')) {
       event.preventDefault();
       event.stopImmediatePropagation();
       sendAndDestroy();
       return;
     }
-
-    if (event.target.closest?.('.report-edit-button, .report-section-save, .report-section-cancel')) {
-      setTimeout(syncValidateAvailability, 0);
-      return;
-    }
-
-    if (event.target.closest?.('[data-go="review"], [data-step="review"], [data-go="input"], [data-step="input"]')) {
-      invalidateBeforeLeavingReport();
-      return;
-    }
-
-    if (event.target.closest?.('[data-go="report"], [data-step="report"]')) {
-      setTimeout(resetValidation, 0);
+    if (event.target.closest?.('.report-section-save, .report-section-cancel')) {
+      setTimeout(() => setUnvalidated(), 0);
     }
   }, true);
 
   document.addEventListener('input', (event) => {
-    if (!event.target.matches?.('.report-section-input')) return;
-    const copy = copyButton();
-    const check = checkbox();
-    const email = document.getElementById('prepareReportEmail');
-    if (copy) copy.disabled = true;
-    if (email) email.disabled = true;
-    if (check) check.checked = false;
-    state.validated = false;
-    syncValidateAvailability();
+    if (event.target.matches?.('.report-section-input')) setUnvalidated();
   });
 
   window.addEventListener('pageshow', resetValidation);
+  window.addEventListener('clinical-report-ready', resetValidation);
+  window.sendValidatedClinicalReport = sendAndDestroy;
   resetValidation();
 })();

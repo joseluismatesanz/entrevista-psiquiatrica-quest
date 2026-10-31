@@ -16,7 +16,7 @@ test('organización: la petición tiene límite y siempre recupera el botón', (
   assert.match(client, /ANALYSIS_TIMEOUT_MS\s*=\s*225_000/);
   assert.match(client, /ClinicalRequest\.fetchWithDeadline/);
   assert.match(client, /label:\s*'La organización clínica'/);
-  assert.match(client, /finally\s*\{[\s\S]*button\.disabled\s*=\s*false/);
+  assert.match(client, /finally\s*\{[\s\S]*button\.disabled\s*=\s*Boolean\(state\.result\)/);
   assert.match(client, /clearInterval\(progressTimer\)/);
 });
 
@@ -25,7 +25,8 @@ test('organización larga: espera evidencia compactada y no conserva un preanál
   assert.match(gate, /ANALYSIS_PREFETCH_TIMEOUT_MS\s*=\s*210_000/);
   assert.match(gate, /controller\.abort/);
   assert.match(gate, /signal:\s*controller\.signal/);
-  assert.match(gate, /waitForSnapshot\(pending, init\?\.signal\)/);
+  assert.match(gate, /waitForPrefetchGrace\(pending, init\?\.signal\)/);
+  assert.match(gate, /PREFETCH_REUSE_GRACE_MS\s*=\s*1_500/);
 });
 
 test('organización larga: la ruta compleja es única y las llamadas del modelo tienen límite propio', () => {
@@ -39,5 +40,5 @@ test('organización larga: la ruta compleja es única y las llamadas del modelo 
 test('navegador: fuerza la carga de la recuperación de análisis', () => {
   assert.match(loader, /backend-client\.js\?v=20261006-analysis-recovery-1/);
   assert.match(index, /loader\.js\?v=20261006-analysis-recovery-1/);
-  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261024-recording-gate-1/);
+  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261031-foreground-recovery-1/);
 });

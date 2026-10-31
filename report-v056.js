@@ -302,5 +302,6 @@
 
   window.getClinicalReportText = getClinicalReportText;
   window.addEventListener('pageshow', resetReportValidation);
+  window.addEventListener('clinical-report-ready', refreshReportScreen);
   refreshReportScreen();
 })();

@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="organization-v055.css" />
   <link rel="stylesheet" href="report-v056.css?v=20260909-4" />
   <link rel="stylesheet" href="blue-glasses-theme.css?v=20260930-1" />
+  <link rel="stylesheet" href="recording-focus-v063.css?v=20261031-1" />
 </head>
 <body>
   <main class="app-shell">
@@ -75,10 +76,6 @@
         </div>
         <textarea id="caseText" rows="18" spellcheck="false" placeholder="La transcripción aparecerá aquí. También puedes pegar una entrevista."></textarea>
         <p class="muted small">Revisa el texto y la atribución de cada intervención antes de organizar la información clínica.</p>
-        <div class="actions">
-          <button id="destroyInput" class="danger secondary-danger" type="button">Borrar sesión</button>
-          <button id="analyzeCase" class="primary" type="button">Organizar información clínica</button>
-        </div>
         <p id="sessionMessage" class="muted small"></p>
       </div>
     </section>
@@ -113,10 +110,6 @@
           <ul id="alertList" class="clinical-list"></ul>
         </article>
       </div>
-      <div class="actions sticky-actions">
-        <button class="secondary" data-go="input">Volver a entrevista</button>
-        <button class="primary" data-go="report">Generar borrador de informe</button>
-      </div>
     </section>
 
     <section id="screen-report" class="screen">
@@ -138,21 +131,32 @@
           <input type="checkbox" id="validateCheck" />
           <span>He revisado el contenido y asumo la validación clínica del informe.</span>
         </label>
-        <div class="actions">
-          <button id="backToReview" class="secondary footer-back" data-go="review" aria-label="Volver a categorización" title="Volver a categorización">←</button>
-          <button id="copyReport" class="primary" disabled>Copiar</button>
-        </div>
+        <button id="copyReport" class="hidden" type="button" disabled aria-hidden="true" tabindex="-1">Copiar</button>
         <p class="muted small">El borrador no debe exportarse sin revisión profesional.</p>
       </div>
     </section>
+
+    <section id="workflowActions" class="workflow-actions hidden" aria-label="Acciones principales">
+      <button id="analyzeCase" class="primary workflow-main-button" type="button">Info Clínica</button>
+      <button id="prepareReportEmail" class="primary workflow-main-button" type="button" disabled>Envío / Borrar</button>
+    </section>
   </main>
+
+  <section id="recordingBlackout" class="recording-blackout hidden" aria-live="polite" aria-label="Grabación de entrevista en curso">
+    <button id="recordingBlackoutButton" class="recording-blackout-button" type="button">
+      <span class="recording-blackout-dot" aria-hidden="true"></span>
+      <span id="recordingBlackoutLabel">Finalizar entrevista</span>
+      <small id="recordingBlackoutDetail">Grabando…</small>
+    </button>
+    <p id="recordingBlackoutStatus">Grabando entrevista.</p>
+  </section>
   <script src="client-request-timeout.js?v=20261004-recording-1"></script>
   <script src="config.js?v=20260912-long-6"></script>
   <script src="semantic-role-ui.js?v=20260911-long-2"></script>
   <script src="loader.js?v=20261006-analysis-recovery-1"></script>
-  <script src="long-interview-v06.js?v=20261015-transcription-recovery-1"></script>
+  <script src="long-interview-v06.js?v=20261031-recording-focus-1"></script>
   <script src="long-interview-silent-block-v062.js?v=20260912-1"></script>
-  <script src="long-interview-prefetch-gate-v061.js?v=20261024-recording-gate-1"></script>
+  <script src="long-interview-prefetch-gate-v061.js?v=20261031-foreground-recovery-1"></script>
   <script src="long-interview-context-v06.js?v=20260911-20s-2"></script>
   <script src="organization-v055.js"></script>
   <script src="report-v056.js?v=20260909-3"></script>

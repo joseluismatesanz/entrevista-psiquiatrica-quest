@@ -20,6 +20,8 @@
   const SILENT_BLOCK_MARKER = 'SISTEMA: [BLOQUE_SILENCIOSO]';
 
   const $ = (id) => document.getElementById(id);
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  const normalThemeColor = themeColor?.getAttribute('content') || '#123b79';
   const state = {
     active: false,
     finishing: false,
@@ -54,6 +56,31 @@
     partialTranscript: '',
     terminalError: null,
   };
+
+  function setRecordingFocus(mode = 'recording') {
+    document.body.classList.add('recording-focus-active');
+    document.body.classList.remove('transcription-actions-only', 'clinical-report-visible');
+    $('recordingBlackout')?.classList.remove('hidden');
+    $('workflowActions')?.classList.add('hidden');
+    if (themeColor) themeColor.setAttribute('content', '#000000');
+    const button = $('recordingBlackoutButton');
+    button?.classList.toggle('processing', mode === 'processing');
+    if (button) button.disabled = mode === 'processing';
+  }
+
+  function clearRecordingFocus({ transcriptionReady = false } = {}) {
+    document.body.classList.remove('recording-focus-active');
+    document.body.classList.toggle('transcription-actions-only', transcriptionReady);
+    $('recordingBlackout')?.classList.add('hidden');
+    $('workflowActions')?.classList.toggle('hidden', !transcriptionReady);
+    if (themeColor) themeColor.setAttribute('content', normalThemeColor);
+  }
+
+  function syncBlackoutStatus() {
+    const source = $('recordingStatus');
+    const target = $('recordingBlackoutStatus');
+    if (source && target) target.textContent = source.textContent || '';
+  }
 
   function formatClock(seconds) {
     const safe = Math.max(0, Math.floor(seconds));
@@ -177,6 +204,7 @@
     invalidateVerifiedBlocks();
     clearPartialInterview();
     if (!keepText && $('caseText')) $('caseText').value = '';
+    clearRecordingFocus({ transcriptionReady: false });
   }
 
   function setButton(mode) {
@@ -188,10 +216,21 @@
     button.classList.toggle('processing', mode === 'processing');
     button.setAttribute('aria-pressed', mode === 'recording' ? 'true' : 'false');
     button.disabled = mode === 'processing';
-    if (mode === 'recording') label.textContent = 'Finalizar entrevista';
+    const blackoutButton = $('recordingBlackoutButton');
+    const blackoutLabel = $('recordingBlackoutLabel');
+    const blackoutDetail = $('recordingBlackoutDetail');
+    blackoutButton?.classList.toggle('processing', mode === 'processing');
+    if (blackoutButton) blackoutButton.disabled = mode === 'processing';
+    if (mode === 'recording') {
+      label.textContent = 'Finalizar entrevista';
+      if (blackoutLabel) blackoutLabel.textContent = 'Finalizar entrevista';
+      if (blackoutDetail) blackoutDetail.textContent = 'Grabando…';
+    }
     else if (mode === 'processing') {
       label.textContent = 'Cerrando entrevista…';
       detail.textContent = 'Procesando últimos bloques';
+      if (blackoutLabel) blackoutLabel.textContent = 'Preparando transcripción…';
+      if (blackoutDetail) blackoutDetail.textContent = 'Espera a que vuelva la pantalla';
     } else {
       label.textContent = 'Iniciar entrevista';
       detail.textContent = 'Hasta 60 min';
@@ -214,6 +253,7 @@
       const screen = state.wakeLock && !state.wakeLock.released ? ' · pantalla activa' : '';
       status.textContent = `Grabando · ${safe} bloque${safe === 1 ? '' : 's'} seguro${safe === 1 ? '' : 's'} · ${processing} transcribiendo${waiting ? ` · ${waiting} en cola` : ''}${recovery}${evidence}${screen}.`;
     }
+    syncBlackoutStatus();
   }
 
   function makeRecorder() {
@@ -718,6 +758,10 @@
     if (status) status.textContent = `Entrevista cerrada · ${state.processedBlocks.length} bloques desidentificados · audio descartado. Servidor acumulado: ${(totalAudioMs / 1000).toFixed(1)} s durante la entrevista. Cierre tras Finalizar: ${(closeMs / 1000).toFixed(1)} s. Pico de cola: ${state.peakPendingBlocks}. Evidencia clínica preparada: ${state.evidenceByBlock.size}/${state.processedBlocks.length}.`;
     const message = $('sessionMessage');
     if (message) message.textContent = 'Transcripción larga desidentificada lista. Revisa únicamente las fuentes críticas señaladas antes de organizar.';
+    clearRecordingFocus({ transcriptionReady: true });
+    window.dispatchEvent(new CustomEvent('clinical-transcription-ready', {
+      detail: { blockCount: state.processedBlocks.length },
+    }));
   }
 
   async function finishLongRecording() {
@@ -727,7 +771,9 @@
     state.finalizationStartedAt = performance.now();
     clearTimers();
     setButton('processing');
+    setRecordingFocus('processing');
     if ($('recordingStatus')) $('recordingStatus').textContent = 'Cerrando el último bloque y esperando solo la transcripción pendiente…';
+    syncBlackoutStatus();
     try {
       if (state.rotationPromise) await state.rotationPromise;
       if (state.recorder && state.recorder.state !== 'inactive') {
@@ -759,6 +805,7 @@
       if ($('recordingStatus')) $('recordingStatus').textContent = partialTranscript
         ? 'Transcripción parcial conservada. No se puede organizar hasta completar o sustituir manualmente la entrevista.'
         : 'El audio se ha descartado y no se ha generado una transcripción. Corrige el problema indicado antes de iniciar otra entrevista.';
+      clearRecordingFocus({ transcriptionReady: false });
     } finally {
       await releaseWakeLock();
       state.finishing = false;
@@ -780,6 +827,7 @@
       state.active = true;
       window.__LONG_INTERVIEW_INCOMPLETE = true;
       state.startedAt = Date.now();
+      setRecordingFocus('recording');
       setButton('recording');
       startBlockRecorder();
       void requestWakeLock();
@@ -841,6 +889,15 @@
     event.stopImmediatePropagation();
     if (state.active) finishLongRecording();
     else if (!state.finishing) startLongRecording();
+  }, true);
+
+  $('recordingBlackoutButton')?.addEventListener('click', () => {
+    if (state.active && !state.finishing) void finishLongRecording();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest?.('#analyzeCase')) return;
+    document.body.classList.remove('transcription-actions-only');
   }, true);
 
   document.addEventListener('click', (event) => {

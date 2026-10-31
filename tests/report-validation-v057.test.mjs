@@ -8,66 +8,29 @@ const [indexHtml, validationJs, packageJson] = await Promise.all([
   readFile(new URL("../package.json", import.meta.url), "utf8"),
 ]);
 
-test("V0.5.6 informe: la validación tiene una consecuencia real sobre la edición", () => {
+test("informe: validar bloquea edición y desmarcar la reabre", () => {
   assert.match(validationJs, /state = \{ validated: false \}/);
   assert.match(validationJs, /function setEditLocked/);
   assert.match(validationJs, /setEditLocked\(true\)/);
   assert.match(validationJs, /setEditLocked\(false\)/);
+  assert.match(validationJs, /if \(event\.target\.checked\) validateReport\(\)/);
 });
 
-test("V0.5.6 informe: no puede validarse mientras una sección está abierta", () => {
-  assert.match(validationJs, /function isEditing/);
-  assert.match(validationJs, /report-section-editing/);
-  assert.match(validationJs, /validate\.disabled = isEditing\(\) \|\| state\.validated/);
+test("informe: no se envía vacío, sin validar o durante una edición", () => {
+  assert.match(validationJs, /if \(!state\.validated \|\| isEditing\(\)\) return ''/);
+  assert.match(validationJs, /if \(!text\)/);
+  assert.match(validationJs, /El informe debe estar revisado y validado/);
 });
 
-test("V0.5.6 informe: copiar y envío-destrucción permanecen bloqueados hasta validar", () => {
-  assert.match(validationJs, /copy\.disabled = true/);
-  assert.match(validationJs, /copy\.disabled = false/);
-  assert.match(validationJs, /email\.disabled = true/);
-  assert.match(validationJs, /email\.disabled = false/);
-  assert.match(validationJs, /check\.checked = true/);
-  assert.match(validationJs, /check\.checked = false/);
+test("interfaz: solo mantiene las dos acciones principales solicitadas", () => {
+  assert.match(indexHtml, />Info Clínica<\/button>/);
+  assert.match(indexHtml, />Envío \/ Borrar<\/button>/);
+  assert.doesNotMatch(indexHtml, /id="destroySession"|Descargar TXT|id="backToReview"/);
 });
 
-test("V0.5.6 informe: no existe exportación TXT ni destrucción separada en el pie", () => {
-  assert.doesNotMatch(validationJs, /downloadReportTxt|downloadValidatedTxt|Descargar TXT/);
-  assert.doesNotMatch(indexHtml, /Descargar TXT/);
-  assert.doesNotMatch(indexHtml, /id="destroySession"/);
-});
-
-test("V0.5.6 informe: navegar fuera de un informe validado invalida su validación", () => {
-  assert.match(validationJs, /function invalidateBeforeLeavingReport/);
-  assert.match(validationJs, /setUnvalidated\('Has salido del informe validado/);
-});
-
-test("V0.5.6 informe: el correo usa el texto clínico validado y solo el destino institucional", () => {
-  assert.match(validationJs, /EMAIL_RECIPIENT/);
-  assert.match(validationJs, /joseluis\.matesanz@salud-juntaex\.es/);
-  assert.doesNotMatch(validationJs, /gmail\.com/);
-  assert.match(validationJs, /getValidatedReportText/);
-  assert.match(validationJs, /mailto:/);
-  assert.doesNotMatch(validationJs, /\/api\/send-report/);
-});
-
-test("V0.5.6 informe: Envío/Destruir entrega el correo al sistema y limpia la sesión local", () => {
-  assert.match(validationJs, /function sendAndDestroy/);
-  assert.match(validationJs, /link\.click\(\)/);
-  assert.match(validationJs, /destroyEphemeralSession\(\)/);
-  assert.match(validationJs, /window\.location\.replace/);
-});
-
-test("V0.5.6 informe: el pie validado se reduce a flecha, re-edición, copia y envío-destrucción", () => {
-  assert.match(indexHtml, />←<\/button>/);
-  assert.match(validationJs, /Re-editar/);
-  assert.match(indexHtml, />Copiar<\/button>/);
-  assert.match(validationJs, /@ Envío\/Destruir/);
-});
-
-test("V0.5.6 informe: el navegador fuerza la carga de la nueva capa de validación y chequea desidentificación", () => {
-  assert.match(indexHtml, /report-v056\.js\?v=20260909-3/);
+test("comprobaciones: incluye validación, desidentificación y no usa un backend de correo", () => {
   assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-10/);
   assert.match(packageJson, /node --check server\/person-name-redaction\.mjs/);
-  assert.doesNotMatch(packageJson, /node --check api\/send-report\.mjs/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);
+  assert.doesNotMatch(packageJson, /node --check api\/send-report\.mjs/);
 });

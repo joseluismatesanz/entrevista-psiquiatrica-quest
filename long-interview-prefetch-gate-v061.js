@@ -4,8 +4,10 @@
   const inheritedFetch = window.fetch.bind(window);
   const MAX_EVIDENCE_WAIT_MS = 5_000;
   const ANALYSIS_PREFETCH_TIMEOUT_MS = 210_000;
+  const PREFETCH_REUSE_GRACE_MS = 1_500;
   const POLL_MS = 100;
   const verifiedPrefetches = new Map();
+  const verifiedPrefetchControllers = new Map();
 
   function parseBody(init) {
     if (typeof init?.body !== 'string') return null;
@@ -114,6 +116,8 @@
       }));
     }
 
+    const controller = new AbortController();
+    verifiedPrefetchControllers.set(transcript, controller);
     const pending = (async () => {
       const evidence = await waitForCompleteEvidence(blocks);
       const body = {
@@ -127,7 +131,6 @@
       // instantánea antigua sin proofs/evidence.
       legacyCache?.delete(transcript);
 
-      const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(new DOMException('Tiempo de análisis agotado.', 'TimeoutError')), ANALYSIS_PREFETCH_TIMEOUT_MS);
       try {
         const response = await inheritedFetch(`${String(window.CLINICAL_API_URL || '').replace(/\/+$/, '')}/api/analyze`, {
@@ -161,6 +164,29 @@
     return pending;
   }
 
+  function waitForPrefetchGrace(pending, signal) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        signal?.removeEventListener?.('abort', abort);
+        resolve(value);
+      };
+      const abort = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(signal.reason || new DOMException('Solicitud cancelada.', 'AbortError'));
+      };
+      const timer = setTimeout(() => finish({ ready: false }), PREFETCH_REUSE_GRACE_MS);
+      if (signal?.aborted) return abort();
+      signal?.addEventListener?.('abort', abort, { once: true });
+      pending.then((snapshot) => finish({ ready: true, snapshot }), reject);
+    });
+  }
+
   // publishAggregate dispara este evento antes de intentar su antiguo prefetch. Al
   // registrar aquí una entrada en la caché de inmediato, ese prefetch antiguo queda
   // inhibido; esta promesa espera a las pruebas verificadas y lanza una única petición.
@@ -183,13 +209,24 @@
     if (!current) return inheritedFetch(input, init);
 
     const pending = startVerifiedPrefetch(current.transcript, current.blocks);
-    const snapshot = await waitForSnapshot(pending, init?.signal);
+    const reuse = await waitForPrefetchGrace(pending, init?.signal);
+    if (!reuse.ready) {
+      verifiedPrefetchControllers.get(current.transcript)?.abort(new DOMException('El análisis principal tiene prioridad.', 'AbortError'));
+      verifiedPrefetchControllers.delete(current.transcript);
+      verifiedPrefetches.delete(current.transcript);
+      prefetchCache()?.delete(current.transcript);
+      return inheritedFetch(input, init);
+    }
+    const snapshot = reuse.snapshot;
+    verifiedPrefetchControllers.delete(current.transcript);
     verifiedPrefetches.delete(current.transcript);
     prefetchCache()?.delete(current.transcript);
     return responseFromSnapshot(snapshot);
   };
 
   window.addEventListener('pagehide', () => {
+    verifiedPrefetchControllers.forEach((controller) => controller.abort());
+    verifiedPrefetchControllers.clear();
     verifiedPrefetches.clear();
   });
 })();

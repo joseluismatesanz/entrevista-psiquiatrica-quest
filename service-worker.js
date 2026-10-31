@@ -1,10 +1,11 @@
-const STATIC_CACHE = 'salud-mental-static-v2-blue-glasses';
+const STATIC_CACHE = 'salud-mental-static-v3-recording-focus';
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/styles.css',
   '/organization-v055.css',
   '/report-v056.css?v=20260909-4',
   '/blue-glasses-theme.css?v=20260930-1',
+  '/recording-focus-v063.css?v=20261031-1',
   '/assets/blue-glasses.png',
   '/icons/blue-glasses-192.png',
   '/icons/blue-glasses-512.png',

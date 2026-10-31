@@ -388,15 +388,20 @@
         $('sessionMessage').textContent = 'Transcripción desidentificada aplicada. Al volver a Entrevista puedes comprobar literalmente la máscara XXXXXXXXXXX y las entidades conservadas.';
       }
       state.result = payload;
+      window.__CLINICAL_REPORT_AVAILABLE = true;
       renderReview(payload);
-      showScreen('review');
+      showScreen('report');
+      document.body.classList.add('clinical-report-visible');
+      window.dispatchEvent(new CustomEvent('clinical-report-ready'));
     } catch (error) {
       console.error('Backend analysis failed without logging transcript.', error);
       $('sessionMessage').textContent = `No se pudo completar el análisis: ${error.message}`;
       showScreen('input');
+      document.body.classList.add('transcription-actions-only');
+      $('workflowActions')?.classList.remove('hidden');
     } finally {
       if (progressTimer) clearInterval(progressTimer);
-      button.disabled = false;
+      button.disabled = Boolean(state.result);
       button.textContent = original;
     }
   }
@@ -408,6 +413,9 @@
     state.recorder = null;
     state.audioChunks = [];
     state.result = null;
+    window.__CLINICAL_REPORT_AVAILABLE = false;
+    document.body.classList.remove('transcription-actions-only', 'clinical-report-visible');
+    $('workflowActions')?.classList.add('hidden');
     clearAudioMappingState();
     $('caseText').value = '';
     $('sourcesList').innerHTML = '';
@@ -433,6 +441,17 @@
     $(id)?.addEventListener('click', () => clearAudioMappingState());
   }
   $('analyzeCase')?.addEventListener('click', analyzeWithBackend);
+  $('caseText')?.addEventListener('input', () => {
+    const hasTranscript = Boolean($('caseText').value.trim());
+    if (hasTranscript && !window.__CLINICAL_REPORT_AVAILABLE) {
+      $('workflowActions')?.classList.remove('hidden');
+      $('analyzeCase').disabled = false;
+      return;
+    }
+    if (!hasTranscript && !window.__CLINICAL_REPORT_AVAILABLE) {
+      $('workflowActions')?.classList.add('hidden');
+    }
+  });
   $('recordButton')?.addEventListener('click', () => {
     if (state.recorder?.state === 'recording') stopRecording();
     else startRecording();

@@ -34,6 +34,13 @@ test("V0.6: la compuerta se carga después del controlador de bloques y usa revi
   const gatePosition = index.indexOf('long-interview-prefetch-gate-v061.js');
   const context = index.indexOf('long-interview-context-v06.js');
   assert.ok(controller >= 0 && gatePosition > controller && context > gatePosition);
-  assert.match(index, /long-interview-v06\.js\?v=20261015-transcription-recovery-1/);
-  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261024-recording-gate-1/);
+  assert.match(index, /long-interview-v06\.js\?v=20261031-recording-focus-1/);
+  assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261031-foreground-recovery-1/);
+});
+
+test("V0.6: el análisis visible no queda bloqueado esperando el prefetch", () => {
+  assert.match(gate, /PREFETCH_REUSE_GRACE_MS\s*=\s*1_500/);
+  assert.match(gate, /waitForPrefetchGrace/);
+  assert.match(gate, /verifiedPrefetchControllers\.get\(current\.transcript\)\?\.abort/);
+  assert.match(gate, /return inheritedFetch\(input, init\)/);
 });
