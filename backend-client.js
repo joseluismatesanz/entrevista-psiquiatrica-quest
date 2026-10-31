@@ -415,7 +415,7 @@
     state.result = null;
     window.__CLINICAL_REPORT_AVAILABLE = false;
     document.body.classList.remove('transcription-actions-only', 'clinical-report-visible');
-    $('workflowActions')?.classList.add('hidden');
+    $('workflowActions')?.classList.remove('hidden');
     clearAudioMappingState();
     $('caseText').value = '';
     $('sourcesList').innerHTML = '';
@@ -441,17 +441,14 @@
     $(id)?.addEventListener('click', () => clearAudioMappingState());
   }
   $('analyzeCase')?.addEventListener('click', analyzeWithBackend);
-  $('caseText')?.addEventListener('input', () => {
+  function syncWorkflowActions() {
     const hasTranscript = Boolean($('caseText').value.trim());
-    if (hasTranscript && !window.__CLINICAL_REPORT_AVAILABLE) {
-      $('workflowActions')?.classList.remove('hidden');
-      $('analyzeCase').disabled = false;
-      return;
-    }
-    if (!hasTranscript && !window.__CLINICAL_REPORT_AVAILABLE) {
-      $('workflowActions')?.classList.add('hidden');
-    }
-  });
+    $('workflowActions')?.classList.remove('hidden');
+    $('analyzeCase').disabled = !hasTranscript;
+  }
+  $('caseText')?.addEventListener('input', syncWorkflowActions);
+  window.addEventListener('clinical-transcription-ready', syncWorkflowActions);
+  syncWorkflowActions();
   $('recordButton')?.addEventListener('click', () => {
     if (state.recorder?.state === 'recording') stopRecording();
     else startRecording();

@@ -13,6 +13,11 @@ test("grabación: cubre toda la pantalla con negro hasta publicar la transcripci
   assert.match(index, /id="recordingBlackout"/);
   assert.match(css, /\.recording-blackout\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*background:\s*var\(--recording-black\)/);
   assert.match(css, /--recording-black:\s*#000/);
+  assert.match(css, /width:\s*100vw/);
+  assert.match(css, /height:\s*100dvh/);
+  assert.match(css, /html\.recording-focus-active/);
+  assert.match(controller, /document\.documentElement\.classList\.add\('recording-focus-active'\)/);
+  assert.match(index, /apple-mobile-web-app-status-bar-style" content="black-translucent"/);
   assert.match(controller, /setRecordingFocus\('recording'\)/);
   assert.match(controller, /setRecordingFocus\('processing'\)/);
   assert.match(controller, /clearRecordingFocus\(\{ transcriptionReady: true \}\)/);

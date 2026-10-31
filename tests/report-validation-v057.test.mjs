@@ -2,34 +2,33 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [indexHtml, validationJs, packageJson] = await Promise.all([
+const [indexHtml, sendJs, packageJson] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../report-validation-v058.js", import.meta.url), "utf8"),
   readFile(new URL("../package.json", import.meta.url), "utf8"),
 ]);
 
-test("informe: validar bloquea edición y desmarcar la reabre", () => {
-  assert.match(validationJs, /state = \{ validated: false \}/);
-  assert.match(validationJs, /function setEditLocked/);
-  assert.match(validationJs, /setEditLocked\(true\)/);
-  assert.match(validationJs, /setEditLocked\(false\)/);
-  assert.match(validationJs, /if \(event\.target\.checked\) validateReport\(\)/);
+test("envío: no solicita validación clínica ni confirmación adicional", () => {
+  assert.doesNotMatch(indexHtml, /He revisado el contenido y asumo la validación clínica/);
+  assert.doesNotMatch(sendJs, /validateReport|state\.validated|isEditing|confirm\(/);
+  assert.match(sendJs, /function sendAndDestroy/);
 });
 
-test("informe: no se envía vacío, sin validar o durante una edición", () => {
-  assert.match(validationJs, /if \(!state\.validated \|\| isEditing\(\)\) return ''/);
-  assert.match(validationJs, /if \(!text\)/);
-  assert.match(validationJs, /El informe debe estar revisado y validado/);
+test("envío: prioriza el informe y permite enviar la transcripción si aún no existe", () => {
+  assert.match(sendJs, /if \(!window\.__CLINICAL_REPORT_AVAILABLE\) return ''/);
+  assert.match(sendJs, /const report = reportText\(\)/);
+  assert.match(sendJs, /const transcript = transcriptField\(\)\?\.value\.trim\(\)/);
+  assert.match(sendJs, /kind: 'Transcripción clínica'/);
 });
 
-test("interfaz: solo mantiene las dos acciones principales solicitadas", () => {
+test("interfaz: las dos acciones principales están presentes desde la primera pantalla", () => {
+  assert.match(indexHtml, /id="workflowActions" class="workflow-actions"/);
   assert.match(indexHtml, />Info Clínica<\/button>/);
   assert.match(indexHtml, />Envío \/ Borrar<\/button>/);
-  assert.doesNotMatch(indexHtml, /id="destroySession"|Descargar TXT|id="backToReview"/);
 });
 
-test("comprobaciones: incluye validación, desidentificación y no usa un backend de correo", () => {
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-10/);
+test("comprobaciones: mantiene desidentificación y chequeo del envío directo", () => {
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20261031-direct-send-1/);
   assert.match(packageJson, /node --check server\/person-name-redaction\.mjs/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);
   assert.doesNotMatch(packageJson, /node --check api\/send-report\.mjs/);

@@ -58,6 +58,7 @@
   };
 
   function setRecordingFocus(mode = 'recording') {
+    document.documentElement.classList.add('recording-focus-active');
     document.body.classList.add('recording-focus-active');
     document.body.classList.remove('transcription-actions-only', 'clinical-report-visible');
     $('recordingBlackout')?.classList.remove('hidden');
@@ -69,10 +70,11 @@
   }
 
   function clearRecordingFocus({ transcriptionReady = false } = {}) {
+    document.documentElement.classList.remove('recording-focus-active');
     document.body.classList.remove('recording-focus-active');
     document.body.classList.toggle('transcription-actions-only', transcriptionReady);
     $('recordingBlackout')?.classList.add('hidden');
-    $('workflowActions')?.classList.toggle('hidden', !transcriptionReady);
+    $('workflowActions')?.classList.remove('hidden');
     if (themeColor) themeColor.setAttribute('content', normalThemeColor);
   }
 
