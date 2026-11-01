@@ -82,6 +82,32 @@ test("V0.6 medicamentos: mirtazapina bien transcrita sigue verificándose litera
   assert.equal(result.assessment.safety_review.length, 0);
 });
 
+test("V0.6 medicamentos: la pasada final consulta solo entidades todavía no verificadas", async () => {
+  const fixture = baseAssessment("Sertralina");
+  fixture.medications.habitual[0].medication_verification = { status: "confirmed" };
+  fixture.medications.current.push({
+    ...fixture.medications.habitual[0],
+    raw_name: "Venlafacina",
+    display_name: "Venlafacina",
+    medication_verification: undefined,
+  });
+  const seen = [];
+  const fetchFn = async (url) => {
+    seen.push(url);
+    if (url.includes("practiv1=Venlafaxina")) {
+      return response({ resultados: [{ nregistro: "70000", nombre: "VENLAFAXINA 75 MG EFG", pactivos: "VENLAFAXINA" }] });
+    }
+    return response({ resultados: [] });
+  };
+
+  const result = await verifyAssessmentMedications(fixture, { fetchFn, onlyUnverified: true });
+  assert.equal(result.assessment.medications.habitual[0].medication_verification.status, "confirmed");
+  assert.equal(result.assessment.medications.current[0].display_name, "Venlafaxina");
+  assert.ok(seen.some((url) => url.includes("practiv1=Venlafaxina")));
+  assert.ok(seen.every((url) => !url.includes("practiv1=Sertralina")));
+  assert.equal(result.meta.medication_only_unverified_pass, true);
+});
+
 test("V0.6 medicamentos: nombre comercial real se asocia al principio activo sin ocultar la marca", async () => {
   const fetchFn = async (url) => {
     if (url.includes("/medicamento?nregistro=60000")) {

@@ -7,7 +7,7 @@ import {
   mergeParallelClinicalAssessment,
 } from "./parallel-clinical-analysis.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
-import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
+import { applyClinicalPostprocessing, finalizeVerifiedMedicationNames } from "./clinical-postprocess.mjs";
 import { groundInterventionToTranscript } from "./intervention-grounding.mjs";
 import { groundExplicitMseAssessment } from "./mse-grounding.mjs";
 import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
@@ -171,6 +171,20 @@ export async function analyzeFastParallelTranscript(transcript, options = {}) {
   const postprocessResult = applyClinicalPostprocessing(assessment, transcript);
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
+
+  if (shouldVerifyMedications) {
+    const verifier = options.medicationVerifier || verifyAssessmentMedications;
+    const finalMedicationResult = await verifier(assessment, {
+      ...(options.medicationVerificationOptions || {}),
+      onlyUnverified: true,
+    });
+    assessment = finalMedicationResult.assessment;
+    warnings.push(...(finalMedicationResult.warnings || []));
+    medicationMeta = finalMedicationResult.meta || medicationMeta;
+    const finalized = finalizeVerifiedMedicationNames(assessment);
+    assessment = finalized.assessment;
+    warnings.push(...finalized.warnings);
+  }
 
   const interventionGroundResult = groundInterventionToTranscript(assessment, transcript);
   assessment = interventionGroundResult.assessment;

@@ -65,3 +65,13 @@ test("ASR farmacológico: normaliza segmentos conservando identidad y timestamps
   assert.ok(result.applied_aliases.includes("ribotril_to_rivotril"));
   assert.ok(result.applied_aliases.includes("mirtacepina_to_mirtazapina"));
 });
+
+test("ASR farmacológico: recupera variantes fonéticas frecuentes antes de consultar CIMA", () => {
+  const result = normalizeMedicationAsrText(
+    "Sustituir por ven la fascina y de praxis; añadir cronacepan si precisa.",
+  );
+  assert.equal(result.text, "Sustituir por venlafaxina y deprax; añadir clonazepam si precisa.");
+  assert.ok(result.applied_aliases.includes("ven_la_fascina_to_venlafaxina"));
+  assert.ok(result.applied_aliases.includes("de_praxis_to_deprax"));
+  assert.ok(result.applied_aliases.includes("cronacepan_to_clonazepam"));
+});

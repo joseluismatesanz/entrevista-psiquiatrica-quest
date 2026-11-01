@@ -574,26 +574,43 @@ function canonicalizeVerifiedMedicationNamesInSections(assessment, warnings) {
       const displayName = clean(med?.display_name);
       if (!rawName || !displayName || normalize(rawName) === normalize(displayName)) continue;
       if (med?.medication_verification?.status !== "confirmed") continue;
-      replacements.push({ rawName, displayName });
+      const aliases = [
+        rawName,
+        med?.medication_verification?.queriedName,
+        med?.medication_verification?.rawName,
+      ].map(clean).filter(Boolean);
+      replacements.push({ aliases: [...new Set(aliases)], rawName, displayName });
     }
   }
 
   replacements.sort((left, right) => right.rawName.length - left.rawName.length);
   for (const section of Object.values(assessment.sections || {})) {
     if (!section?.text) continue;
-    for (const { rawName, displayName } of replacements) {
-      const escaped = rawName
-        .split(/\s+/)
-        .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-        .join("\\s+");
-      const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu");
-      const updated = section.text.replace(pattern, displayName);
-      if (updated !== section.text) {
-        section.text = updated;
-        warnings.push(`medication_verified_name_propagated_to_sections:${rawName}->${displayName}`);
+    for (const { aliases, rawName, displayName } of replacements) {
+      for (const alias of aliases) {
+        if (normalize(alias) === normalize(displayName)) continue;
+        const escaped = alias
+          .split(/\s+/)
+          .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join("\\s+");
+        const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu");
+        const updated = section.text.replace(pattern, displayName);
+        if (updated !== section.text) {
+          section.text = updated;
+          warnings.push(`medication_verified_name_propagated_to_sections:${alias}->${displayName}`);
+        }
       }
     }
   }
+}
+
+export function finalizeVerifiedMedicationNames(inputAssessment) {
+  const assessment = structuredClone(inputAssessment);
+  const warnings = [];
+  canonicalizeVerifiedMedicationNamesInSections(assessment, warnings);
+  syncMedicationSection(assessment, "habitual", "tratamiento_habitual", ["active"]);
+  syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
+  return { assessment, warnings };
 }
 
 function syncMedicationSection(assessment, group, sectionKey, statuses) {

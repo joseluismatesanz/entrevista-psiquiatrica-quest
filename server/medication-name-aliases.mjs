@@ -72,6 +72,30 @@ export const MEDICATION_NAME_ALIASES = [
     canonical: "clonazepam",
     pattern: /\bclonacepam\b/giu,
   },
+  {
+    id: "cronacepan_to_clonazepam",
+    source: "cronacepan",
+    canonical: "clonazepam",
+    pattern: /\bcronacepan\b/giu,
+  },
+  {
+    id: "ven_la_fascina_to_venlafaxina",
+    source: "ven la fascina",
+    canonical: "venlafaxina",
+    pattern: /\bven\s+la\s+fascina\b/giu,
+  },
+  {
+    id: "venlafacina_to_venlafaxina",
+    source: "venlafacina",
+    canonical: "venlafaxina",
+    pattern: /\bvenlafacina\b/giu,
+  },
+  {
+    id: "de_praxis_to_deprax",
+    source: "de praxis",
+    canonical: "deprax",
+    pattern: /\bde\s+praxis\b/giu,
+  },
 ];
 
 export const PSYCHIATRIC_MEDICATION_VOCABULARY = [
@@ -96,6 +120,19 @@ export const PSYCHIATRIC_MEDICATION_VOCABULARY = [
   "guanfacina",
   "clonidina",
   "litio",
+  "trazodona",
+  "deprax",
+  "paroxetina",
+  "vortioxetina",
+  "desvenlafaxina",
+  "clomipramina",
+  "amitriptilina",
+  "valproato",
+  "carbamazepina",
+  "lurasidona",
+  "paliperidona",
+  "asenapina",
+  "clozapina",
 ];
 
 function clean(value) {

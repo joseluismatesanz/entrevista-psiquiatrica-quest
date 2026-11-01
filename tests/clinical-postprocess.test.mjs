@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyClinicalPostprocessing } from "../server/clinical-postprocess.mjs";
+import { applyClinicalPostprocessing, finalizeVerifiedMedicationNames } from "../server/clinical-postprocess.mjs";
 
 function med(rawName, displayName, status = "active", dose = "", schedule = "") {
   return {
@@ -460,6 +460,28 @@ test("V0.6 medicación: propaga el nombre confirmado por CIMA a todo el informe"
   assert.match(result.assessment.sections.plan_terapeutico.text, /«Venlafaxina» 225 mg/);
   assert.match(result.assessment.sections.enfermedad_actual.text, /iniciar Venlafaxina/);
   assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /Ven la fascina/i);
+  assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: por la mañana");
+});
+
+test("V0.6 medicación: la pasada final propaga también el nombre consultado en CIMA", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  const venlafaxina = med("Venlafacina", "Venlafaxina", "active", "225 mg", "por la mañana");
+  venlafaxina.medication_verification = {
+    status: "confirmed",
+    rawName: "Venlafacina",
+    queriedName: "Venlafaxina",
+  };
+  fixture.medications.current = [venlafaxina];
+  fixture.sections.plan_terapeutico = {
+    text: "Sustituir fluoxetina por Venlafacina 225 mg por la mañana.",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+
+  const result = finalizeVerifiedMedicationNames(fixture);
+  assert.match(result.assessment.sections.plan_terapeutico.text, /Venlafaxina 225 mg/);
+  assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /Venlafacina/);
   assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: por la mañana");
 });
 

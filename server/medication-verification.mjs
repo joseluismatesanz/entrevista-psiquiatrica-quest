@@ -286,6 +286,7 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
 
   for (const group of ["habitual", "current"]) {
     for (const med of assessment.medications?.[group] || []) {
+      if (options.onlyUnverified && med?.medication_verification?.status === "confirmed") continue;
       const rawName = clean(med.raw_name) || clean(med.display_name);
       if (!rawName) continue;
       medicationEntries.push({ med, rawName, key: normalize(rawName) });
@@ -355,6 +356,7 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
       medication_active_ingredient_lookup_precedes_product_lookup: true,
       medication_active_ingredient_master_fallback: true,
       medication_verification_parallelized: true,
+      medication_only_unverified_pass: Boolean(options.onlyUnverified),
     },
   };
 }

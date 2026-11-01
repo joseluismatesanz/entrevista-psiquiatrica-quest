@@ -170,6 +170,7 @@ Devuelve exactamente el esquema solicitado.
 - PLAN TERAPÉUTICO: ingreso/no ingreso, unidad, cambios farmacológicos, pruebas, seguimiento, seguridad y medidas no farmacológicas solo cuando estén sustentados.
 - TRATAMIENTO HABITUAL es la pauta completa inmediatamente anterior a la consulta. TRATAMIENTO ACTUAL es la pauta completa resultante al finalizarla: mantenida + modificada en su nueva pauta + añadida, excluyendo lo retirado. Un fármaco mantenido aparece en ambos apartados. Separa las dosis puntuales administered_once.
 - MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Conserva marcas/nombres cuando no exista equivalencia inequívoca y lleva la incertidumbre a safety_review, nunca a la redacción clínica de sections. La medicación que un familiar refiere tomar para sí mismo no debe incorporarse al paciente; una prescripción explícita del psiquiatra dirigida al paciente sí pertenece al tratamiento actual.
+- Toda medicación del paciente mencionada en cualquier bloque debe quedar además como entidad estructurada, aunque sea histórica, retirada o solo aparezca en la narrativa o el plan. Conserva en raw_name la forma oída para que CIMA la normalice globalmente.
 - missing_or_not_explored: solo ausencias que puedan cambiar diagnóstico, tratamiento o seguimiento.
 - conflicts: conserva versiones incompatibles sin resolverlas sin base.
 - Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.
