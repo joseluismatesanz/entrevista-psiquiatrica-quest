@@ -249,11 +249,31 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
       && COLLATERAL_PATIENT_MEDICATION_PATTERN.test(text);
   });
 
-  const hasClinicianMaintenanceEvidence = (med) => lines.some((line) =>
-    line.speaker === "PSIQUIATRA"
-    && lineMentionsMedication(line, med)
-    && CLINICIAN_MAINTENANCE_PATTERN.test(normalize(line.text))
-  );
+  const hasClinicianMaintenanceEvidence = (med) => lines.some((line) => {
+    if (line.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
+    const text = normalize(line.text);
+    if (!CLINICIAN_MAINTENANCE_PATTERN.test(text)) return false;
+
+    const medicationIndex = medicationCandidateNames(med)
+      .map((name) => text.indexOf(name))
+      .filter((index) => index >= 0)
+      .sort((a, b) => a - b)[0];
+    if (!Number.isInteger(medicationIndex)) return false;
+
+    const before = text.slice(0, medicationIndex);
+    const lastIndex = (pattern) => {
+      let index = -1;
+      for (const match of before.matchAll(pattern)) index = match.index;
+      return index;
+    };
+    const maintenanceIndex = lastIndex(/\b(?:mantener|mantengo|mantenemos|mantenga|continuar|continua|seguimos\s+con|seguir\s+con|sin\s+cambios|misma\s+pauta)\b/gi);
+    const newOrModifyIndex = lastIndex(/\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|anadir|anado|anadimos|empezar|comenzar|subir|subo|subimos|aumentar|aumento|aumentamos|incrementar|incremento|incrementamos|reducir|reduzco|reducimos|disminuir|disminuyo|disminuimos|bajar|bajo|bajamos|ajustar|ajusto|ajustamos|titular|titulo|titulamos)\b/gi);
+
+    // En una frase con varios fármacos ("mantenemos A y añadimos B"), la
+    // última orden anterior a cada nombre determina su temporalidad.
+    if (maintenanceIndex >= 0) return maintenanceIndex > newOrModifyIndex;
+    return newOrModifyIndex < 0;
+  });
 
   const explicitSubstitutionPriors = [
     ...substitutionPriorMedicationPhrases(transcript),
@@ -377,6 +397,12 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     return medicationCandidateNames(right).some((name) => a.has(name));
   };
 
+  const regimenChanged = (currentMed, habitualMed) => {
+    const fields = ["dose", "schedule", "route"];
+    if (fields.some((field) => normalize(currentMed?.[field]) !== normalize(habitualMed?.[field]))) return true;
+    return Boolean(currentMed?.prn) !== Boolean(habitualMed?.prn);
+  };
+
   const retainedHabitual = [];
   for (const med of habitual) {
     const onlyNewPrescription = !hasPreexistingEvidence(med) && hasCurrentPatientEvidence(med);
@@ -412,31 +438,23 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   }
 
   assessment.medications.habitual = retainedHabitual;
-  const reconciledCurrent = current.filter((med) => {
+  const withoutDiscontinued = current.filter((med) => {
     if (!hasExplicitDiscontinuation(med)) return true;
     const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
     warnings.push(`medication_explicitly_discontinued_removed_from_current:${name}`);
     return false;
   });
 
-  // La pauta final parte siempre de la fotografía previa. Un fármaco habitual
-  // activo debe continuar en TRATAMIENTO ACTUAL salvo retirada o sustitución
-  // explícita. Si el modelo omitió un medicamento mantenido, se recupera aquí;
-  // si existe una entidad actual con nueva dosis/pauta, esa entidad prevalece.
-  for (const habitualMed of retainedHabitual) {
-    if (habitualMed?.status !== "active") continue;
-    if (hasExplicitDiscontinuation(habitualMed)) continue;
-    if (reconciledCurrent.some((currentMed) => overlaps(currentMed, habitualMed))) continue;
-
-    reconciledCurrent.push({
-      ...habitualMed,
-      status: "active",
-    });
-    const name = clean(habitualMed.display_name) || clean(habitualMed.raw_name) || "medicamento";
-    warnings.push(`medication_unchanged_carried_habitual_to_current:${name}`);
-  }
-
-  assessment.medications.current = reconciledCurrent;
+  // TRATAMIENTO ACTUAL contiene únicamente prescripciones nuevas o pautas que
+  // el psiquiatra modifica en esta consulta. La medicación habitual mantenida
+  // sin cambios permanece solo en TRATAMIENTO HABITUAL.
+  assessment.medications.current = withoutDiscontinued.filter((currentMed) => {
+    const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
+    if (!previous || regimenChanged(currentMed, previous)) return true;
+    const name = clean(currentMed.display_name) || clean(currentMed.raw_name) || "medicamento";
+    warnings.push(`medication_unchanged_pruned_from_current:${name}`);
+    return false;
+  });
 
   // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
   // Si el único respaldo del fármaco es una prescripción del psiquiatra posterior

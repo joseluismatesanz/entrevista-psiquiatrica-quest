@@ -261,7 +261,7 @@ test("V0.6 medicación: una nueva pauta del psiquiatra no queda como tratamiento
   assert.equal(result.meta.medication_new_prescription_temporality_guard, true);
 });
 
-test("V0.6 medicación: recupera la pauta previa como habitual y conserva la pauta final completa en actual", () => {
+test("V0.6 medicación: recupera la pauta previa como habitual y deja solo la nueva prescripción en actual", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [];
   fixture.medications.current = [
@@ -294,12 +294,12 @@ test("V0.6 medicación: recupera la pauta previa como habitual y conserva la pau
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => item.raw_name),
-    ["Fluoxetina", "Anafranil", "Catapresan", "Olanzapina", "Clonazepam", "Mirtazapina"],
+    ["Fluoxetina"],
   );
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clomipramina \(Anafranil\)/);
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonidina \(Catapresan\)/);
   assert.match(result.assessment.sections.tratamiento_actual.text, /Fluoxetina 20 mg/);
-  assert.match(result.assessment.sections.tratamiento_actual.text, /Clomipramina \(Anafranil\)/);
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Clomipramina \(Anafranil\)/);
   assert.ok(result.warnings.some((warning) =>
     warning.startsWith("medication_preexisting_recovered_current_to_habitual:")
   ));
@@ -334,7 +334,7 @@ test("V0.6 medicación: conserva la foto previa y la pauta final tras retirar, m
   );
 });
 
-test("V0.6 medicación: el actual conserva los habituales no retirados aunque el modelo los omita", () => {
+test("V0.6 medicación: el actual excluye los habituales mantenidos y retirados", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [
     med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
@@ -359,14 +359,14 @@ test("V0.6 medicación: el actual conserva los habituales no retirados aunque el
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Fluoxetina:20 mg", "Sertralina:50 mg", "Metformina:850 mg"],
+    ["Fluoxetina:20 mg"],
   );
-  assert.match(result.assessment.sections.tratamiento_actual.text, /Sertralina 50 mg/);
-  assert.match(result.assessment.sections.tratamiento_actual.text, /Metformina 850 mg/);
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Sertralina 50 mg/);
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Metformina 850 mg/);
   assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Lorazepam/);
 });
 
-test("V0.6 medicación: si no hay cambios la pauta actual coincide con la habitual activa", () => {
+test("V0.6 medicación: si no hay cambios el tratamiento actual queda vacío", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [
     med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
@@ -381,11 +381,9 @@ test("V0.6 medicación: si no hay cambios la pauta actual coincide con la habitu
   ].join("\n");
 
   const result = applyClinicalPostprocessing(fixture, transcript);
-  assert.deepEqual(
-    result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Sertralina:50 mg", "Mirtazapina:15 mg"],
-  );
-  assert.equal(result.assessment.sections.tratamiento_actual.evidence_status, "supported");
+  assert.deepEqual(result.assessment.medications.current, []);
+  assert.equal(result.assessment.sections.tratamiento_actual.text, "");
+  assert.equal(result.assessment.sections.tratamiento_actual.evidence_status, "not_provided");
 });
 
 test("V0.6 medicación: recupera fluoxetina y mirtazapina como habituales y las excluye tras sustituirlas", () => {
