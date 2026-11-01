@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'salud-mental-static-v4-full-black-direct-send';
+const STATIC_CACHE = 'salud-mental-static-v5-action-timers';
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/styles.css',

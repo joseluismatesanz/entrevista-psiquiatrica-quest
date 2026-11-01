@@ -29,6 +29,14 @@ test("correo: está visible desde el inicio y genera el informe antes de enviarl
   assert.match(sendJs, /openReportEmailAndDestroy\(\)/);
 });
 
+test("correo: muestra el tiempo total y llama directamente al generador compartido", () => {
+  assert.match(indexHtml, /id="prepareReportEmailTimer"/);
+  assert.match(sendJs, /Generando informe y preparando correo/);
+  assert.match(sendJs, /setInterval\(\(\) => updateSendTimer\(\), 1_000\)/);
+  assert.match(sendJs, /window\.runClinicalReportGeneration\(\)/);
+  assert.match(sendJs, /Proceso interrumpido/);
+});
+
 test("privacidad: la portada no expone documentación técnica ni casos de prueba", () => {
   assert.match(indexHtml, /La información se desidentifica antes de generar el informe/);
   assert.doesNotMatch(indexHtml, /Microsoft Presidio|loadDemo|loadCase1|loadCase2|loadCase3/);

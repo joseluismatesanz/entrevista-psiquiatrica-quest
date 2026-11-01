@@ -363,13 +363,22 @@
     const original = button.textContent;
     const analysisStartedAt = Date.now();
     let progressTimer = null;
+    const actionTimer = $('analyzeCaseTimer');
+    let analysisSucceeded = false;
+    const updateActionTimer = () => {
+      if (!actionTimer) return;
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - analysisStartedAt) / 1000));
+      actionTimer.textContent = `Organizando información clínica · ${elapsedSeconds} s`;
+    };
     button.disabled = true;
     button.textContent = 'Organizando información clínica…';
+    updateActionTimer();
     $('sessionMessage').textContent = 'Preparando la organización clínica y el borrador del informe…';
     progressTimer = setInterval(() => {
       const elapsedSeconds = Math.max(1, Math.round((Date.now() - analysisStartedAt) / 1000));
       $('sessionMessage').textContent = `Organizando la entrevista · ${elapsedSeconds} s. La transcripción permanece disponible y el proceso tiene un límite de seguridad.`;
-    }, 10_000);
+      updateActionTimer();
+    }, 1_000);
 
     try {
       const response = await window.ClinicalRequest.fetchWithDeadline(`${baseUrl}/api/analyze`, {
@@ -392,7 +401,9 @@
       renderReview(payload);
       showScreen('report');
       document.body.classList.add('clinical-report-visible');
+      analysisSucceeded = true;
       window.dispatchEvent(new CustomEvent('clinical-report-ready'));
+      return payload;
     } catch (error) {
       console.error('Backend analysis failed without logging transcript.', error);
       $('sessionMessage').textContent = `No se pudo completar el análisis: ${error.message}`;
@@ -402,8 +413,13 @@
       window.dispatchEvent(new CustomEvent('clinical-report-error', {
         detail: { message: error.message },
       }));
+      return null;
     } finally {
       if (progressTimer) clearInterval(progressTimer);
+      if (actionTimer) {
+        const elapsedSeconds = Math.max(0, Math.floor((Date.now() - analysisStartedAt) / 1000));
+        actionTimer.textContent = `${analysisSucceeded ? 'Informe creado' : 'Proceso interrumpido'} · ${elapsedSeconds} s`;
+      }
       button.disabled = Boolean(state.result);
       button.textContent = original;
     }
@@ -444,6 +460,7 @@
     $(id)?.addEventListener('click', () => clearAudioMappingState());
   }
   $('analyzeCase')?.addEventListener('click', analyzeWithBackend);
+  window.runClinicalReportGeneration = analyzeWithBackend;
   function syncWorkflowActions() {
     const hasTranscript = Boolean($('caseText').value.trim());
     $('workflowActions')?.classList.remove('hidden');

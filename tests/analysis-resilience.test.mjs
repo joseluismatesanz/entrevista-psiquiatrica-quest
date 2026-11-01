@@ -38,7 +38,13 @@ test('organización larga: la ruta compleja es única y las llamadas del modelo 
 });
 
 test('navegador: fuerza la carga de la recuperación de análisis', () => {
-  assert.match(loader, /backend-client\.js\?v=20261031-auto-report-send-2/);
-  assert.match(index, /loader\.js\?v=20261031-auto-report-send-2/);
+  assert.match(loader, /backend-client\.js\?v=20261101-action-timers-3/);
+  assert.match(index, /loader\.js\?v=20261101-action-timers-3/);
   assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261031-foreground-recovery-1/);
+});
+
+test('organización: muestra un contador por segundo y conserva el tiempo final', () => {
+  assert.match(client, /analyzeCaseTimer/);
+  assert.match(client, /Organizando información clínica.*elapsedSeconds/);
+  assert.match(client, /Informe creado.*Proceso interrumpido/);
 });

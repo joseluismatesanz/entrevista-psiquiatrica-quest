@@ -5,6 +5,28 @@
   const transcriptField = () => document.getElementById('caseText');
   const reportEditor = () => document.getElementById('reportEditor');
   let automaticSendPending = false;
+  let automaticSendTimer = null;
+  let automaticSendStartedAt = 0;
+
+  function updateSendTimer(finalLabel = '') {
+    const timer = document.getElementById('prepareReportEmailTimer');
+    if (!timer || !automaticSendStartedAt) return;
+    const seconds = Math.max(0, Math.floor((Date.now() - automaticSendStartedAt) / 1000));
+    timer.textContent = `${finalLabel || 'Generando informe y preparando correo'} · ${seconds} s`;
+  }
+
+  function startSendTimer() {
+    if (automaticSendTimer) clearInterval(automaticSendTimer);
+    automaticSendStartedAt = Date.now();
+    updateSendTimer();
+    automaticSendTimer = setInterval(() => updateSendTimer(), 1_000);
+  }
+
+  function finishSendTimer(label) {
+    if (automaticSendTimer) clearInterval(automaticSendTimer);
+    automaticSendTimer = null;
+    updateSendTimer(label);
+  }
 
   function reportText() {
     if (!window.__CLINICAL_REPORT_AVAILABLE) return '';
@@ -28,6 +50,12 @@
     if (!transcript) return Promise.reject(new Error('No hay una transcripción disponible para generar el informe.'));
     const analyzeButton = document.getElementById('analyzeCase');
     if (!analyzeButton) return Promise.reject(new Error('No se encuentra la acción de información clínica.'));
+
+    if (typeof window.runClinicalReportGeneration === 'function') {
+      return window.runClinicalReportGeneration().then((result) => {
+        if (!result || !reportText()) throw new Error('No se pudo generar el informe clínico.');
+      });
+    }
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => finish(new Error('La generación automática del informe ha superado el tiempo permitido.')), 230_000);
@@ -100,6 +128,7 @@
   async function generateSendAndDestroy() {
     if (automaticSendPending) return;
     automaticSendPending = true;
+    startSendTimer();
     const button = emailButton();
     try {
       if (!reportText()) {
@@ -110,8 +139,10 @@
         await waitForAutomaticReport();
       }
       openReportEmailAndDestroy();
+      finishSendTimer('Correo preparado');
     } catch (error) {
       automaticSendPending = false;
+      finishSendTimer('Proceso interrumpido');
       syncSendAction();
       const message = document.getElementById('sessionMessage');
       if (message) message.textContent = `No se pudo preparar el envío: ${error.message}`;

@@ -31,7 +31,7 @@ test("interfaz: las dos acciones principales están presentes desde la primera p
 });
 
 test("comprobaciones: mantiene desidentificación y chequeo del envío directo", () => {
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20261031-auto-report-send-2/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20261101-action-timers-3/);
   assert.match(packageJson, /node --check server\/person-name-redaction\.mjs/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);
   assert.doesNotMatch(packageJson, /node --check api\/send-report\.mjs/);

@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [index, css, controller, backend] = await Promise.all([
+const [index, css, baseCss, controller, backend] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../recording-focus-v063.css", import.meta.url), "utf8"),
+  readFile(new URL("../styles.css", import.meta.url), "utf8"),
   readFile(new URL("../long-interview-v06.js", import.meta.url), "utf8"),
   readFile(new URL("../backend-client.js", import.meta.url), "utf8"),
 ]);
@@ -28,6 +29,13 @@ test("después de transcribir: muestra exactamente las dos acciones principales"
   assert.match(index, />Info Clínica<\/button>/);
   assert.match(index, />Envío \/ Borrar<\/button>/);
   assert.match(css, /body\.transcription-actions-only \.app-shell > :not\(#workflowActions\)/);
+});
+
+test("acciones: cada opción dispone de un contador visible debajo", () => {
+  assert.match(index, /id="analyzeCaseTimer" class="workflow-action-timer"/);
+  assert.match(index, /id="prepareReportEmailTimer" class="workflow-action-timer"/);
+  assert.match(baseCss, /\.workflow-action-block/);
+  assert.match(baseCss, /font-variant-numeric:\s*tabular-nums/);
 });
 
 test("entrada manual: pegar una transcripción también revela Info Clínica", () => {
