@@ -369,6 +369,36 @@ test("V0.6 medicación: una presentación inicial no oculta las pautas previas d
   assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg.*por la noche/i);
 });
 
+test("V0.6 medicación: recupera mirtazapina habitual aunque el dictado fonético y el modelo la omitan", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
+  ];
+  fixture.medications.current = [
+    med("Mirtazapina", "Mirtazapina", "active", "30 mg", "por la noche"),
+  ];
+
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente antes de esta consulta?",
+    "PACIENTE: Tomo sertralina 50 mg por la mañana, mirta sapina 15 miligramos por la noche y clonazepam 0,5 mg a demanda.",
+    "PSIQUIATRA: Se aumenta la mirta sapina a 30 mg por la noche.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Sertralina:50 mg", "Mirtazapina:15 mg", "Clonazepam:0,5 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Mirtazapina:30 mg"],
+  );
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg.*por la noche/i);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonazepam 0,5 mg.*a demanda/i);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg.*por la noche/i);
+});
+
 test("V0.6 medicación: el actual excluye los habituales mantenidos y retirados", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [

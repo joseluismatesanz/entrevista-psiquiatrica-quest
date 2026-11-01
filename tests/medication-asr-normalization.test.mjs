@@ -25,7 +25,7 @@ test("ASR farmacológico: corrige ribotril y ribotil a rivotril sin fuzzy libre"
 });
 
 test("ASR farmacológico: recupera variantes observadas de mirtazapina", () => {
-  for (const heard of ["Mirtacepina", "Mirtazepina", "Mertazapina", "Mirtrazapina", "Mil tazapina"]) {
+  for (const heard of ["Mirtacepina", "Mirtazepina", "Mertazapina", "Mirtrazapina", "Mil tazapina", "Mirta sapina", "Mirta cepina", "Mita zapina", "Milta zapina"]) {
     const result = normalizeMedicationAsrText(`Tomo ${heard} 15 mg por la noche.`);
     assert.equal(result.text, "Tomo Mirtazapina 15 mg por la noche.");
     assert.equal(result.replacements, 1);

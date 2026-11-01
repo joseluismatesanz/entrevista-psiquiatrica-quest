@@ -1,3 +1,6 @@
+import { normalizeMedicationAsrText } from "./medication-asr-normalization.mjs";
+import { PSYCHIATRIC_MEDICATION_VOCABULARY } from "./medication-name-aliases.mjs";
+
 function clean(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -62,6 +65,62 @@ function speakerLines(transcript) {
       return { index, speaker: match[1].toUpperCase(), text: match[2].trim() };
     })
     .filter(Boolean);
+}
+
+function recoverExplicitPatientHabitualMedications(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  if (!lines.length) return;
+  assessment.medications ||= {};
+  const habitual = Array.isArray(assessment.medications.habitual)
+    ? assessment.medications.habitual
+    : [];
+  const patientSourceId = (assessment.sources || []).find((source) => source.kind === "patient")?.id;
+
+  for (const line of lines) {
+    if (line.speaker !== "PACIENTE" || isFamilySelfMedicationLine(lines, line)) continue;
+    const text = normalize(normalizeMedicationAsrText(line.text).text);
+    const previous = previousSpeakerLine(lines, line);
+    const answersHabitualQuestion = previous?.speaker === "PSIQUIATRA"
+      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text));
+    const statesActiveTreatment = ACTIVE_MEDICATION_PATTERN.test(text)
+      && !HISTORICAL_MEDICATION_PATTERN.test(text)
+      && !NO_CURRENT_MEDICATION_PATTERN.test(text);
+    if (!answersHabitualQuestion && !statesActiveTreatment) continue;
+
+    const mentionedMedications = PSYCHIATRIC_MEDICATION_VOCABULARY
+      .map((canonical) => {
+        const wanted = normalize(canonical);
+        const match = new RegExp(`\\b${wanted}\\b`, "i").exec(text);
+        return { canonical, wanted, medicationIndex: match?.index ?? -1 };
+      })
+      .filter(({ medicationIndex }) => medicationIndex >= 0)
+      .sort((left, right) => left.medicationIndex - right.medicationIndex);
+
+    for (const { canonical, wanted, medicationIndex } of mentionedMedications) {
+      if (habitual.some((med) => medicationCandidateNames(med).includes(wanted))) continue;
+
+      const nearby = text.slice(medicationIndex + wanted.length, medicationIndex + wanted.length + 100)
+        .split(/\s+y\s+(?=[a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2}\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b)/i)[0];
+      const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui|miligramos?)\b/i);
+      const schedules = nearby.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|para\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia)\b/gi);
+      habitual.push({
+        raw_name: canonical[0].toUpperCase() + canonical.slice(1),
+        display_name: canonical[0].toUpperCase() + canonical.slice(1),
+        active_ingredient_known: true,
+        role: "psychiatric",
+        dose: dose ? `${dose[1]} ${/^mili/i.test(dose[2]) ? "mg" : dose[2]}` : "",
+        schedule: schedules?.length ? [...new Set(schedules)].join(" y ") : "",
+        route: "",
+        prn: /\ba\s+demanda\b/i.test(nearby),
+        adherence_status: "unknown",
+        adherence_text: "",
+        status: "active",
+        source_ids: patientSourceId ? [patientSourceId] : [],
+      });
+      warnings.push(`medication_habitual_recovered_from_explicit_patient_statement:${canonical}`);
+    }
+  }
+  assessment.medications.habitual = habitual;
 }
 
 function previousSpeakerLine(lines, line) {
@@ -132,7 +191,7 @@ function medicationCandidateNames(med) {
 }
 
 function lineMentionsMedication(line, med) {
-  const text = normalize(line?.text);
+  const text = normalize(normalizeMedicationAsrText(line?.text).text);
   return medicationCandidateNames(med).some((candidate) => text.includes(candidate));
 }
 
@@ -341,13 +400,13 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     const evidence = habitualPatientEvidenceLine(med);
     if (!evidence || !hasExplicitTreatmentChange(med)) return prior;
 
-    const text = normalize(evidence.text);
+    const text = normalize(normalizeMedicationAsrText(evidence.text).text);
     const candidate = medicationCandidateNames(med).find((name) => text.includes(name));
     const start = candidate ? text.indexOf(candidate) + candidate.length : 0;
     const nearby = text.slice(start, start + 100)
       .split(/\s+y\s+(?=[a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2}\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b)/i)[0];
-    const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\b/i);
-    if (dose) prior.dose = `${dose[1]} ${dose[2]}`;
+    const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui|miligramos?)\b/i);
+    if (dose) prior.dose = `${dose[1]} ${/^mili/i.test(dose[2]) ? "mg" : dose[2]}`;
 
     const schedules = nearby.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia)\b/gi);
     if (schedules?.length) prior.schedule = [...new Set(schedules)].join(" y ");
@@ -902,6 +961,10 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
 
   recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
   pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);
+  // Última recuperación de la fotografía previa: primero dejamos que la
+  // conciliación estructurada conserve su orden y después añadimos únicamente
+  // los fármacos que el modelo omitió pese a estar explícitos en la respuesta.
+  recoverExplicitPatientHabitualMedications(assessment, transcript, warnings);
 
   for (const med of assessment.medications?.habitual || []) {
     const rawName = clean(med.raw_name) || clean(med.display_name);
