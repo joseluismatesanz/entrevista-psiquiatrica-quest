@@ -214,7 +214,7 @@ test("V0.6 informe: limpia las nuevas variantes metadiscursivas de sociofamiliar
   );
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "El psiquiatra indica la pauta de sertralina, clonazepam de rescate y mirtazapina nocturna",
+    "Se indica la pauta de sertralina, clonazepam de rescate y mirtazapina nocturna",
   );
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_sociofamily"));
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
@@ -782,4 +782,35 @@ test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaj
   assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));
   assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
   assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
+});
+
+test("V0.6 informe: elimina la presentación profesional y usa redacción impersonal", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "El psiquiatra señala que persiste ansiedad durante el día.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+    plan_terapeutico: {
+      text: "Soy XXXXXXXXXXX, soy psiquiatra y voy a valorar toda la información médica que tiene. El psiquiatra propone seguimiento en dos semanas. La profesional indica control por su equipo habitual.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PSIQUIATRA: Soy XXXXXXXXXXX, soy psiquiatra y voy a valorar toda la información médica que tiene. Propongo seguimiento en dos semanas y control por su equipo habitual.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "Se señala que persiste ansiedad durante el día.",
+  );
+  assert.equal(
+    result.assessment.sections.plan_terapeutico.text,
+    "Se propone seguimiento en dos semanas. Se indica control por su equipo habitual.",
+  );
+  assert.ok(result.warnings.includes("report_professional_introduction_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_clinical_style_normalized_to_impersonal"));
 });

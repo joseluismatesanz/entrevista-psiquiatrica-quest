@@ -254,6 +254,43 @@ function cleanClinicalMetaPhrasing(section, warnings, warningCode) {
   warnings.push(warningCode);
 }
 
+function removeProfessionalIntroductionFromPlan(section, warnings) {
+  if (!section?.text) return;
+  const sentences = splitSentences(section.text);
+  const kept = sentences.filter((sentence) => {
+    const text = normalize(sentence);
+    return !/\bsoy\b[^.!?]{0,100}\b(?:psiquiatra|profesional|facultativ[oa])\b/.test(text)
+      && !/\b(?:me\s+presento|mi\s+nombre\s+es)\b[^.!?]{0,100}\b(?:valorar|entrevista|consulta)\b/.test(text);
+  });
+  if (kept.length === sentences.length) return;
+
+  section.text = kept.join(" ").trim();
+  if (!section.text) {
+    section.evidence_status = "not_provided";
+    section.source_ids = [];
+  }
+  warnings.push("report_professional_introduction_pruned_from_plan");
+}
+
+function normalizeImpersonalClinicalStyle(sections, warnings) {
+  let changed = false;
+  for (const section of Object.values(sections || {})) {
+    if (!section?.text) continue;
+    const next = String(section.text)
+      .replace(/\b(?:el|la)\s+(?:psiquiatra|profesional|facultativ[oa])\s+(?:expone|señala|senala|propone|indica|plantea|considera|refiere|decide|recomienda)\b/gi, (match) => {
+        const verb = match.trim().split(/\s+/).at(-1).toLowerCase();
+        return `Se ${verb}`;
+      })
+      .replace(/\bpor\s+(?:el|la)\s+(?:psiquiatra|profesional|facultativ[oa])\s+se\s+(propone|señala|senala|indica|expone|plantea|considera|decide|recomienda)\b/gi, "se $1")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (next === section.text) continue;
+    section.text = next;
+    changed = true;
+  }
+  if (changed) warnings.push("report_clinical_style_normalized_to_impersonal");
+}
+
 const COLLATERAL_MSE_CLAUSE_PATTERN = /^(?:segun\s+(?:la|el)\s+(?:madre|padre|familiar|acompanante|cuidador(?:a)?)|(?:(?:la|su)\s+)?(?:madre|padre|familia(?:r|res)?|acompanante|cuidador(?:a)?)\s+(?:refiere|describe|observa|senala|informa|comenta|explica|discrepa|considera)|discrepa\s+respecto\s+a(?:l)?\s+(?:sueno|descanso))\b/i;
 
 function pruneCollateralContentFromMse(section, assessment, warnings) {
@@ -426,6 +463,13 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     warnings,
     "report_meta_phrasing_pruned_from_plan",
   );
+
+  removeProfessionalIntroductionFromPlan(
+    assessment.sections?.plan_terapeutico,
+    warnings,
+  );
+
+  normalizeImpersonalClinicalStyle(assessment.sections, warnings);
 
   pruneCollateralContentFromMse(
     assessment.sections?.exploracion_psicopatologica,

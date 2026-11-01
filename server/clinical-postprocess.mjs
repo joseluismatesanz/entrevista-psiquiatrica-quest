@@ -44,7 +44,7 @@ const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\
 const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
 const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
 const CLINICIAN_MAINTENANCE_PATTERN = /\b(?:mantener|mantengo|mantenemos|mantenga|continuar|continua|contin\u00fao|seguimos\s+con|seguir\s+con|sin\s+cambios|misma\s+pauta|resto\s+del\s+tratamiento)\b/i;
-const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|anadir|anado|anadimos|empezar|comenzar|sustituir|cambiar|cambio|cambiamos|aumentar|aumento|aumentamos|incrementar|incremento|incrementamos|subir|subo|subimos|reducir|reduzco|reducimos|disminuir|disminuyo|disminuimos|bajar|bajo|bajamos|ajustar|ajusto|ajustamos|titular|titulo|titulamos)\b/i;
+const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|inicia|iniciamos|introducir|introduzco|introduce|introducimos|anadir|anado|anade|anadimos|empezar|comenzar|sustituir|sustituye|cambiar|cambio|cambia|cambiamos|aumentar|aumento|aumenta|aumentamos|incrementar|incremento|incrementa|incrementamos|subir|subo|sube|subimos|reducir|reduzco|reduce|reducimos|disminuir|disminuyo|disminuye|disminuimos|bajar|bajo|baja|bajamos|ajustar|ajusto|ajusta|ajustamos|titular|titulo|titula|titulamos)\b/i;
 const CLINICIAN_DISCONTINUATION_PATTERN = /\b(?:retirar|retiro|retiramos|suspender|suspendo|suspendemos|suprimir|suprimo|suprimimos|quitar|quito|quitamos|dejar\s+de\s+tomar|no\s+continuar|sustituir|sustituyo|sustituimos)\b/i;
 const FAMILY_ADDRESS_PATTERN = /\b(?:señora|senora|madre|padre|familiar|cuidador(?:a)?)\b/i;
 const FORMAL_ADDRESS_PATTERN = /\busted\b/i;
@@ -140,8 +140,16 @@ function medicationPlanCutoffIndex(lines, med, planAnchorIndex) {
   const firstExplicitPrescription = lines.find((line) =>
     line.speaker === "PSIQUIATRA"
     && lineMentionsMedication(line, med)
-    && CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
+    && (
+      CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
+      || CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
+      || CLINICIAN_DISCONTINUATION_PATTERN.test(normalize(line.text))
+    )
   );
+  // Una presentación genérica al inicio (p. ej. «soy psiquiatra y voy a
+  // valorar...») no puede convertir en pauta nueva la medicación que el
+  // paciente enumera después. El corte debe ser específico de cada fármaco.
+  if (med) return firstExplicitPrescription?.index ?? Number.POSITIVE_INFINITY;
   return Math.min(planAnchorIndex, firstExplicitPrescription?.index ?? Number.POSITIVE_INFINITY);
 }
 

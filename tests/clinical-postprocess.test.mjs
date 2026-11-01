@@ -334,6 +334,41 @@ test("V0.6 medicación: conserva la foto previa y la pauta final tras retirar, m
   );
 });
 
+test("V0.6 medicación: una presentación inicial no oculta las pautas previas de fármacos modificados", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
+  ];
+  fixture.medications.current = [
+    med("Mirtazapina", "Mirtazapina", "active", "30 mg", "por la noche"),
+    med("Escitalopram", "Escitalopram", "active", "20 mg", "por la mañana"),
+  ];
+
+  const transcript = [
+    "PSIQUIATRA: Soy XXXXXXXXXXX, soy psiquiatra y voy a explicar el tratamiento que tiene que hacer a partir de este momento.",
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente antes de esta consulta?",
+    "PACIENTE: Tomo sertralina 50 mg por la mañana, mirtazapina 15 mg por la noche y escitalopram 10 mg por la mañana.",
+    "PSIQUIATRA: Se aumenta la mirtazapina a 30 mg por la noche y el escitalopram a 20 mg por la mañana.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}:${item.schedule}`),
+    [
+      "Sertralina:50 mg:por la mañana",
+      "Mirtazapina:15 mg:por la noche",
+      "Escitalopram:10 mg:por la manana",
+    ],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Mirtazapina:30 mg", "Escitalopram:20 mg"],
+  );
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg.*por la noche/i);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg.*por la noche/i);
+});
+
 test("V0.6 medicación: el actual excluye los habituales mantenidos y retirados", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [
