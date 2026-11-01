@@ -290,7 +290,7 @@ test("V0.6 medicación: recupera la pauta previa como habitual y deja solo la nu
 
   assert.deepEqual(
     result.assessment.medications.habitual.map((item) => item.raw_name),
-    ["Anafranil", "Catapresan", "Olanzapina", "Clonazepam", "Mirtazapina"],
+    ["Olanzapina", "Clonazepam", "Mirtazapina", "Anafranil", "Catapresan"],
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => item.raw_name),
@@ -365,8 +365,8 @@ test("V0.6 medicación: una presentación inicial no oculta las pautas previas d
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
     ["Mirtazapina:30 mg", "Escitalopram:20 mg"],
   );
-  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg.*por la noche/i);
-  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg.*por la noche/i);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/i);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg: 0 - 0 - 1/i);
 });
 
 test("V0.6 medicación: recupera mirtazapina habitual aunque el dictado fonético y el modelo la omitan", () => {
@@ -394,9 +394,9 @@ test("V0.6 medicación: recupera mirtazapina habitual aunque el dictado fonétic
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
     ["Mirtazapina:30 mg"],
   );
-  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg.*por la noche/i);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/i);
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonazepam 0,5 mg.*a demanda/i);
-  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg.*por la noche/i);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg: 0 - 0 - 1/i);
 });
 
 test("V0.6 medicación: el actual excluye los habituales mantenidos y retirados", () => {
@@ -449,6 +449,22 @@ test("V0.6 medicación: si no hay cambios el tratamiento actual queda vacío", (
   assert.deepEqual(result.assessment.medications.current, []);
   assert.equal(result.assessment.sections.tratamiento_actual.text, "");
   assert.equal(result.assessment.sections.tratamiento_actual.evidence_status, "not_provided");
+});
+
+test("V0.6 medicación: presenta la posología técnica mañana-comida-noche", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana y por la noche"),
+  ];
+  fixture.medications.current = [];
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente?",
+    "PACIENTE: Tomo sertralina 50 mg, una pastilla por la mañana y una por la noche.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.equal(result.assessment.sections.tratamiento_habitual.text, "Sertralina 50 mg: 1 - 0 - 1");
+  assert.equal(result.assessment.sections.tratamiento_actual.text, "");
 });
 
 test("V0.6 medicación: recupera fluoxetina y mirtazapina como habituales y las excluye tras sustituirlas", () => {
@@ -577,7 +593,7 @@ test("V0.6 medicación: propaga el nombre confirmado por CIMA a todo el informe"
   assert.match(result.assessment.sections.plan_terapeutico.text, /«Venlafaxina» 225 mg/);
   assert.match(result.assessment.sections.enfermedad_actual.text, /iniciar Venlafaxina/);
   assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /Ven la fascina/i);
-  assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: por la mañana");
+  assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: 1 - 0 - 0");
 });
 
 test("V0.6 medicación: la pasada final propaga también el nombre consultado en CIMA", () => {
@@ -599,7 +615,7 @@ test("V0.6 medicación: la pasada final propaga también el nombre consultado en
   const result = finalizeVerifiedMedicationNames(fixture);
   assert.match(result.assessment.sections.plan_terapeutico.text, /Venlafaxina 225 mg/);
   assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /Venlafacina/);
-  assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: por la mañana");
+  assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: 1 - 0 - 0");
 });
 
 

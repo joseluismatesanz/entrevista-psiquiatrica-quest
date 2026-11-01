@@ -271,7 +271,7 @@ test("V0.6 informe: limpia las variantes del informe tras la nueva prueba comple
   );
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "Se indica sertralina 50 mg por la mañana, en una sola dosis con el desayuno. Se prescribe Rivotril (clonazepam) 0,5 mg como medicación de rescate durante el día cuando aparezca ansiedad. Se indica mirtazapina 15 mg por la noche antes de dormir.",
+    "",
   );
   assert.ok(result.warnings.includes("report_family_self_symptoms_pruned_from_sociofamily"));
   assert.ok(result.warnings.includes("report_family_self_symptoms_pruned_from_current_illness"));
@@ -813,4 +813,47 @@ test("V0.6 informe: elimina la presentación profesional y usa redacción impers
   );
   assert.ok(result.warnings.includes("report_professional_introduction_pruned_from_plan"));
   assert.ok(result.warnings.includes("report_clinical_style_normalized_to_impersonal"));
+});
+
+test("V0.6 informe: separa exploración de enfermedad actual y confina la medicación", () => {
+  const input = assessment({
+    enfermedad_actual: {
+      text: "Desde hace dos meses presenta ansiedad con repercusión laboral. Se encuentra consciente y orientado, colaborador y sin alteraciones del discurso. Se aumenta sertralina a 100 mg por la mañana.",
+      evidence_status: "supported",
+      source_ids: ["p", "q"],
+    },
+    exploracion_psicopatologica: {
+      text: "Se encuentra consciente y orientado, colaborador y sin alteraciones del discurso.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+    plan_terapeutico: {
+      text: "Se aumenta sertralina a 100 mg por la mañana. Seguimiento en cuatro semanas.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+  input.medications = {
+    habitual: [{ raw_name: "Sertralina", display_name: "Sertralina", status: "active" }],
+    current: [{ raw_name: "Sertralina", display_name: "Sertralina", status: "active" }],
+  };
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PACIENTE: Desde hace dos meses tengo ansiedad y me afecta al trabajo. PSIQUIATRA: Se encuentra consciente y orientado, colaborador y sin alteraciones del discurso. Se aumenta sertralina a 100 mg por la mañana y se revisará en cuatro semanas.",
+  );
+
+  assert.equal(
+    result.assessment.sections.enfermedad_actual.text,
+    "Desde hace dos meses presenta ansiedad con repercusión laboral.",
+  );
+  assert.equal(
+    result.assessment.sections.exploracion_psicopatologica.text,
+    "Se encuentra consciente y orientado, colaborador y sin alteraciones del discurso.",
+  );
+  assert.equal(result.assessment.sections.plan_terapeutico.text, "Seguimiento en cuatro semanas.");
+  for (const [key, section] of Object.entries(result.assessment.sections)) {
+    if (["tratamiento_habitual", "tratamiento_actual"].includes(key)) continue;
+    assert.doesNotMatch(section.text || "", /sertralina/i);
+  }
 });

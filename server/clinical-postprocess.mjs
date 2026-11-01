@@ -341,6 +341,10 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     if (maintenanceIndex >= 0) return maintenanceIndex > newOrModifyIndex;
     return newOrModifyIndex < 0;
   });
+  const hasGenericMaintenanceEvidence = lines.some((line) =>
+    line.speaker === "PSIQUIATRA"
+    && /\b(?:mantenga|mantener|mantenemos|continuar|continua)\b.*\bresto\s+del\s+tratamiento\b/i.test(normalize(line.text))
+  );
 
   const explicitSubstitutionPriors = [
     ...substitutionPriorMedicationPhrases(transcript),
@@ -466,7 +470,11 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
 
   const regimenChanged = (currentMed, habitualMed) => {
     const fields = ["dose", "schedule", "route"];
-    if (fields.some((field) => normalize(currentMed?.[field]) !== normalize(habitualMed?.[field]))) return true;
+    if (fields.some((field) => {
+      const currentValue = normalize(currentMed?.[field]);
+      const habitualValue = normalize(habitualMed?.[field]);
+      return currentValue && habitualValue && currentValue !== habitualValue;
+    })) return true;
     return Boolean(currentMed?.prn) !== Boolean(habitualMed?.prn);
   };
 
@@ -517,6 +525,11 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   // sin cambios permanece solo en TRATAMIENTO HABITUAL.
   assessment.medications.current = withoutDiscontinued.filter((currentMed) => {
     const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
+    if (previous && (hasClinicianMaintenanceEvidence(currentMed) || hasGenericMaintenanceEvidence)) {
+      const name = clean(currentMed.display_name) || clean(currentMed.raw_name) || "medicamento";
+      warnings.push(`medication_explicitly_maintained_pruned_from_current:${name}`);
+      return false;
+    }
     if (!previous || regimenChanged(currentMed, previous)) return true;
     const name = clean(currentMed.display_name) || clean(currentMed.raw_name) || "medicamento";
     warnings.push(`medication_unchanged_pruned_from_current:${name}`);
@@ -661,9 +674,26 @@ function medicationLine(med) {
   const route = clean(med.route);
   const adherence = cleanAdherence(med.adherence_text);
 
+  const normalizedSchedule = normalize(schedule);
+  const technicalSchedule = (() => {
+    if (!schedule || med.prn || /\b(?:cada\s+\d+\s+horas?|semanal|mensual)\b/i.test(normalizedSchedule)) return "";
+    if (/^\s*\d+(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d+)?\s*$/.test(schedule)) return schedule.replace(/\s*-\s*/g, " - ");
+    const slot = (pattern) => {
+      const explicit = normalizedSchedule.match(new RegExp(`(?:^|[,;]|\\by\\b)\\s*(\\d+(?:[.,]\\d+)?)\\s*(?:comprimidos?|pastillas?|capsulas?|tomas?)?[^,;]{0,35}${pattern}`, "i"));
+      if (explicit) return explicit[1];
+      return new RegExp(pattern, "i").test(normalizedSchedule) ? "1" : "0";
+    };
+    const morning = slot("(?:por\\s+la\\s+manana|desayuno|matutin[oa])");
+    const midday = slot("(?:al\\s+mediodia|comida)");
+    const night = slot("(?:por\\s+la\\s+noche|antes\\s+de\\s+dormir|para\\s+dormir|cena|nocturn[oa])");
+    if ([morning, midday, night].every((value) => value === "0")) return "";
+    return `${morning} - ${midday} - ${night}`;
+  })();
+
   let line = name;
   if (dose) line += ` ${dose}`;
-  if (schedule) line += `: ${schedule}`;
+  if (technicalSchedule) line += `: ${technicalSchedule}`;
+  else if (schedule) line += `: ${schedule}`;
   else if (med.prn) line += ": a demanda";
   if (route && !/oral/i.test(route)) line += ` (${route})`;
   if (adherence && med.adherence_status !== "not_applicable") line += `. Adherencia: ${adherence}`;
@@ -959,12 +989,11 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
 
-  recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
-  pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);
-  // Última recuperación de la fotografía previa: primero dejamos que la
-  // conciliación estructurada conserve su orden y después añadimos únicamente
-  // los fármacos que el modelo omitió pese a estar explícitos en la respuesta.
   recoverExplicitPatientHabitualMedications(assessment, transcript, warnings);
+  recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
+  // La fotografía previa debe estar completa antes de conciliar la pauta
+  // actual; así los fármacos mantenidos sin cambios no se arrastran a ACTUAL.
+  pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);
 
   for (const med of assessment.medications?.habitual || []) {
     const rawName = clean(med.raw_name) || clean(med.display_name);

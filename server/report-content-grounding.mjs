@@ -291,6 +291,74 @@ function normalizeImpersonalClinicalStyle(sections, warnings) {
   if (changed) warnings.push("report_clinical_style_normalized_to_impersonal");
 }
 
+function removeMseContentFromCurrentIllness(assessment, warnings) {
+  const illness = assessment.sections?.enfermedad_actual;
+  const mse = assessment.sections?.exploracion_psicopatologica;
+  if (!illness?.text || !mse?.text) return;
+  const mseSentences = new Set(
+    splitSentences(mse.text).map(normalize),
+  );
+  const mseDomainPattern = /\b(?:consciente\s+y\s+orientad|orientad[oa]\s+en|colaborador(?:a)?|contacto\s+(?:visual|sint[oó]nico)|lenguaje|discurso|psicomotricidad|curso\s+del\s+pensamiento|contenido\s+del\s+pensamiento|sensopercepci[oó]n|alucinaciones|ideas?\s+delirantes?|ideaci[oó]n\s+(?:autol[ií]tica|heteroagresiva)|juicio\s+de\s+realidad|conciencia\s+de\s+enfermedad|insight|autocontenci[oó]n|no\s+se\s+objetivan?)\b/i;
+  const sentences = splitSentences(illness.text);
+  const kept = sentences.filter((sentence) => {
+    const text = normalize(sentence);
+    return !mseSentences.has(text) && !mseDomainPattern.test(text);
+  });
+  if (kept.length === sentences.length) return;
+  illness.text = kept.join(" ").trim();
+  if (!illness.text) {
+    illness.evidence_status = "not_provided";
+    illness.source_ids = [];
+  }
+  warnings.push("report_mse_content_pruned_from_current_illness");
+}
+
+function confineMedicationToTreatmentSections(assessment, warnings) {
+  const protectedKeys = new Set(["tratamiento_habitual", "tratamiento_actual"]);
+  const medicationNames = new Set();
+  for (const group of [assessment.medications?.habitual, assessment.medications?.current]) {
+    for (const med of group || []) {
+      for (const value of [med?.raw_name, med?.display_name, med?.medication_verification?.queriedName]) {
+        const name = normalize(value).replace(/\([^)]*\)/g, " ").trim();
+        if (name.length >= 4) medicationNames.add(name);
+      }
+    }
+  }
+  if (!medicationNames.size) return;
+
+  const mentionsMedication = (clause) => {
+    const text = normalize(clause);
+    if ([...medicationNames].some((name) => text.includes(name))) return true;
+    return /\b(?:medicacion|tratamiento\s+farmacologico|psicofarmaco|farmaco)\b/.test(text)
+      && /\b(?:\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml)|pauta|dosis|tomar|retirar|sustituir|aumentar|reducir|iniciar|mantener)\b/.test(text);
+  };
+
+  let changed = false;
+  for (const [key, section] of Object.entries(assessment.sections || {})) {
+    if (protectedKeys.has(key) || !section?.text) continue;
+    const retained = [];
+    for (const sentence of splitSentences(section.text)) {
+      const terminal = sentence.match(/[.!?]$/)?.[0] || "";
+      const clauses = sentence.replace(/[.!?]+$/, "").split(/\s*;\s*/).map((item) => item.trim()).filter(Boolean);
+      const keptClauses = clauses.filter((clause) => !mentionsMedication(clause));
+      if (!keptClauses.length) {
+        changed = true;
+        continue;
+      }
+      if (keptClauses.length !== clauses.length) changed = true;
+      retained.push(`${keptClauses.join("; ")}${terminal || "."}`);
+    }
+    const next = retained.join(" ").trim();
+    if (next === section.text) continue;
+    section.text = next;
+    if (!next) {
+      section.evidence_status = "not_provided";
+      section.source_ids = [];
+    }
+  }
+  if (changed) warnings.push("report_medication_confined_to_treatment_sections");
+}
+
 const COLLATERAL_MSE_CLAUSE_PATTERN = /^(?:segun\s+(?:la|el)\s+(?:madre|padre|familiar|acompanante|cuidador(?:a)?)|(?:(?:la|su)\s+)?(?:madre|padre|familia(?:r|res)?|acompanante|cuidador(?:a)?)\s+(?:refiere|describe|observa|senala|informa|comenta|explica|discrepa|considera)|discrepa\s+respecto\s+a(?:l)?\s+(?:sueno|descanso))\b/i;
 
 function pruneCollateralContentFromMse(section, assessment, warnings) {
@@ -470,6 +538,10 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
   );
 
   normalizeImpersonalClinicalStyle(assessment.sections, warnings);
+
+  removeMseContentFromCurrentIllness(assessment, warnings);
+
+  confineMedicationToTreatmentSections(assessment, warnings);
 
   pruneCollateralContentFromMse(
     assessment.sections?.exploracion_psicopatologica,
