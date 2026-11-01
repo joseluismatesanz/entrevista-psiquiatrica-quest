@@ -399,6 +399,9 @@
       showScreen('input');
       document.body.classList.add('transcription-actions-only');
       $('workflowActions')?.classList.remove('hidden');
+      window.dispatchEvent(new CustomEvent('clinical-report-error', {
+        detail: { message: error.message },
+      }));
     } finally {
       if (progressTimer) clearInterval(progressTimer);
       button.disabled = Boolean(state.result);

@@ -4,6 +4,7 @@
   const emailButton = () => document.getElementById('prepareReportEmail');
   const transcriptField = () => document.getElementById('caseText');
   const reportEditor = () => document.getElementById('reportEditor');
+  let automaticSendPending = false;
 
   function reportText() {
     if (!window.__CLINICAL_REPORT_AVAILABLE) return '';
@@ -13,21 +14,49 @@
     return (reportEditor()?.innerText || reportEditor()?.textContent || '').trim();
   }
 
-  function availableText() {
-    const report = reportText();
-    if (report) return { text: report, kind: 'Informe clínico' };
-    const transcript = transcriptField()?.value.trim() || '';
-    if (transcript) return { text: transcript, kind: 'Transcripción clínica' };
-    return { text: '', kind: 'Informe clínico' };
-  }
-
   function syncSendAction() {
     const button = emailButton();
     if (!button) return;
     button.textContent = 'Envío / Borrar';
-    button.setAttribute('aria-label', 'Enviar por correo el contenido disponible y borrar la sesión');
+    button.setAttribute('aria-label', 'Generar y enviar por correo el informe clínico y borrar la sesión');
     button.setAttribute('title', 'Envío / Borrar');
     button.disabled = false;
+  }
+
+  function waitForAutomaticReport() {
+    const transcript = transcriptField()?.value.trim() || '';
+    if (!transcript) return Promise.reject(new Error('No hay una transcripción disponible para generar el informe.'));
+    const analyzeButton = document.getElementById('analyzeCase');
+    if (!analyzeButton) return Promise.reject(new Error('No se encuentra la acción de información clínica.'));
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => finish(new Error('La generación automática del informe ha superado el tiempo permitido.')), 230_000);
+      const onReady = () => finish();
+      const onError = (event) => finish(new Error(event.detail?.message || 'No se pudo generar el informe clínico.'));
+      function finish(error) {
+        clearTimeout(timeout);
+        window.removeEventListener('clinical-report-ready', onReady);
+        window.removeEventListener('clinical-report-error', onError);
+        if (error) reject(error);
+        else resolve();
+      }
+      window.addEventListener('clinical-report-ready', onReady, { once: true });
+      window.addEventListener('clinical-report-error', onError, { once: true });
+      analyzeButton.click();
+    });
+  }
+
+  function markAutomaticallyValidated() {
+    window.__CLINICAL_REPORT_AUTO_VALIDATED = true;
+    reportEditor()?.classList.add('report-locked');
+    document.querySelectorAll('.report-edit-button').forEach((button) => {
+      button.disabled = true;
+      button.classList.add('hidden');
+    });
+    const badge = document.querySelector('#screen-report .draft-badge');
+    const eyebrow = document.querySelector('#screen-report .report-heading .section-label');
+    if (badge) badge.textContent = 'Informe validado automáticamente';
+    if (eyebrow) eyebrow.textContent = 'DOCUMENTO CLÍNICO VALIDADO AUTOMÁTICAMENTE';
   }
 
   function destroyEphemeralSession() {
@@ -46,10 +75,12 @@
     }, 900);
   }
 
-  function sendAndDestroy() {
-    const content = availableText();
-    const subject = content.kind;
-    const body = content.text ? `${content.kind}\n\n${content.text}` : '';
+  function openReportEmailAndDestroy() {
+    const text = reportText();
+    if (!text) throw new Error('El informe clínico generado está vacío.');
+    markAutomaticallyValidated();
+    const subject = 'Informe clínico validado';
+    const body = `Informe clínico validado\n\n${text}`;
     const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     const button = emailButton();
     if (button) {
@@ -66,16 +97,37 @@
     destroyEphemeralSession();
   }
 
+  async function generateSendAndDestroy() {
+    if (automaticSendPending) return;
+    automaticSendPending = true;
+    const button = emailButton();
+    try {
+      if (!reportText()) {
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Creando informe…';
+        }
+        await waitForAutomaticReport();
+      }
+      openReportEmailAndDestroy();
+    } catch (error) {
+      automaticSendPending = false;
+      syncSendAction();
+      const message = document.getElementById('sessionMessage');
+      if (message) message.textContent = `No se pudo preparar el envío: ${error.message}`;
+    }
+  }
+
   transcriptField()?.addEventListener('input', syncSendAction);
   document.addEventListener('click', (event) => {
     if (!event.target.closest?.('#prepareReportEmail')) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    sendAndDestroy();
+    void generateSendAndDestroy();
   }, true);
   window.addEventListener('pageshow', syncSendAction);
   window.addEventListener('clinical-transcription-ready', syncSendAction);
   window.addEventListener('clinical-report-ready', syncSendAction);
-  window.sendValidatedClinicalReport = sendAndDestroy;
+  window.sendValidatedClinicalReport = generateSendAndDestroy;
   syncSendAction();
 })();

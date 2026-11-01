@@ -21,12 +21,12 @@ test("correo: borra el estado efímero tras entregar el contenido al sistema", (
   assert.match(sendJs, /window\.location\.replace/);
 });
 
-test("correo: está habilitado desde el inicio y se actualiza con transcripción o informe", () => {
+test("correo: está visible desde el inicio y genera el informe antes de enviarlo", () => {
   assert.match(indexHtml, /id="prepareReportEmail"[^>]*>Envío \/ Borrar<\/button>/);
   assert.match(sendJs, /button\.disabled = false/);
-  assert.match(sendJs, /clinical-transcription-ready/);
-  assert.match(sendJs, /clinical-report-ready/);
-  assert.match(sendJs, /transcriptField\(\)\?\.addEventListener\('input', syncSendAction\)/);
+  assert.match(sendJs, /async function generateSendAndDestroy/);
+  assert.match(sendJs, /if \(!reportText\(\)\)/);
+  assert.match(sendJs, /openReportEmailAndDestroy\(\)/);
 });
 
 test("privacidad: la portada no expone documentación técnica ni casos de prueba", () => {
