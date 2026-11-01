@@ -412,12 +412,31 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   }
 
   assessment.medications.habitual = retainedHabitual;
-  assessment.medications.current = current.filter((med) => {
+  const reconciledCurrent = current.filter((med) => {
     if (!hasExplicitDiscontinuation(med)) return true;
     const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
     warnings.push(`medication_explicitly_discontinued_removed_from_current:${name}`);
     return false;
   });
+
+  // La pauta final parte siempre de la fotografía previa. Un fármaco habitual
+  // activo debe continuar en TRATAMIENTO ACTUAL salvo retirada o sustitución
+  // explícita. Si el modelo omitió un medicamento mantenido, se recupera aquí;
+  // si existe una entidad actual con nueva dosis/pauta, esa entidad prevalece.
+  for (const habitualMed of retainedHabitual) {
+    if (habitualMed?.status !== "active") continue;
+    if (hasExplicitDiscontinuation(habitualMed)) continue;
+    if (reconciledCurrent.some((currentMed) => overlaps(currentMed, habitualMed))) continue;
+
+    reconciledCurrent.push({
+      ...habitualMed,
+      status: "active",
+    });
+    const name = clean(habitualMed.display_name) || clean(habitualMed.raw_name) || "medicamento";
+    warnings.push(`medication_unchanged_carried_habitual_to_current:${name}`);
+  }
+
+  assessment.medications.current = reconciledCurrent;
 
   // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
   // Si el único respaldo del fármaco es una prescripción del psiquiatra posterior

@@ -334,6 +334,60 @@ test("V0.6 medicación: conserva la foto previa y la pauta final tras retirar, m
   );
 });
 
+test("V0.6 medicación: el actual conserva los habituales no retirados aunque el modelo los omita", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
+    med("Lorazepam", "Lorazepam", "active", "1 mg", "por la noche"),
+    med("Metformina", "Metformina", "active", "850 mg", "mañana y noche"),
+  ];
+  fixture.medications.current = [
+    med("Fluoxetina", "Fluoxetina", "active", "20 mg", "al mediodía"),
+  ];
+
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma hasta hoy?",
+    "PACIENTE: Sertralina 50 mg por la mañana, lorazepam 1 mg por la noche y metformina 850 mg por la mañana y por la noche.",
+    "PSIQUIATRA: Desde hoy retiramos lorazepam, mantenemos sertralina y metformina sin cambios y añadimos fluoxetina 20 mg al mediodía.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Sertralina:50 mg", "Lorazepam:1 mg", "Metformina:850 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Fluoxetina:20 mg", "Sertralina:50 mg", "Metformina:850 mg"],
+  );
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Sertralina 50 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Metformina 850 mg/);
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Lorazepam/);
+});
+
+test("V0.6 medicación: si no hay cambios la pauta actual coincide con la habitual activa", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
+    med("Mirtazapina", "Mirtazapina", "active", "15 mg", "por la noche"),
+  ];
+  fixture.medications.current = [];
+
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente?",
+    "PACIENTE: Sertralina 50 mg por la mañana y mirtazapina 15 mg por la noche.",
+    "PSIQUIATRA: Mantendremos el mismo tratamiento sin cambios.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Sertralina:50 mg", "Mirtazapina:15 mg"],
+  );
+  assert.equal(result.assessment.sections.tratamiento_actual.evidence_status, "supported");
+});
+
 test("V0.6 medicación: recupera fluoxetina y mirtazapina como habituales y las excluye tras sustituirlas", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [];
