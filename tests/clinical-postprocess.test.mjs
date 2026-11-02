@@ -261,7 +261,7 @@ test("V0.6 medicación: una nueva pauta del psiquiatra no queda como tratamiento
   assert.equal(result.meta.medication_new_prescription_temporality_guard, true);
 });
 
-test("V0.6 medicación: recupera la pauta previa como habitual y deja solo la nueva prescripción en actual", () => {
+test("V0.6 medicación: recupera la pauta previa y construye la pauta final completa", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [];
   fixture.medications.current = [
@@ -294,12 +294,12 @@ test("V0.6 medicación: recupera la pauta previa como habitual y deja solo la nu
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => item.raw_name),
-    ["Fluoxetina"],
+    ["Fluoxetina", "Anafranil", "Catapresan", "Olanzapina", "Clonazepam", "Mirtazapina"],
   );
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clomipramina \(Anafranil\)/);
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonidina \(Catapresan\)/);
   assert.match(result.assessment.sections.tratamiento_actual.text, /Fluoxetina 20 mg/);
-  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Clomipramina \(Anafranil\)/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Clomipramina \(Anafranil\)/);
   assert.ok(result.warnings.some((warning) =>
     warning.startsWith("medication_preexisting_recovered_current_to_habitual:")
   ));
@@ -399,7 +399,7 @@ test("V0.6 medicación: recupera mirtazapina habitual aunque el dictado fonétic
   assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg: 0 - 0 - 1/i);
 });
 
-test("V0.6 medicación: el actual excluye los habituales mantenidos y retirados", () => {
+test("V0.6 medicación: el actual incluye los mantenidos y excluye los retirados", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [
     med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
@@ -424,10 +424,10 @@ test("V0.6 medicación: el actual excluye los habituales mantenidos y retirados"
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Fluoxetina:20 mg"],
+    ["Fluoxetina:20 mg", "Sertralina:50 mg", "Metformina:850 mg"],
   );
-  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Sertralina 50 mg/);
-  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Metformina 850 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Sertralina 50 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Metformina 850 mg/);
   assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Lorazepam/);
 });
 

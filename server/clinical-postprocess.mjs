@@ -520,16 +520,32 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     return false;
   });
 
-  // TRATAMIENTO ACTUAL contiene únicamente prescripciones nuevas o pautas que
-  // el psiquiatra modifica en esta consulta. La medicación habitual mantenida
-  // sin cambios permanece solo en TRATAMIENTO HABITUAL.
+  const hasPharmacologicalUpdate = withoutDiscontinued.some((currentMed) => {
+    const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
+    return !previous || regimenChanged(currentMed, previous) || hasExplicitTreatmentChange(currentMed);
+  }) || retainedHabitual.some((habitualMed) => hasExplicitDiscontinuation(habitualMed));
+
+  // Si durante la consulta hay una actualización, ACTUAL representa la pauta
+  // final completa. Se incorporan los fármacos que el clínico mantiene de
+  // forma expresa (también cuando dice «mantener el resto del tratamiento»).
+  if (hasPharmacologicalUpdate) {
+    for (const habitualMed of retainedHabitual) {
+      if (hasExplicitDiscontinuation(habitualMed)) continue;
+      const maintained = hasClinicianMaintenanceEvidence(habitualMed) || hasGenericMaintenanceEvidence;
+      if (!maintained || withoutDiscontinued.some((item) => overlaps(item, habitualMed))) continue;
+      withoutDiscontinued.push({ ...habitualMed, status: "active" });
+      const name = clean(habitualMed.display_name) || clean(habitualMed.raw_name) || "medicamento";
+      warnings.push(`medication_explicitly_maintained_added_to_current:${name}`);
+    }
+  }
+
+  // Sin actualización farmacológica, ACTUAL queda vacío. Cuando sí la hay,
+  // conserva nuevas/modificadas y las mantenidas expresamente; elimina solo
+  // duplicados que el modelo haya copiado sin una indicación clínica final.
   assessment.medications.current = withoutDiscontinued.filter((currentMed) => {
     const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
-    if (previous && (hasClinicianMaintenanceEvidence(currentMed) || hasGenericMaintenanceEvidence)) {
-      const name = clean(currentMed.display_name) || clean(currentMed.raw_name) || "medicamento";
-      warnings.push(`medication_explicitly_maintained_pruned_from_current:${name}`);
-      return false;
-    }
+    if (!hasPharmacologicalUpdate) return false;
+    if (previous && (hasClinicianMaintenanceEvidence(currentMed) || hasGenericMaintenanceEvidence)) return true;
     if (!previous || regimenChanged(currentMed, previous)) return true;
     const name = clean(currentMed.display_name) || clean(currentMed.raw_name) || "medicamento";
     warnings.push(`medication_unchanged_pruned_from_current:${name}`);

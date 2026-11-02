@@ -25,7 +25,7 @@ function canonicalDiagnosticText(judgment) {
   const { diagnosis, cie10, dsm5 } = diagnosticFields(judgment);
   if (!diagnosis || !cie10 || !dsm5) return "";
 
-  let text = `JUICIO CLÍNICO: ${diagnosis}. CIE-10: ${cie10}. DSM-5: ${dsm5}.`;
+  let text = `JUICIO CLÍNICO: ${diagnosis}. CIE-10: ${cie10}. DSM-5-TR: ${dsm5}.`;
   const differential = Array.isArray(judgment?.differential)
     ? judgment.differential.map((x) => String(x || "").trim()).filter(Boolean)
     : [];

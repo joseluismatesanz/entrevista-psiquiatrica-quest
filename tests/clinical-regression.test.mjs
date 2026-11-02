@@ -138,7 +138,7 @@ test("Caso 1: motivo directo, tratamiento por líneas, NSSI no se convierte en i
   assert.match(report, /Sertralina 50 mg: 1 - 0 - 0/);
   assert.match(report, /Melatonina 3,8 mg: 0 - 0 - 1/);
   assert.doesNotMatch(report, /\nINTERVENCIÓN\n/);
-  assert.match(report, /JUICIO CLÍNICO: Episodio depresivo moderado\. CIE-10: F32\.1\. DSM-5: 296\.22\./);
+  assert.match(report, /JUICIO CLÍNICO: Episodio depresivo moderado\. CIE-10: F32\.1\. DSM-5-TR: 296\.22\./);
   assert.equal(assessment.sections.psq_guardia.text, "");
   assert.deepEqual(collectClinicalInvariantViolations(assessment), []);
 });
@@ -231,7 +231,7 @@ test("Caso 2: familia solo paciente, intervención explícita, contención en en
   );
   assert.match(report, /Olanzapina 10 mg: 0 - 0 - 1/);
   assert.match(report, /Salbutamol 100 microgramos\/inhalación: 2 inhalaciones a demanda/);
-  assert.match(report, /JUICIO CLÍNICO: Psicosis no especificada\. CIE-10: F29\. DSM-5: 298\.9\./);
+  assert.match(report, /JUICIO CLÍNICO: Psicosis no especificada\. CIE-10: F29\. DSM-5-TR: 298\.9\./);
   assert.match(report, /Diagnóstico diferencial: Trastorno psicótico inducido por sustancias; Recaída de trastorno psicótico primario/);
   assert.deepEqual(collectClinicalInvariantViolations(assessment), []);
 });
