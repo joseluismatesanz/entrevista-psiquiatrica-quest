@@ -121,6 +121,7 @@ Devuelve exactamente el esquema solicitado.
 - SITUACIÓN SOCIOFAMILIAR: convivencia, relaciones, apoyos, escolarización/empleo según edad; no conviertas contenido potencialmente delirante sobre identidad/filiación en hecho objetivo.
 - HÁBITOS TÓXICOS: nicotina, alcohol, cannabis y otras sustancias con patrón y discrepancias.
 - TRATAMIENTO VIGENTE: lista completa de medicación que el paciente tomaba antes de la valoración, con dosis, pauta y adherencia. Una entidad por fármaco; no inventes datos. Si un familiar dice "yo tomo X", X es del familiar y no del paciente salvo evidencia explícita independiente.
+- En schedule, toda pauta diaria programada usa el formato mañana - comida - noche (por ejemplo, 1 - 0 - 1); conserva «a demanda» para rescates.
 - missing_or_not_explored: solo ausencias clínicamente relevantes para riesgo, diagnóstico, tratamiento o seguimiento; no lista exhaustiva.
 - conflicts: conserva versiones incompatibles sin elegir una arbitrariamente.
 - Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.
@@ -140,6 +141,7 @@ Devuelve exactamente el esquema solicitado.
 - TRATAMIENTO VIGENTE es la pauta completa inmediatamente anterior a la consulta. TRATAMIENTO REVISADO es una segunda lista completa con toda la pauta posterior: mantenida + modificada en su nueva pauta + añadida, excluyendo lo retirado. Nunca contiene solo los cambios. Un fármaco mantenido aparece en ambas listas y una dosis modificada conserva la anterior en VIGENTE y la nueva en REVISADO.
 - RIESGO: NSSI no es automáticamente intento suicida; conserva conducta preparatoria, heteroagresividad y discrepancias de fuentes.
 - MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Si el nombre es dudoso, conserva raw_name y lleva la advertencia a safety_review; no escribas en sections expresiones como "en la transcripción", "según la evidencia" o "principio activo no confirmado".
+- En schedule, toda pauta diaria programada usa el formato mañana - comida - noche (por ejemplo, 1 - 0 - 1); conserva «a demanda» para rescates.
 - missing_or_not_explored: solo ausencias con posible impacto clínico real.
 - conflicts: conserva versiones incompatibles sin resolverlas sin base.
 - safety_review: solo hechos que realmente requieren revisión clínica, con fuentes.
@@ -170,6 +172,7 @@ Devuelve exactamente el esquema solicitado.
 - PLAN TERAPÉUTICO: ingreso/no ingreso, unidad, cambios farmacológicos, pruebas, seguimiento, seguridad y medidas no farmacológicas solo cuando estén sustentados.
 - TRATAMIENTO VIGENTE es la pauta completa inmediatamente anterior a la consulta. TRATAMIENTO REVISADO es una segunda lista completa con toda la pauta posterior: mantenida + modificada en su nueva pauta + añadida, excluyendo lo retirado. Nunca contiene solo los cambios. Un fármaco mantenido aparece en ambas listas y una dosis modificada conserva la anterior en VIGENTE y la nueva en REVISADO.
 - MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Conserva marcas/nombres cuando no exista equivalencia inequívoca y lleva la incertidumbre a safety_review, nunca a la redacción clínica de sections. La medicación que un familiar refiere tomar para sí mismo no debe incorporarse al paciente; una prescripción explícita del psiquiatra dirigida al paciente sí pertenece al tratamiento actual.
+- En schedule, toda pauta diaria programada usa el formato mañana - comida - noche (por ejemplo, 1 - 0 - 1); conserva «a demanda» para rescates.
 - missing_or_not_explored: solo ausencias que puedan cambiar diagnóstico, tratamiento o seguimiento.
 - conflicts: conserva versiones incompatibles sin resolverlas sin base.
 - Crea source IDs estables dentro de TU respuesta y úsalos solo cuando sustentan el dato.

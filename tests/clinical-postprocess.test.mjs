@@ -460,7 +460,7 @@ test("V0.6 medicación: propaga el nombre confirmado por CIMA a todo el informe"
   assert.match(result.assessment.sections.plan_terapeutico.text, /«Venlafaxina» 225 mg/);
   assert.match(result.assessment.sections.enfermedad_actual.text, /iniciar Venlafaxina/);
   assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /Ven la fascina/i);
-  assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: por la mañana");
+  assert.equal(result.assessment.sections.tratamiento_actual.text, "Venlafaxina 225 mg: 1 - 0 - 0");
 });
 
 
@@ -734,4 +734,65 @@ test("ADELANTO medicación: tratamiento actual conserva lo mantenido y excluye l
   const result = applyClinicalPostprocessing(fixture, transcript);
   assert.deepEqual(result.assessment.medications.current.map((item) => item.raw_name), ["Duloxetina"]);
   assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Sertralina/);
+});
+
+test("ADELANTO medicación: sustitución de toda la pauta separa vigente y revisado y normaliza horarios", () => {
+  const fixture = assessmentFixture();
+  const deprax = med("De Prax", "Deprax", "active", "100 mg", "antes de dormir");
+  deprax.medication_verification = {
+    status: "confirmed",
+    queriedName: "Deprax",
+    medicationAliasApplied: true,
+    matchType: "product_name_exact_or_prefix",
+  };
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Duloxetina", "Duloxetina", "active", "60 mg", "por la mañana y en la comida"),
+    med("Olanzapina", "Olanzapina", "active", "5 mg", "de rescate"),
+    deprax,
+    med("Fluoxetina", "Fluoxetina", "active", "20 mg", "por la mañana"),
+    med("Mirtazapina", "Mirtazapina", "active", "15 mg", "por la noche"),
+    med("Clonazepam", "Clonazepam", "active", "0,5 mg", "a demanda"),
+  ];
+  fixture.medications.current[1].prn = true;
+  fixture.medications.current[5].prn = true;
+  fixture.sections.tratamiento_habitual = {
+    text: "pauta previa",
+    evidence_status: "supported",
+    source_ids: ["patient"],
+  };
+  fixture.sections.plan_terapeutico = {
+    text: "Sustituir la pauta previa por duloxetina 60 mg por la mañana y en la comida, olanzapina 5 mg de rescate y De Prax 100 mg antes de dormir.",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+  fixture.sections.tratamiento_actual = {
+    text: "",
+    evidence_status: "supported",
+    source_ids: ["psychiatrist"],
+  };
+
+  const transcript = [
+    "PSIQUIATRA: ¿Cuál es el tratamiento que está tomando ahora mismo?",
+    "PACIENTE: Fluoxetina 20 mg por la mañana, mirtazapina 15 mg por la noche y clonazepam 0,5 mg a demanda.",
+    "PSIQUIATRA: Vamos a sustituir la pauta previa por duloxetina 60 mg por la mañana y en la comida, olanzapina 5 mg de rescate y De Prax 100 mg antes de dormir.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => item.raw_name),
+    ["Fluoxetina", "Mirtazapina", "Clonazepam"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => item.raw_name),
+    ["Duloxetina", "Olanzapina", "De Prax"],
+  );
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonazepam 0,5 mg: a demanda/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Duloxetina 60 mg: 1 - 1 - 0/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Olanzapina 5 mg: a demanda/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Deprax 100 mg: 0 - 0 - 1/);
+  assert.match(result.assessment.sections.plan_terapeutico.text, /Deprax 100 mg/);
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Fluoxetina|Mirtazapina|Clonazepam/);
 });

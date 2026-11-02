@@ -78,6 +78,15 @@ body.transcription-actions-only .app-shell {
 .workflow-main-button { width: 100%; min-height: 74px; border-radius: 16px; font-size: 1.08rem; }
 .workflow-main-button:disabled { opacity: .45; }
 
+#organizationTranscriptAction {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+#organizeTranscript {
+  min-height: 58px;
+}
+
 @keyframes recordingFocusSpin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .recording-blackout-button.processing .recording-blackout-dot { animation: none; }

@@ -36,6 +36,7 @@ MEDICACIÓN
 - Si el principio activo no se conoce, display_name debe conservar el nombre comercial/raw_name.
 - Si el nombre es dudoso, conserva literalmente raw_name en el informe sin añadir frases como "principio activo no confirmado" o "no establecido en la transcripción"; registra la necesidad de revisión únicamente en safety_review.
 - Mantén dosis, vía, PRN y pauta exactamente hasta donde estén documentadas.
+- Para pautas diarias programadas, escribe schedule siempre como «mañana - comida - noche» con números separados por guiones (por ejemplo, 1 - 0 - 1). Conserva «a demanda» para rescates y no fuerces este formato si la pauta es ambigua.
 - Adherencia debe quedar explícita cuando se haya preguntado/obtenido.
 - Separa la pauta previa (VIGENTE) de la pauta final resultante (REVISADO), además del tratamiento histórico y las dosis administradas una sola vez. Son dos listas completas, no una lista inicial y una lista de cambios. Si cambia una dosis, conserva la dosis previa en VIGENTE y la nueva en REVISADO. Mantener un fármaco hace que figure en ambos apartados; retirarlo hace que permanezca solo en VIGENTE.
 - La medicación que un familiar refiere tomar para sí mismo NO pertenece al tratamiento del paciente. Ejemplo: MADRE: "yo tomo lorazepam" es medicación de la madre, no del paciente. Solo incorpora un fármaco al paciente si existe evidencia explícita dirigida al paciente (paciente que lo toma, familiar que dice que el paciente lo toma, o psiquiatra que se lo prescribe).

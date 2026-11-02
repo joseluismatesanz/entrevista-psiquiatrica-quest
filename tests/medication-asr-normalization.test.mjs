@@ -32,6 +32,15 @@ test("ASR farmacológico: recupera variantes observadas de mirtazapina", () => {
   }
 });
 
+test("ASR farmacológico: normaliza De Prax y de praxis como Deprax", () => {
+  for (const heard of ["De Prax", "de praxis"]) {
+    const result = normalizeMedicationAsrText(`Tomo ${heard} 100 mg antes de dormir.`);
+    assert.match(result.text, /Deprax 100 mg antes de dormir/i);
+    assert.equal(result.replacements, 1);
+    assert.ok(result.applied_aliases.some((id) => id.includes("deprax")));
+  }
+});
+
 test("ASR farmacológico: permite aproximación única de alta confianza solo en contexto farmacológico", () => {
   const medicationContext = normalizeMedicationAsrText("Tomo mirtazipina 15 mg por la noche.");
   assert.equal(medicationContext.text, "Tomo mirtazapina 15 mg por la noche.");

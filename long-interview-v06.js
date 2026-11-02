@@ -896,7 +896,7 @@
   });
 
   document.addEventListener('click', (event) => {
-    if (!event.target.closest?.('#analyzeCase, #organizeCase')) return;
+    if (!event.target.closest?.('#organizeCase')) return;
     document.body.classList.remove('transcription-actions-only');
   }, true);
 

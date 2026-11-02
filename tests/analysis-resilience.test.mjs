@@ -37,7 +37,7 @@ test('organización larga: la ruta compleja es única y las llamadas del modelo 
 });
 
 test('navegador: fuerza la carga de la recuperación de análisis', () => {
-  assert.match(loader, /backend-client\.js\?v=20261102-recording-focus-1/);
-  assert.match(index, /loader\.js\?v=20261102-recording-focus-1/);
+  assert.match(loader, /backend-client\.js\?v=20261102-clinical-flow-2/);
+  assert.match(index, /loader\.js\?v=20261102-clinical-flow-2/);
   assert.match(index, /long-interview-prefetch-gate-v061\.js\?v=20261024-recording-gate-1/);
 });

@@ -25,8 +25,9 @@ test("tras la transcripción solo presenta Informe y Organización", () => {
   assert.match(css, /body\.transcription-actions-only \.app-shell > :not\(#workflowActions\)/);
 });
 
-test("Informe abre el informe y Organización abre la revisión", () => {
-  assert.match(backend, /analyzeWithBackend\('report'\)/);
+test("Informe prepara el correo directo y Organización abre la transcripción antes de la revisión", () => {
+  assert.match(backend, /analyzeWithBackend\('email'\)/);
   assert.match(backend, /analyzeWithBackend\('review'\)/);
-  assert.match(backend, /showScreen\(destination === 'review' \? 'review' : 'report'\)/);
+  assert.match(backend, /openTranscriptForOrganization/);
+  assert.match(backend, /window\.sendClinicalReportDirect\(payload\.report\)/);
 });

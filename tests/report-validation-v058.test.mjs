@@ -83,6 +83,6 @@ test("privacidad: la portada informa del resultado sin exponer documentación t�
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
   assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20260909-10/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20261102-clinical-flow-2/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });

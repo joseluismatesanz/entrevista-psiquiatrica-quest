@@ -359,15 +359,19 @@
       return;
     }
 
-    const button = destination === 'review' ? $('organizeCase') : $('analyzeCase');
-    const otherButton = destination === 'review' ? $('analyzeCase') : $('organizeCase');
+    const button = destination === 'review' ? $('organizeTranscript') : $('analyzeCase');
+    const otherButton = destination === 'review' ? null : $('organizeCase');
     const original = button.textContent;
     const analysisStartedAt = Date.now();
     let progressTimer = null;
     button.disabled = true;
     if (otherButton) otherButton.disabled = true;
-    button.textContent = 'Organizando información clínica…';
-    $('sessionMessage').textContent = 'Preparando la organización clínica y el borrador del informe…';
+    button.textContent = destination === 'email'
+      ? 'Creando informe y correo…'
+      : 'Organizando información clínica…';
+    $('sessionMessage').textContent = destination === 'email'
+      ? 'Preparando el informe clínico para su envío directo…'
+      : 'Preparando la organización clínica y el borrador del informe…';
     progressTimer = setInterval(() => {
       const elapsedSeconds = Math.max(1, Math.round((Date.now() - analysisStartedAt) / 1000));
       $('sessionMessage').textContent = `Organizando la entrevista · ${elapsedSeconds} s. La transcripción permanece disponible y el proceso tiene un límite de seguridad.`;
@@ -392,8 +396,18 @@
       state.result = payload;
       renderReview(payload);
       window.__CLINICAL_REPORT_AVAILABLE = true;
-      showScreen(destination === 'review' ? 'review' : 'report');
       window.dispatchEvent(new CustomEvent('clinical-report-ready'));
+      if (destination === 'email') {
+        if (typeof window.sendClinicalReportDirect !== 'function') {
+          showScreen('report');
+          $('sessionMessage').textContent = 'El envío directo no está disponible. El informe queda abierto para revisión y envío manual.';
+          return;
+        }
+        window.sendClinicalReportDirect(payload.report);
+        return;
+      }
+      $('organizationTranscriptAction')?.classList.add('hidden');
+      showScreen(destination === 'review' ? 'review' : 'report');
     } catch (error) {
       console.error('Backend analysis failed without logging transcript.', error);
       $('sessionMessage').textContent = `No se pudo completar el análisis: ${error.message}`;
@@ -424,6 +438,7 @@
     $('reportEditor').textContent = '';
     $('validateCheck').checked = false;
     $('copyReport').disabled = true;
+    $('organizationTranscriptAction')?.classList.add('hidden');
     $('sessionMessage').textContent = message;
     $('recordingStatus').textContent = 'Micrófono preparado para una prueba ficticia.';
     setRecordButton('idle');
@@ -438,12 +453,23 @@
   for (const id of ['loadCase1', 'loadCase2']) {
     $(id)?.addEventListener('click', () => clearAudioMappingState());
   }
-  $('analyzeCase')?.addEventListener('click', () => analyzeWithBackend('report'));
-  $('organizeCase')?.addEventListener('click', () => analyzeWithBackend('review'));
+  function openTranscriptForOrganization() {
+    document.body.classList.remove('transcription-actions-only');
+    $('workflowActions')?.classList.add('hidden');
+    $('organizationTranscriptAction')?.classList.remove('hidden');
+    showScreen('input');
+    $('sessionMessage').textContent = 'Revisa la transcripción y pulsa «Organizar información clínica» para continuar.';
+    $('caseText')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  $('analyzeCase')?.addEventListener('click', () => analyzeWithBackend('email'));
+  $('organizeCase')?.addEventListener('click', openTranscriptForOrganization);
+  $('organizeTranscript')?.addEventListener('click', () => analyzeWithBackend('review'));
   window.runClinicalReportGeneration = () => analyzeWithBackend('report');
   function syncWorkflowActions() {
     const hasTranscript = Boolean($('caseText').value.trim());
-    $('workflowActions')?.classList.toggle('hidden', !hasTranscript);
+    const reviewingTranscript = !$('organizationTranscriptAction')?.classList.contains('hidden');
+    $('workflowActions')?.classList.toggle('hidden', !hasTranscript || reviewingTranscript);
     if ($('analyzeCase')) $('analyzeCase').disabled = !hasTranscript;
     if ($('organizeCase')) $('organizeCase').disabled = !hasTranscript;
   }

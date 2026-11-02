@@ -242,6 +242,13 @@ function canonicalDisplayName(verification, rawName) {
     : raw;
   const matchType = verification.matchType || "";
 
+  // Deprax es el nombre comercial confirmado por CIMA. Cuando la entrada procede
+  // de una separación fonética ("De Prax"), se conserva la marca oficial solicitada
+  // para el informe en lugar de volver a mostrar la forma errónea del audio.
+  if (normalize(canonicalInput) === "deprax" && matchType === "product_name_exact_or_prefix") {
+    return "Deprax";
+  }
+
   if (
     matchType === "active_ingredient_exact"
     || matchType === "active_ingredient_exact_token"
@@ -293,14 +300,18 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
   }
 
   const uniqueNames = new Map();
+  const existingVerifications = new Map();
   for (const entry of medicationEntries) {
     if (!uniqueNames.has(entry.key)) uniqueNames.set(entry.key, entry.rawName);
+    if (entry.med?.medication_verification?.status && !existingVerifications.has(entry.key)) {
+      existingVerifications.set(entry.key, entry.med.medication_verification);
+    }
   }
 
   const verificationPairs = await Promise.all(
     [...uniqueNames.entries()].map(async ([key, rawName]) => [
       key,
-      await verifyMedicationName(rawName, options),
+      existingVerifications.get(key) || await verifyMedicationName(rawName, options),
     ])
   );
   const cache = new Map(verificationPairs);

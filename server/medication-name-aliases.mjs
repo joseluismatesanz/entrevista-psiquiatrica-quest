@@ -72,6 +72,18 @@ export const MEDICATION_NAME_ALIASES = [
     canonical: "clonazepam",
     pattern: /\bclonacepam\b/giu,
   },
+  {
+    id: "de_prax_to_deprax",
+    source: "de prax",
+    canonical: "deprax",
+    pattern: /\bde\s+prax\b/giu,
+  },
+  {
+    id: "de_praxis_to_deprax",
+    source: "de praxis",
+    canonical: "deprax",
+    pattern: /\bde\s+praxis\b/giu,
+  },
 ];
 
 export const PSYCHIATRIC_MEDICATION_VOCABULARY = [
@@ -96,6 +108,8 @@ export const PSYCHIATRIC_MEDICATION_VOCABULARY = [
   "guanfacina",
   "clonidina",
   "litio",
+  "deprax",
+  "trazodona",
 ];
 
 function clean(value) {

@@ -225,6 +225,20 @@
     }, 900);
   }
 
+  function openReportEmail(text) {
+    const subject = 'Informe clínico validado';
+    const body = `Informe clínico validado\n\n${text}`;
+    const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    const link = document.createElement('a');
+    link.href = mailto;
+    link.style.display = 'none';
+    link.setAttribute('aria-hidden', 'true');
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }
+
   function sendAndDestroy() {
     const emailButton = document.getElementById('prepareReportEmail');
     const text = getValidatedReportText();
@@ -235,25 +249,31 @@
       return;
     }
 
-    const subject = 'Informe clínico validado';
-    const body = `Informe clínico validado\n\n${text}`;
-    const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
     if (emailButton) {
       emailButton.disabled = true;
       emailButton.textContent = 'Abriendo correo…';
     }
     setHint('Abriendo el correo institucional y destruyendo la sesión local…');
 
-    const link = document.createElement('a');
-    link.href = mailto;
-    link.style.display = 'none';
-    link.setAttribute('aria-hidden', 'true');
-    document.body.append(link);
-    link.click();
-    link.remove();
+    openReportEmail(text);
 
     destroyEphemeralSession();
+  }
+
+  function sendClinicalReportDirect(rawText) {
+    const text = String(rawText || '').trim();
+    if (!text) return false;
+
+    state.validated = true;
+    const directButton = document.getElementById('analyzeCase');
+    if (directButton) {
+      directButton.disabled = true;
+      directButton.textContent = 'Abriendo correo…';
+    }
+    setHint(`Informe generado · abriendo correo para ${EMAIL_RECIPIENT}`);
+    openReportEmail(text);
+    destroyEphemeralSession();
+    return true;
   }
 
   document.addEventListener('click', (event) => {
@@ -306,5 +326,6 @@
   });
 
   window.addEventListener('pageshow', resetValidation);
+  window.sendClinicalReportDirect = sendClinicalReportDirect;
   resetValidation();
 })();

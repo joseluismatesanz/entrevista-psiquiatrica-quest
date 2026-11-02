@@ -208,6 +208,35 @@ test("V0.6 medicamentos: Ribotril usa alias validado Rivotril y CIMA confirma cl
   assert.equal(result.assessment.safety_review.length, 0);
 });
 
+test("V0.6 medicamentos: De Prax se consulta como Deprax y conserva la marca oficial", async () => {
+  const seen = [];
+  const fetchFn = async (url) => {
+    seen.push(url);
+    if (url.includes("/medicamento?nregistro=78762")) {
+      return response({
+        nregistro: "78762",
+        nombre: "DEPRAX 100 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG",
+        principiosActivos: [{ nombre: "TRAZODONA HIDROCLORURO" }],
+      });
+    }
+    if (url.includes("practiv1=Deprax")) return response({ resultados: [] });
+    if (url.includes("maestras?maestra=1") && url.includes("nombre=Deprax")) return response([]);
+    if (url.includes("nombre=Deprax")) {
+      return response({ resultados: [{ nregistro: "78762", nombre: "DEPRAX 100 MG COMPRIMIDOS RECUBIERTOS CON PELICULA EFG" }] });
+    }
+    return response({ resultados: [] });
+  };
+
+  const result = await verifyAssessmentMedications(baseAssessment("De Prax"), { fetchFn });
+  const med = result.assessment.medications.habitual[0];
+  assert.equal(med.display_name, "Deprax");
+  assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.queriedName, "Deprax");
+  assert.equal(med.medication_verification.medicationAliasId, "de_prax_to_deprax");
+  assert.ok(seen.some((url) => url.includes("nombre=Deprax")));
+  assert.ok(seen.every((url) => !url.includes("nombre=De%20Prax")));
+});
+
 test("V0.6 medicamentos: caída de CIMA no se presenta como medicamento inexistente", async () => {
   const fetchFn = async () => { throw new Error("network down"); };
   const verification = await verifyMedicationName("Cetralina", { fetchFn, timeoutMs: 50 });

@@ -49,11 +49,12 @@ const CLINICIAN_DISCONTINUATION_PATTERN = /\b(?:retirar|retiro|retiramos|suspend
 const FAMILY_ADDRESS_PATTERN = /\b(?:señora|senora|madre|padre|familiar|cuidador(?:a)?)\b/i;
 const FORMAL_ADDRESS_PATTERN = /\busted\b/i;
 const MEDICATION_QUESTION_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?|toma(?:r|s)?|tomando)\b/i;
-const HABITUAL_MEDICATION_QUESTION_PATTERN = /\b(?:(?:que|qué)\s+(?:tratamiento|medicacion|medicación)\s+(?:tomas?|toma)|(?:tomas?|toma)\s+(?:alguna\s+)?medicacion|tratamiento\s+habitual)\b/i;
+const HABITUAL_MEDICATION_QUESTION_PATTERN = /\b(?:(?:que|qué|cual|cuál)\s+(?:(?:es|era)\s+)?(?:el\s+|su\s+|tu\s+)?(?:tratamiento|medicacion|medicación|pauta|farmacos|fármacos|pastillas?)\s*(?:(?:que\s+)?(?:tomas?|toma|esta\s+tomando|está\s+tomando))?|(?:que|qué|cual|cuál)\s+(?:tomas?|toma|esta\s+tomando|está\s+tomando)(?:\s+ahora\s+mismo)?|(?:tomas?|toma)\s+(?:alguna\s+)?medicacion|tratamiento\s+habitual|tratamiento\s+vigente|medicacion\s+actual|medicación\s+actual)\b/i;
 const NO_CURRENT_MEDICATION_PATTERN = /\b(?:no\s+(?:tomo|toma|estoy\s+tomando|esta\s+tomando|está\s+tomando)|ningun[ao]?\s+(?:medicacion|medicación|tratamiento)|sin\s+(?:medicacion|medicación|tratamiento))\b/i;
 const MEDICATION_NOUN_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?)\b/i;
 const HABITUAL_CONFIRMATION_PATTERN = /\b(?:toma|tomando|tratamiento|medicacion|medicación|pauta)\b/i;
 const AFFIRMATIVE_RESPONSE_PATTERN = /^\s*(?:s[ií]|correcto|exacto|eso\s+es|as[ií]\s+es|de\s+acuerdo|vale)(?:\b|[.,;:])/i;
+const COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN = /\b(?:(?:sustituir|sustituimos|sustituyo|cambiar|cambiamos|cambio)\s+(?:(?:por\s+completo|completamente)\s+)?(?:la\s+|el\s+|toda\s+la\s+|todo\s+el\s+)?(?:pauta|tratamiento|medicacion)\s+(?:previa|anterior|vigente|actual)\s+por\b|(?:retirar|retiramos|retiro|suspender|suspendemos|suspendo)\s+(?:por\s+completo\s+|completamente\s+|toda\s+la\s+|todo\s+el\s+)(?:pauta|tratamiento|medicacion)(?:\s+(?:previa|anterior|vigente|actual))?)\b/i;
 
 function speakerLines(transcript) {
   return String(transcript || "")
@@ -194,6 +195,9 @@ function medicationFromPriorSubstitutionPhrase(phrase, sourceIds = []) {
     .replace(/\s+(?:de|en|por)\s+la\s*$/i, "")
     .trim();
   if (!rawName || rawName.split(/\s+/).length > 4) return null;
+  if (/^(?:(?:la|el|toda\s+la|todo\s+el)\s+)?(?:pauta|tratamiento|medicacion)\s+(?:previa|anterior|vigente|actual)$/i.test(normalize(rawName))) {
+    return null;
+  }
   return {
     raw_name: rawName,
     display_name: rawName,
@@ -366,6 +370,25 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     return line.index >= medicationPlanIndex || CLINICIAN_PRESCRIPTION_PATTERN.test(text);
   });
 
+  const completePriorRegimenReplacement = lines.some((line) =>
+    line.speaker === "PSIQUIATRA"
+    && COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN.test(normalize(line.text))
+  );
+  const hasPostChangeMedicationEvidence = (med) => lines.some((line) =>
+    line.speaker === "PSIQUIATRA"
+    && line.index >= planAnchorIndex
+    && lineMentionsMedication(line, med)
+    && (
+      CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
+      || CLINICIAN_MAINTENANCE_PATTERN.test(normalize(line.text))
+      || CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
+    )
+  );
+  const removedByCompleteReplacement = (med) =>
+    completePriorRegimenReplacement
+    && hasPreexistingEvidence(med)
+    && !hasPostChangeMedicationEvidence(med);
+
   for (const [group, hasPatientEvidence] of [
     ["habitual", hasHabitualPatientEvidence],
     ["current", hasCurrentPatientEvidence],
@@ -439,16 +462,20 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
 
   assessment.medications.habitual = retainedHabitual;
   assessment.medications.current = current.filter((med) => {
-    if (!hasExplicitDiscontinuation(med)) return true;
+    const explicitlyDiscontinued = hasExplicitDiscontinuation(med);
+    const replacedWithPriorRegimen = removedByCompleteReplacement(med);
+    if (!explicitlyDiscontinued && !replacedWithPriorRegimen) return true;
     const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
-    warnings.push(`medication_explicitly_discontinued_removed_from_current:${name}`);
+    warnings.push(replacedWithPriorRegimen
+      ? `medication_complete_prior_regimen_removed_from_current:${name}`
+      : `medication_explicitly_discontinued_removed_from_current:${name}`);
     return false;
   });
 
   // La pauta final debe ser completa. Un fármaco habitual no retirado se mantiene
   // también en TRATAMIENTO REVISADO aunque el modelo solo haya devuelto los cambios.
   for (const med of retainedHabitual) {
-    if (med?.status !== "active" || hasExplicitDiscontinuation(med)) continue;
+    if (med?.status !== "active" || hasExplicitDiscontinuation(med) || removedByCompleteReplacement(med)) continue;
     if (assessment.medications.current.some((existing) => overlaps(existing, med))) continue;
     assessment.medications.current.push({ ...med, status: "active" });
     const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
@@ -590,6 +617,37 @@ function cleanAdherence(value) {
   return clean(value).replace(/^adherencia\s*:?\s*/i, "").trim();
 }
 
+function normalizeMedicationSchedule(value, prn = false) {
+  const schedule = clean(value);
+  if (prn || /\b(?:a\s+demanda|de\s+rescate|si\s+precisa|cuando\s+lo\s+necesite)\b/i.test(schedule)) {
+    return "a demanda";
+  }
+  const numeric = schedule.match(/^\s*(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*$/);
+  if (numeric) return `${numeric[1]} - ${numeric[2]} - ${numeric[3]}`;
+  if (!schedule || /\b(?:pauta\s+ambigua|alternativamente)\b/i.test(schedule)) return schedule;
+
+  const normalized = normalize(schedule);
+  if (/\b(?:manana|desayuno)\s+o\s+(?:mediodia|comida|cena|noche)\b/i.test(normalized)) return schedule;
+  const morning = /\b(?:por\s+la\s+manana|a\s+la\s+manana|manana|desayuno)\b/i.test(normalized);
+  const midday = /\b(?:al\s+mediodia|mediodia|en\s+la\s+comida|con\s+la\s+comida|comida)\b/i.test(normalized);
+  const night = /\b(?:por\s+la\s+noche|a\s+la\s+noche|noche|antes\s+de\s+dormir|al\s+acostarse|cena)\b/i.test(normalized);
+  if (!morning && !midday && !night) return schedule;
+  return `${morning ? 1 : 0} - ${midday ? 1 : 0} - ${night ? 1 : 0}`;
+}
+
+function normalizeMedicationSchedules(assessment, warnings) {
+  for (const group of ["habitual", "current"]) {
+    for (const med of assessment.medications?.[group] || []) {
+      const before = clean(med.schedule);
+      const after = normalizeMedicationSchedule(before, med.prn === true);
+      if (after === before) continue;
+      med.schedule = after;
+      const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
+      warnings.push(`medication_schedule_normalized:${group}:${name}:${after}`);
+    }
+  }
+}
+
 function medicationLine(med) {
   const name = clean(med.display_name) || clean(med.raw_name) || "Medicamento no identificado";
   const dose = clean(med.dose);
@@ -655,6 +713,39 @@ function syncMedicationSection(assessment, group, sectionKey, statuses) {
     section.evidence_status = "not_provided";
     section.source_ids = [];
   }
+}
+
+function pruneGenericMedicationSectionPlaceholders(assessment, warnings) {
+  for (const [sectionKey, group] of [
+    ["tratamiento_habitual", "habitual"],
+    ["tratamiento_actual", "current"],
+  ]) {
+    const hasVisibleMedication = (assessment.medications?.[group] || [])
+      .some((med) => med?.status === "active" || (group === "current" && med?.status === "administered_once"));
+    if (hasVisibleMedication) continue;
+    const section = assessment.sections?.[sectionKey];
+    const text = normalize(section?.text);
+    if (!/^(?:la\s+)?(?:pauta|tratamiento|medicacion)\s+(?:previa|anterior|vigente|actual|revisada?)$/.test(text)) continue;
+    section.text = "";
+    section.evidence_status = "not_provided";
+    section.source_ids = [];
+    warnings.push(`generic_medication_placeholder_pruned:${sectionKey}`);
+  }
+}
+
+function refreshMedicationPresentationInPlace(assessment, warnings) {
+  normalizeMedicationSchedules(assessment, warnings);
+  canonicalizeVerifiedMedicationNamesInSections(assessment, warnings);
+  syncMedicationSection(assessment, "habitual", "tratamiento_habitual", ["active"]);
+  syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
+  pruneGenericMedicationSectionPlaceholders(assessment, warnings);
+}
+
+export function applyVerifiedMedicationPresentation(inputAssessment) {
+  const assessment = structuredClone(inputAssessment);
+  const warnings = [];
+  refreshMedicationPresentationInPlace(assessment, warnings);
+  return { assessment, warnings };
 }
 
 function sourceIdsForSpeaker(assessment, speaker) {
@@ -900,10 +991,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   // CIMA verifica las entidades farmacológicas estructuradas antes de este paso.
   // Propagamos el nombre canónico a todos los apartados para que el plan y la
   // narrativa no conserven una variante fonética que ya fue corregida.
-  canonicalizeVerifiedMedicationNamesInSections(assessment, warnings);
-
-  syncMedicationSection(assessment, "habitual", "tratamiento_habitual", ["active"]);
-  syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
+  refreshMedicationPresentationInPlace(assessment, warnings);
   restoreExplicitNoHabitualMedication(assessment, transcript, warnings);
 
   pruneEncounterPresenceFromSociofamily(assessment, warnings);

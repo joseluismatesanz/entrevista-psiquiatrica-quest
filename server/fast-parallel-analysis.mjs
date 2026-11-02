@@ -7,7 +7,7 @@ import {
   mergeParallelClinicalAssessment,
 } from "./parallel-clinical-analysis.mjs";
 import { applyClinicalInvariants, collectClinicalInvariantViolations } from "./clinical-invariants.mjs";
-import { applyClinicalPostprocessing } from "./clinical-postprocess.mjs";
+import { applyClinicalPostprocessing, applyVerifiedMedicationPresentation } from "./clinical-postprocess.mjs";
 import { groundInterventionToTranscript } from "./intervention-grounding.mjs";
 import { groundExplicitMseAssessment } from "./mse-grounding.mjs";
 import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
@@ -174,6 +174,26 @@ export async function analyzeFastParallelTranscript(transcript, options = {}) {
   const postprocessResult = applyClinicalPostprocessing(assessment, transcript);
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
+
+  const hasRecoveredUnverifiedMedication = ["habitual", "current"].some((group) =>
+    (assessment.medications?.[group] || []).some((med) => !med?.medication_verification?.status)
+  );
+  if (shouldVerifyMedications && hasRecoveredUnverifiedMedication) {
+    const recoveredMedicationStartedAt = Date.now();
+    const verifier = options.medicationVerifier || verifyAssessmentMedications;
+    const recoveredMedicationResult = await verifier(assessment, options.medicationVerificationOptions || {});
+    medicationMs += Date.now() - recoveredMedicationStartedAt;
+    assessment = recoveredMedicationResult.assessment;
+    warnings.push(...(recoveredMedicationResult.warnings || []));
+    medicationMeta = {
+      ...medicationMeta,
+      ...(recoveredMedicationResult.meta || {}),
+      medication_recovered_entities_verified_after_timeline: true,
+    };
+    const presentationResult = applyVerifiedMedicationPresentation(assessment);
+    assessment = presentationResult.assessment;
+    warnings.push(...presentationResult.warnings);
+  }
 
   const medicationSafetyResult = applyMedicationSafetyReview(assessment);
   assessment = medicationSafetyResult.assessment;
