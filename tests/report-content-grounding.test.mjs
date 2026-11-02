@@ -62,6 +62,20 @@ test("Informe: el plan conserva la ampliación diagnóstica explícita del psiqu
   assert.ok(result.warnings.includes("report_plan_enriched_from_explicit_psychiatrist_assessment"));
 });
 
+test("Informe: conserva juntos los decimales de los códigos CIE-10 y DSM-5-TR", () => {
+  const input = assessment({
+    orientacion_diagnostica: {
+      text: "JUICIO CLÍNICO: Trastorno de ansiedad generalizada. CIE-10: F41. 1. DSM-5-TR: 300. 02.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(input, CASE3);
+  assert.match(result.assessment.sections.orientacion_diagnostica.text, /CIE-10: F41\.1\./);
+  assert.match(result.assessment.sections.orientacion_diagnostica.text, /DSM-5-TR: 300\.02\./);
+});
+
 
 test("V0.6 informe: elimina frases metadiscursivas de ausencia de MSE y plan", () => {
   const assessment = {

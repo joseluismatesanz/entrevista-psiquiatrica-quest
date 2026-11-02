@@ -12,6 +12,16 @@ function splitSentences(text) {
     .match(/[^.!?]+[.!?]?/g)?.map((sentence) => sentence.trim()).filter(Boolean) || [];
 }
 
+function normalizeDiagnosticCodeSpacing(section) {
+  if (!section?.text) return;
+  // El segmentador de frases puede interpretar el punto interno de códigos
+  // CIE/DSM como final de oración. Se corrige únicamente en diagnóstico para
+  // no alterar la puntuación clínica del resto del informe.
+  section.text = String(section.text)
+    .replace(/\b([A-Z]\d{1,2})\.\s+(\d+)\b/g, "$1.$2")
+    .replace(/\b(\d{3})\.\s+(\d+)\b/g, "$1.$2");
+}
+
 function parseTranscript(transcript) {
   return String(transcript || "")
     .split(/\n+/)
@@ -558,6 +568,10 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     assessment.sections?.plan_terapeutico,
     warnings,
     "report_meta_absence_pruned_from_plan",
+  );
+
+  normalizeDiagnosticCodeSpacing(
+    assessment.sections?.orientacion_diagnostica,
   );
 
   return { assessment, warnings };
