@@ -40,10 +40,31 @@ function medicationLine(med) {
   const schedule = clean(med.schedule);
   const route = clean(med.route);
   const adherence = cleanAdherence(med.adherence_text);
+  const normalizedSchedule = schedule
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const technicalSchedule = (() => {
+    if (!schedule || med.prn || /\b(?:cada\s+\d+\s+horas?|semanal|mensual)\b/i.test(normalizedSchedule)) return "";
+    if (/^\s*\d+(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d+)?\s*$/.test(schedule)) {
+      return schedule.replace(/\s*-\s*/g, " - ");
+    }
+    const slot = (pattern) => {
+      const explicit = normalizedSchedule.match(new RegExp(`(?:^|[,;]|\\by\\b)\\s*(\\d+(?:[.,]\\d+)?)\\s*(?:comprimidos?|pastillas?|capsulas?|tomas?)?[^,;]{0,35}${pattern}`, "i"));
+      if (explicit) return explicit[1];
+      return new RegExp(pattern, "i").test(normalizedSchedule) ? "1" : "0";
+    };
+    const morning = slot("(?:por\\s+la\\s+manana|\\bmanana\\b|desayuno|matutin[oa])");
+    const midday = slot("(?:al\\s+mediodia|\\bmediodia\\b|\\bcomida\\b)");
+    const night = slot("(?:por\\s+la\\s+noche|\\bnoche\\b|antes\\s+de\\s+dormir|para\\s+dormir|\\bcena\\b|nocturn[oa])");
+    if ([morning, midday, night].every((value) => value === "0")) return "";
+    return `${morning} - ${midday} - ${night}`;
+  })();
 
   let line = name;
   if (dose) line += ` ${dose}`;
-  if (schedule) line += `: ${schedule}`;
+  if (technicalSchedule) line += `: ${technicalSchedule}`;
+  else if (schedule) line += `: ${schedule}`;
   else if (med.prn) line += ": a demanda";
   if (route && !/oral/i.test(route)) line += ` (${route})`;
   if (adherence && med.adherence_status !== "not_applicable") line += `. Adherencia: ${adherence}`;

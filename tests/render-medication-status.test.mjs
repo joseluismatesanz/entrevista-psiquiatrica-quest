@@ -90,7 +90,7 @@ test("renderer: no muestra marcadores internos de adherencia desconocida", () =>
   const report = renderClinicalReport(input);
   const current = report.split("TRATAMIENTO ACTUAL\n")[1];
 
-  assert.match(current, /Sertralina 50 mg: por la mañana, con el desayuno/);
+  assert.match(current, /Sertralina 50 mg: 1 - 0 - 0/);
   assert.match(current, /Clonazepam 0,5 mg: de rescate si aparece ansiedad/);
   assert.doesNotMatch(current, /unknown|not[_ ]?applicable|Adherencia/i);
 });
@@ -109,7 +109,7 @@ test("renderer: no muestra mensajes internos de verificación de CIMA", () => {
   const report = renderClinicalReport(input);
   const current = report.split("TRATAMIENTO ACTUAL\n")[1];
 
-  assert.equal(current, "clatipina 15 mg: antes de dormir");
+  assert.equal(current, "clatipina 15 mg: 0 - 0 - 1");
   assert.doesNotMatch(current, /CIMA|correspondencia|no encontrada/i);
 });
 

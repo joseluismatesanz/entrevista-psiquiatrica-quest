@@ -699,9 +699,9 @@ function medicationLine(med) {
       if (explicit) return explicit[1];
       return new RegExp(pattern, "i").test(normalizedSchedule) ? "1" : "0";
     };
-    const morning = slot("(?:por\\s+la\\s+manana|desayuno|matutin[oa])");
-    const midday = slot("(?:al\\s+mediodia|comida)");
-    const night = slot("(?:por\\s+la\\s+noche|antes\\s+de\\s+dormir|para\\s+dormir|cena|nocturn[oa])");
+    const morning = slot("(?:por\\s+la\\s+manana|\\bmanana\\b|desayuno|matutin[oa])");
+    const midday = slot("(?:al\\s+mediodia|\\bmediodia\\b|\\bcomida\\b)");
+    const night = slot("(?:por\\s+la\\s+noche|\\bnoche\\b|antes\\s+de\\s+dormir|para\\s+dormir|\\bcena\\b|nocturn[oa])");
     if ([morning, midday, night].every((value) => value === "0")) return "";
     return `${morning} - ${midday} - ${night}`;
   })();

@@ -759,7 +759,9 @@
     const status = $('recordingStatus');
     if (status) status.textContent = `Entrevista cerrada · ${state.processedBlocks.length} bloques desidentificados · audio descartado. Servidor acumulado: ${(totalAudioMs / 1000).toFixed(1)} s durante la entrevista. Cierre tras Finalizar: ${(closeMs / 1000).toFixed(1)} s. Pico de cola: ${state.peakPendingBlocks}. Evidencia clínica preparada: ${state.evidenceByBlock.size}/${state.processedBlocks.length}.`;
     const message = $('sessionMessage');
-    if (message) message.textContent = 'Transcripción larga desidentificada lista. Revisa únicamente las fuentes críticas señaladas antes de organizar.';
+    if (message) message.textContent = 'Transcripción completada. Pulsa «Info Clínica» para crear el borrador o «Envío / Borrar» para generarlo, enviarlo y cerrar la sesión.';
+    const actionTimer = $('analyzeCaseTimer');
+    if (actionTimer) actionTimer.textContent = 'Transcripción lista · pulsa aquí para crear el informe';
     clearRecordingFocus({ transcriptionReady: true });
     window.dispatchEvent(new CustomEvent('clinical-transcription-ready', {
       detail: { blockCount: state.processedBlocks.length },
