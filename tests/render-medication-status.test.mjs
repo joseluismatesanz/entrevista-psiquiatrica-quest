@@ -70,7 +70,7 @@ test("renderer: habitual solo activo; actual activo + dosis puntual; históricos
   assert.doesNotMatch(current, /Risperidona/);
 });
 
-test("renderer: no muestra marcadores internos de adherencia desconocida", () => {
+test("renderer: normaliza pautas diarias y no muestra marcadores internos de adherencia desconocida", () => {
   const input = assessment();
   input.medications.current = [
     medication("Sertralina", "active", {
@@ -90,8 +90,8 @@ test("renderer: no muestra marcadores internos de adherencia desconocida", () =>
   const report = renderClinicalReport(input);
   const current = report.split("TRATAMIENTO REVISADO\n")[1];
 
-  assert.match(current, /Sertralina 50 mg: por la mañana, con el desayuno/);
-  assert.match(current, /Clonazepam 0,5 mg: de rescate si aparece ansiedad/);
+  assert.match(current, /Sertralina 50 mg: 1 - 0 - 0/);
+  assert.match(current, /Clonazepam 0,5 mg: a demanda/);
   assert.doesNotMatch(current, /unknown|not[_ ]?applicable|Adherencia/i);
 });
 
@@ -109,7 +109,7 @@ test("renderer: no muestra mensajes internos de verificación de CIMA", () => {
   const report = renderClinicalReport(input);
   const current = report.split("TRATAMIENTO REVISADO\n")[1];
 
-  assert.equal(current, "clatipina 15 mg: antes de dormir");
+  assert.equal(current, "clatipina 15 mg: 0 - 0 - 1");
   assert.doesNotMatch(current, /CIMA|correspondencia|no encontrada/i);
 });
 

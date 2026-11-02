@@ -62,7 +62,7 @@ test("V0.5.6 correo: usa solo la cuenta institucional mediante mailto y no llama
   assert.doesNotMatch(validationJs, /jlmatesanzperez@gmail\.com/);
   assert.match(validationJs, /function sendAndDestroy/);
   assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENT\}/);
-  assert.match(validationJs, /link\.click\(\)/);
+  assert.match(validationJs, /window\.location\.assign\(mailto\)/);
   assert.doesNotMatch(validationJs, /\/api\/send-report|RESEND_API_KEY/);
 });
 
@@ -70,7 +70,7 @@ test("V0.5.6 correo: entrega el mailto y destruye inmediatamente el estado clín
   assert.match(validationJs, /function destroyEphemeralSession/);
   assert.match(validationJs, /reportEditor\.replaceChildren\(\)/);
   assert.match(validationJs, /field\.value = ''/);
-  assert.match(validationJs, /link\.click\(\);[\s\S]*destroyEphemeralSession\(\)/);
+  assert.match(validationJs, /destroyEphemeralSession\(\{ reload: false \}\);\s*openReportEmail\(text\)/);
   assert.match(validationJs, /window\.location\.replace/);
 });
 
@@ -83,6 +83,6 @@ test("privacidad: la portada informa del resultado sin exponer documentación t�
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
   assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20261102-clinical-flow-2/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20261102-clinical-flow-3/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });

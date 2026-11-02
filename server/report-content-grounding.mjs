@@ -347,6 +347,33 @@ function enrichPlanFromExplicitPsychiatristAssessment(section, assessment, lines
   warnings.push("report_plan_enriched_from_explicit_psychiatrist_assessment");
 }
 
+const CLINICIAN_INTRODUCTION_PATTERN = /\b(?:(?:buenos?\s+d[ií]as|buenas\s+(?:tardes|noches)|hola)\s*[,.:;-]?\s*)?(?:mi\s+nombre\s+es\b|me\s+llamo\b|soy\s+(?:el\s+|la\s+)?(?:psiquiatra|doctor(?:a)?|dr\.?|dra\.?)\b|soy\s+[^,.!?]{1,80},?\s+soy\s+(?:el\s+|la\s+)?psiquiatra\b)/i;
+
+function pruneClinicianIntroductionFromPlan(section, warnings) {
+  if (!section?.text) return;
+  let changed = false;
+  const retained = [];
+
+  for (const sentence of splitSentences(section.text)) {
+    const match = sentence.match(CLINICIAN_INTRODUCTION_PATTERN);
+    if (!match) {
+      retained.push(sentence);
+      continue;
+    }
+    changed = true;
+    const prefix = sentence.slice(0, match.index).replace(/[,:;\s-]+$/, "").trim();
+    if (prefix) retained.push(prefix.endsWith(".") ? prefix : `${prefix}.`);
+  }
+
+  if (!changed) return;
+  section.text = retained.join(" ").trim();
+  if (!section.text) {
+    section.evidence_status = "not_provided";
+    section.source_ids = [];
+  }
+  warnings.push("report_clinician_introduction_pruned_from_plan");
+}
+
 export function groundReportContentToTranscript(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
@@ -418,6 +445,11 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     assessment.sections?.plan_terapeutico,
     assessment,
     lines,
+    warnings,
+  );
+
+  pruneClinicianIntroductionFromPlan(
+    assessment.sections?.plan_terapeutico,
     warnings,
   );
 

@@ -1,3 +1,8 @@
+import {
+  normalizeKnownMedicationAliasText,
+  PSYCHIATRIC_MEDICATION_VOCABULARY,
+} from "./medication-name-aliases.mjs";
+
 function clean(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -158,6 +163,169 @@ function clinicianConfirmedPreexistingMedication(lines, line, med, cutoffIndex) 
   return Boolean(answer && AFFIRMATIVE_RESPONSE_PATTERN.test(normalize(answer.text)));
 }
 
+function titleCaseMedication(value) {
+  const text = clean(value).toLowerCase();
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : "";
+}
+
+function normalizedMedicationText(value) {
+  return normalize(normalizeKnownMedicationAliasText(value).text);
+}
+
+function medicationNamesInText(value) {
+  const text = normalizedMedicationText(value);
+  return PSYCHIATRIC_MEDICATION_VOCABULARY
+    .filter((name) => new RegExp(`(?:^|[^a-z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|[^a-z0-9])`, "i").test(text))
+    .sort((left, right) => text.indexOf(left) - text.indexOf(right));
+}
+
+function medicationTextSegment(value, medicationName) {
+  const text = normalizedMedicationText(value);
+  const start = text.indexOf(normalize(medicationName));
+  if (start < 0) return "";
+  const contentStart = start + normalize(medicationName).length;
+  const nextMedication = medicationNamesInText(text)
+    .map((name) => text.indexOf(name, contentStart))
+    .filter((index) => index >= contentStart)
+    .sort((left, right) => left - right)[0];
+  return text.slice(contentStart, nextMedication ?? text.length);
+}
+
+function doseAndScheduleFromMention(value, medicationName) {
+  const segment = medicationTextSegment(value, medicationName);
+  const dose = segment.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\b/i);
+  const prn = /\b(?:a\s+demanda|de\s+rescate|si\s+precisa|cuando\s+lo\s+necesite)\b/i.test(segment);
+  return {
+    dose: dose ? `${dose[1]} ${dose[2]}` : "",
+    schedule: normalizeMedicationSchedule(segment, prn),
+    prn,
+  };
+}
+
+function explicitDoseChangeFromMention(value, medicationName) {
+  const segment = medicationTextSegment(value, medicationName);
+  let match = segment.match(/\b(?:de|desde)\s+(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)?\s+(?:a|hasta)\s+(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)?\b/i);
+  if (!match) {
+    match = segment.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\s+(?:a|hasta)\s+(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)?\b/i);
+  }
+  if (!match) return null;
+  const oldUnit = match[2] || match[4];
+  const newUnit = match[4] || match[2];
+  if (!oldUnit || !newUnit) return null;
+  const afterChange = segment.slice((match.index ?? 0) + match[0].length);
+  const prn = /\b(?:a\s+demanda|de\s+rescate|si\s+precisa|cuando\s+lo\s+necesite)\b/i.test(afterChange);
+  return {
+    previousDose: `${match[1]} ${oldUnit}`,
+    revisedDose: `${match[3]} ${newUnit}`,
+    schedule: normalizeMedicationSchedule(afterChange, prn),
+    prn,
+  };
+}
+
+function medicationEntity(name, details, sourceIds = []) {
+  return {
+    raw_name: titleCaseMedication(name),
+    display_name: titleCaseMedication(name),
+    active_ingredient_known: false,
+    role: "psychiatric",
+    dose: details.dose || "",
+    schedule: details.schedule || "",
+    route: "",
+    prn: details.prn === true,
+    adherence_status: "unknown",
+    adherence_text: "",
+    status: "active",
+    source_ids: [...new Set(sourceIds)],
+  };
+}
+
+function sameMedication(left, right) {
+  const names = new Set(medicationCandidateNames(left));
+  return medicationCandidateNames(right).some((name) => names.has(name));
+}
+
+function recoverHabitualMedicationFromPreconsultTranscript(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  if (!lines.length) return;
+  const planAnchor = lines.find((line) => line.speaker === "PSIQUIATRA" && CURRENT_PLAN_ANCHOR_PATTERN.test(normalize(line.text)));
+  const planAnchorIndex = planAnchor?.index ?? Number.POSITIVE_INFINITY;
+  const habitual = Array.isArray(assessment.medications?.habitual) ? assessment.medications.habitual : [];
+  const current = Array.isArray(assessment.medications?.current) ? assessment.medications.current : [];
+
+  for (const line of lines) {
+    if (line.index >= planAnchorIndex) continue;
+    const previous = previousSpeakerLine(lines, line);
+    const patientMedicationAnswer = line.speaker === "PACIENTE"
+      && !isFamilySelfMedicationLine(lines, line)
+      && (
+        /\b(?:tomo|tomando|tratamiento|medicacion|medicación|pauta|pastillas?)\b/i.test(normalize(line.text))
+        || (previous?.speaker === "PSIQUIATRA" && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text)))
+      );
+    const collateralMedicationAnswer = FAMILY_SPEAKER_LABELS.has(line.speaker)
+      && COLLATERAL_PATIENT_MEDICATION_PATTERN.test(normalize(line.text));
+    const confirmedClinicianList = line.speaker === "PSIQUIATRA"
+      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(line.text))
+      && Boolean(nextNonPsychiatristLine(lines, line)?.text.match(AFFIRMATIVE_RESPONSE_PATTERN));
+    if (!patientMedicationAnswer && !collateralMedicationAnswer && !confirmedClinicianList) continue;
+
+    for (const name of medicationNamesInText(line.text)) {
+      const details = doseAndScheduleFromMention(line.text, name);
+      const recovered = medicationEntity(name, details, sourceIdsForSpeaker(assessment, line.speaker));
+      if (habitual.some((med) => sameMedication(med, recovered))) continue;
+      // Si el modelo ya estructuró el fármaco, la reconciliación posterior crea
+      // la instantánea previa conservando el orden clínico original. Esta ruta
+      // solo rescata entidades que el modelo omitió por completo.
+      if (current.some((med) => sameMedication(med, recovered))) continue;
+      habitual.push(recovered);
+      warnings.push(`medication_habitual_recovered_from_preconsult_transcript:${recovered.raw_name}`);
+    }
+  }
+  assessment.medications.habitual = habitual;
+}
+
+function recoverMedicationDoseChanges(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  if (!lines.length) return;
+  const habitual = Array.isArray(assessment.medications?.habitual) ? assessment.medications.habitual : [];
+  const current = Array.isArray(assessment.medications?.current) ? assessment.medications.current : [];
+
+  for (const line of lines) {
+    if (line.speaker !== "PSIQUIATRA" || !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))) continue;
+    for (const name of medicationNamesInText(line.text)) {
+      const change = explicitDoseChangeFromMention(line.text, name);
+      if (!change) continue;
+      const template = medicationEntity(name, {
+        dose: change.revisedDose,
+        schedule: change.schedule,
+        prn: change.prn,
+      }, sourceIdsForSpeaker(assessment, line.speaker));
+      let revised = current.find((med) => sameMedication(med, template));
+      if (!revised) {
+        revised = template;
+        current.push(revised);
+      }
+      revised.dose = change.revisedDose;
+      if (change.schedule) revised.schedule = change.schedule;
+      revised.prn = change.prn;
+      revised.status = "active";
+
+      let previous = habitual.find((med) => sameMedication(med, template));
+      if (!previous) {
+        previous = { ...template };
+        habitual.push(previous);
+      }
+      previous.dose = change.previousDose;
+      if (change.schedule) previous.schedule = change.schedule;
+      previous.prn = change.prn;
+      previous.status = "active";
+      warnings.push(`medication_dose_change_timeline_recovered:${template.raw_name}:${change.previousDose}->${change.revisedDose}`);
+    }
+  }
+
+  assessment.medications.habitual = habitual;
+  assessment.medications.current = current;
+}
+
 function medicationPlanCutoffIndex(lines, med, planAnchorIndex) {
   const firstExplicitPrescription = lines.find((line) =>
     line.speaker === "PSIQUIATRA"
@@ -294,10 +462,17 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     });
   };
 
+  const hasExplicitDoseChangePriorEvidence = (med) => lines.some((line) => {
+    if (line.speaker !== "PSIQUIATRA" || !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))) return false;
+    if (!lineMentionsMedication(line, med)) return false;
+    return medicationCandidateNames(med).some((name) => explicitDoseChangeFromMention(line.text, name));
+  });
+
   const hasPreexistingEvidence = (med) =>
     hasHabitualPatientEvidence(med)
     || hasClinicianMaintenanceEvidence(med)
-    || hasExplicitSubstitutionPriorEvidence(med);
+    || hasExplicitSubstitutionPriorEvidence(med)
+    || hasExplicitDoseChangePriorEvidence(med);
 
   const hasExplicitTreatmentChange = (med) => lines.some((line) =>
     line.speaker === "PSIQUIATRA"
@@ -526,6 +701,12 @@ function inferMedicationTemporality(transcript, rawName) {
 }
 
 function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
+  const explicitPriorDoseChange = line.speaker === "PSIQUIATRA"
+    && CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
+    && (med
+      ? medicationCandidateNames(med).some((name) => explicitDoseChangeFromMention(line.text, name))
+      : medicationNamesInText(line.text).some((name) => explicitDoseChangeFromMention(line.text, name)));
+  if (explicitPriorDoseChange) return true;
   if (line.index >= planAnchorIndex) return false;
   if (med && !lineMentionsMedication(line, med)) return false;
   if (isFamilySelfMedicationLine(lines, line)) return false;
@@ -617,9 +798,11 @@ function cleanAdherence(value) {
   return clean(value).replace(/^adherencia\s*:?\s*/i, "").trim();
 }
 
-function normalizeMedicationSchedule(value, prn = false) {
+export function normalizeMedicationSchedule(value, prn = false) {
   const schedule = clean(value);
   if (prn || /\b(?:a\s+demanda|de\s+rescate|si\s+precisa|cuando\s+lo\s+necesite)\b/i.test(schedule)) {
+    const quantity = schedule.match(/\b(\d+(?:[.,]\d+)?\s+(?:inhalaciones?|comprimidos?|capsulas?|cápsulas?|gotas?|pulsaciones?|sobres?))\b/i);
+    if (quantity) return `${quantity[1]} a demanda`;
     return "a demanda";
   }
   const numeric = schedule.match(/^\s*(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*$/);
@@ -970,6 +1153,8 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const warnings = [];
 
   recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
+  recoverHabitualMedicationFromPreconsultTranscript(assessment, transcript, warnings);
+  recoverMedicationDoseChanges(assessment, transcript, warnings);
   pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);
 
   for (const med of assessment.medications?.habitual || []) {

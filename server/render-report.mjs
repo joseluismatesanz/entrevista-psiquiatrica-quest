@@ -1,3 +1,5 @@
+import { normalizeMedicationSchedule } from "./clinical-postprocess.mjs";
+
 export const SECTION_ORDER = [
   ["motivo_consulta", "MOTIVO DE LA CONSULTA"],
   ["psq_guardia", "PSQ GUARDIA"],
@@ -37,7 +39,7 @@ function medicationLine(med) {
     || cleanMedicationName(med.raw_name)
     || "Medicamento no identificado";
   const dose = clean(med.dose);
-  const schedule = clean(med.schedule);
+  const schedule = normalizeMedicationSchedule(clean(med.schedule), med.prn === true);
   const route = clean(med.route);
   const adherence = cleanAdherence(med.adherence_text);
 

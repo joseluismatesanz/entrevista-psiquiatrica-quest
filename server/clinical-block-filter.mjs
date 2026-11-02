@@ -16,7 +16,6 @@ const MUST_KEEP_PATTERNS = [
   /\b(?:madre|padre|herman[oa]|cuidador\w*|familia\w*|conviv\w*|colegio|instituto|trabajo)\b/i,
   /\b(?:duerm\w*|sueñ\w*|apetit\w*|nervios\w*|triste\w*|irritab\w*|ansiedad|[aá]nimo)\b/i,
   /\b(?:diagn[oó]stic\w*|ingreso|alta|seguimiento|propongo|acepta|rechaza|plan|exploraci[oó]n)\b/i,
-  /^PSIQUIATRA:\s*(?:soy|me llamo|mi nombre)/i,
 ];
 
 function splitLines(transcript) {

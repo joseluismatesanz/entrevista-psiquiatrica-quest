@@ -10,6 +10,7 @@ ESTILO DEL INFORME
 - ENFERMEDAD ACTUAL es la excepción narrativa: integra el problema actual, evolución, síntomas, precipitantes, versiones actuales del paciente/familia y acontecimientos clínicamente centrales ocurridos durante la valoración. Debe ser sintética: prioriza el episodio actual y evita trasladar antecedentes estables, consumo habitual o datos ya bien ubicados en otros apartados salvo que expliquen directamente el episodio.
 - MOTIVO DE LA CONSULTA debe ser una formulación clínica directa, telegráfica y muy breve del hecho/problema que motiva la valoración. No añadas etiquetas de riesgo, gravedad o diagnóstico que no formen parte explícita del motivo o no estén sustentadas por la entrevista. Ejemplo: "Autolesiones mediante cortes superficiales en antebrazo izquierdo e ideación de muerte reciente." Nunca una narración del diálogo.
 - PSQ GUARDIA solo debe contener la identidad profesional si el psiquiatra se identifica explícitamente en la transcripción. Nunca inventes nombre, cargo o categoría profesional.
+- Los saludos y la presentación del profesional (por ejemplo, «Buenas noches, mi nombre es…», «soy psiquiatra» o «voy a valorar…») no son contenido clínico y nunca deben aparecer en PLAN TERAPÉUTICO ni en ningún otro apartado; la identidad explícita, si procede, se limita a PSQ GUARDIA.
 
 REGLAS POR APARTADO
 1. MOTIVO: una o dos frases nominales/directas, sin contexto narrativo innecesario. Evita expresiones vagas como "posible riesgo" si el riesgo concreto puede describirse después en ENFERMEDAD ACTUAL/SEGURIDAD.

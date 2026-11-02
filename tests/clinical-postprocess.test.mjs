@@ -796,3 +796,43 @@ test("ADELANTO medicación: sustitución de toda la pauta separa vigente y revis
   assert.match(result.assessment.sections.plan_terapeutico.text, /Deprax 100 mg/);
   assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Fluoxetina|Mirtazapina|Clonazepam/);
 });
+
+test("ADELANTO medicación: una subida de dosis reconstruye vigente y revisado con pauta numérica", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Sertralina", "Sertralina", "active", "100 mg", "Por la mañana"),
+    med("Mirtazapina", "Mirtazapina", "active", "30 mg", "Por la noche"),
+  ];
+  fixture.sections.tratamiento_habitual = { text: "", evidence_status: "not_provided", source_ids: [] };
+  fixture.sections.tratamiento_actual = { text: "", evidence_status: "supported", source_ids: ["psychiatrist"] };
+
+  const transcript = [
+    "PSIQUIATRA: Buenas noches, mi nombre es XXXXXXXXXXX, soy psiquiatra y voy a valorar toda la información médica que tiene.",
+    "PSIQUIATRA: Vamos a aumentar sertralina de 50 a 100 mg por la mañana y mirtazapina de 15 a 30 mg por la noche.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Sertralina 50 mg: 1 - 0 - 0/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Sertralina 100 mg: 1 - 0 - 0/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg: 0 - 0 - 1/);
+});
+
+test("ADELANTO medicación: una pauta previa omitida por el modelo se recupera y se mantiene en ambas listas", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [];
+  fixture.sections.tratamiento_habitual = { text: "", evidence_status: "not_provided", source_ids: [] };
+  fixture.sections.tratamiento_actual = { text: "", evidence_status: "not_provided", source_ids: [] };
+
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento está tomando ahora mismo?",
+    "PACIENTE: Tomo fluoxetina 20 mg por la mañana.",
+    "PSIQUIATRA: A partir de hoy mantenemos la fluoxetina sin cambios.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
+});

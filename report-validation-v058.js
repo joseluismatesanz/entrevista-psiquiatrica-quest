@@ -193,7 +193,7 @@
     return (editor()?.innerText || editor()?.textContent || '').trim();
   }
 
-  function destroyEphemeralSession() {
+  function destroyEphemeralSession({ reload = true } = {}) {
     window.__CLINICAL_SESSION_DESTROYING = true;
     state.validated = false;
 
@@ -217,12 +217,12 @@
     if (copy) copy.disabled = true;
     if (email) email.disabled = true;
 
-    // El mailto ya contiene una copia independiente del texto. Tras entregarlo al
-    // sistema, limpiamos la interfaz y recargamos la sesión efímera.
-    setTimeout(() => {
-      const cleanUrl = `${window.location.pathname}${window.location.search}`;
-      window.location.replace(cleanUrl);
-    }, 900);
+    if (reload) {
+      setTimeout(() => {
+        const cleanUrl = `${window.location.pathname}${window.location.search}`;
+        window.location.replace(cleanUrl);
+      }, 900);
+    }
   }
 
   function openReportEmail(text) {
@@ -230,13 +230,9 @@
     const body = `Informe clínico validado\n\n${text}`;
     const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-    const link = document.createElement('a');
-    link.href = mailto;
-    link.style.display = 'none';
-    link.setAttribute('aria-hidden', 'true');
-    document.body.append(link);
-    link.click();
-    link.remove();
+    // Navegar la pestaña actual al esquema mailto funciona de forma más fiable
+    // en Safari/iOS que un clic sintético creado después de una petición asíncrona.
+    window.location.assign(mailto);
   }
 
   function sendAndDestroy() {
@@ -255,9 +251,8 @@
     }
     setHint('Abriendo el correo institucional y destruyendo la sesión local…');
 
+    destroyEphemeralSession({ reload: false });
     openReportEmail(text);
-
-    destroyEphemeralSession();
   }
 
   function sendClinicalReportDirect(rawText) {
@@ -271,8 +266,8 @@
       directButton.textContent = 'Abriendo correo…';
     }
     setHint(`Informe generado · abriendo correo para ${EMAIL_RECIPIENT}`);
+    destroyEphemeralSession({ reload: false });
     openReportEmail(text);
-    destroyEphemeralSession();
     return true;
   }
 

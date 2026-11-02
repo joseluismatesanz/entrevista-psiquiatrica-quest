@@ -98,3 +98,39 @@ test("ADELANTO integración: corrige el borrador incompleto en el flujo completo
   assert.match(result.report, /HÁBITOS TÓXICOS[\s\S]*tabaco, alcohol y otras sustancias/);
   assert.match(result.report, /ENFERMEDAD ACTUAL[\s\S]*modificación del tratamiento farmacológico/);
 });
+
+test("ADELANTO integración: corrige el caso real de aumento de sertralina y mirtazapina", async () => {
+  const modelOutput = fixture();
+  const medication = (raw_name, dose, schedule) => ({
+    raw_name, display_name: raw_name, active_ingredient_known: true, role: "psychiatric",
+    dose, schedule, route: "oral", prn: false, adherence_status: "unknown",
+    adherence_text: "", status: "active", source_ids: ["psy"],
+  });
+  modelOutput.medications.current = [
+    medication("Sertralina", "100 mg", "Por la mañana"),
+    medication("Mirtazapina", "30 mg", "Por la noche"),
+  ];
+  modelOutput.sections.plan_terapeutico = section(
+    "Aumentar sertralina a 100 mg por la mañana y mirtazapina a 30 mg por la noche. Buenas noches, mi nombre es XXXXXXXXXXX, soy psiquiatra y voy a valorar toda la información médica que tiene.",
+    "supported",
+    ["psy"],
+  );
+  modelOutput.sections.tratamiento_actual = section("Sertralina y mirtazapina.", "supported", ["psy"]);
+  const client = { responses: { async create() { return { status: "completed", output: [], output_text: JSON.stringify(modelOutput) }; } } };
+  const transcript = [
+    "PSIQUIATRA: Buenas noches, mi nombre es XXXXXXXXXXX, soy psiquiatra y voy a valorar toda la información médica que tiene.",
+    "PACIENTE: Acudo para adaptar el tratamiento antidepresivo.",
+    "PSIQUIATRA: Vamos a aumentar sertralina de 50 a 100 mg por la mañana y mirtazapina de 15 a 30 mg por la noche.",
+  ].join("\n");
+
+  const result = await analyzeTranscript(transcript, { client, model: "test-model" });
+  const vigente = result.report.split("TRATAMIENTO VIGENTE\n")[1].split("\n\nENFERMEDAD ACTUAL")[0];
+  const revisado = result.report.split("TRATAMIENTO REVISADO\n")[1];
+  const plan = result.report.split("PLAN TERAPÉUTICO\n")[1].split("\n\nTRATAMIENTO REVISADO")[0];
+
+  assert.match(vigente, /Sertralina 50 mg: 1 - 0 - 0/);
+  assert.match(vigente, /Mirtazapina 15 mg: 0 - 0 - 1/);
+  assert.match(revisado, /Sertralina 100 mg: 1 - 0 - 0/);
+  assert.match(revisado, /Mirtazapina 30 mg: 0 - 0 - 1/);
+  assert.doesNotMatch(plan, /buenas noches|mi nombre|soy psiquiatra|voy a valorar/i);
+});

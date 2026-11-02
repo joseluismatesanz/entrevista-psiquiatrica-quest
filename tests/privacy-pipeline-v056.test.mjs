@@ -48,9 +48,10 @@ test("privacidad: cualquier texto sin prueba válida se desidentifica antes del 
   assert.doesNotMatch(analyzeApi, /person_name_redaction_failed/);
 });
 
-test("V0.5.6 privacidad: el cierre usa mailto institucional y destruye el estado local después de entregarlo", () => {
+test("V0.5.6 privacidad: el cierre destruye el estado local y abre el mailto institucional", () => {
   assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENT\}/);
   assert.match(validationJs, /EMAIL_RECIPIENT = 'joseluis\.matesanz@salud-juntaex\.es'/);
   assert.doesNotMatch(validationJs, /gmail\.com|\/api\/send-report/);
-  assert.match(validationJs, /link\.click\(\);[\s\S]*destroyEphemeralSession\(\)/);
+  assert.match(validationJs, /destroyEphemeralSession\(\{ reload: false \}\);\s*openReportEmail\(text\)/);
+  assert.match(validationJs, /window\.location\.assign\(mailto\)/);
 });

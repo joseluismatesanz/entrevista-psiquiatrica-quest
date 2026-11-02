@@ -40,6 +40,25 @@ test("Informe: no atribuye a la paciente una negación formal de autolesiones si
   assert.ok(result.warnings.includes("report_patient_autolesion_denial_removed_without_explicit_patient_evidence"));
 });
 
+test("informe: la presentación del psiquiatra nunca aparece en plan terapéutico", () => {
+  const input = assessment({
+    plan_terapeutico: {
+      text: "Aumentar sertralina a 100 mg por la mañana. Buenas noches, mi nombre es XXXXXXXXXXX, soy psiquiatra y voy a valorar toda la información médica que tiene.",
+      evidence_status: "supported",
+      source_ids: ["q"],
+    },
+  });
+
+  const result = groundReportContentToTranscript(
+    input,
+    "PSIQUIATRA: Buenas noches, mi nombre es XXXXXXXXXXX, soy psiquiatra y voy a valorar toda la información médica que tiene.\nPSIQUIATRA: Se aumenta sertralina a 100 mg por la mañana.",
+  );
+
+  assert.equal(result.assessment.sections.plan_terapeutico.text, "Aumentar sertralina a 100 mg por la mañana.");
+  assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /buenas noches|mi nombre|soy psiquiatra|voy a valorar/i);
+  assert.ok(result.warnings.includes("report_clinician_introduction_pruned_from_plan"));
+});
+
 test("Informe: conserva una negación de autolesiones cuando la paciente la expresa de forma específica", () => {
   const transcript = `PSIQUIATRA: ¿Te has autolesionado?\nPACIENTE: No, no me he autolesionado ni me he cortado.`;
   const result = groundReportContentToTranscript(assessment(), transcript);
