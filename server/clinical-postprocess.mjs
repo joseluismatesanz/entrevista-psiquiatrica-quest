@@ -42,6 +42,7 @@ const FAMILY_SPEAKER_LABELS = new Set([
   "HERMANA",
   "HERMANO/A",
 ]);
+const PATIENT_SPEAKER_PATTERN = /^(?:PACIENTE|ENTREVISTAD[OA]|USUARI[OA])(?:\s+\d+)?$/i;
 const FAMILY_SELF_MEDICATION_PATTERN = /\b(?:yo\s+)?(?:ahora\s+mismo\s+)?(?:estoy\s+tomando|estaba\s+tomando|tomo|tomaba|he\s+tomado|me\s+tomo)\b/i;
 const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma)\b/i;
 const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
@@ -67,6 +68,10 @@ function speakerLines(transcript) {
     .filter(Boolean);
 }
 
+function isPatientSpeaker(label) {
+  return PATIENT_SPEAKER_PATTERN.test(String(label || "").trim());
+}
+
 function recoverExplicitPatientHabitualMedications(assessment, transcript, warnings) {
   const lines = speakerLines(transcript);
   if (!lines.length) return;
@@ -77,7 +82,10 @@ function recoverExplicitPatientHabitualMedications(assessment, transcript, warni
   const patientSourceId = (assessment.sources || []).find((source) => source.kind === "patient")?.id;
 
   for (const line of lines) {
-    if (line.speaker !== "PACIENTE" || isFamilySelfMedicationLine(lines, line)) continue;
+    const explicitClinicianHistory = line.speaker === "PSIQUIATRA"
+      && /\b(?:tratamiento\s+habitual|hasta\s+(?:ahora|hoy)|venia\s+tomando|estaba\s+tomando|actualmente\s+toma|esta\s+tomando)\b/i.test(normalize(line.text))
+      && !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text));
+    if ((!isPatientSpeaker(line.speaker) && !explicitClinicianHistory) || isFamilySelfMedicationLine(lines, line)) continue;
     const text = normalize(normalizeMedicationAsrText(line.text).text);
     const previous = previousSpeakerLine(lines, line);
     const answersHabitualQuestion = previous?.speaker === "PSIQUIATRA"
@@ -171,6 +179,71 @@ function isFamilySelfMedicationLine(lines, line) {
   // madre. Una pregunta inmediatamente anterior dirigida de forma explícita a
   // la señora/madre/padre fija la propiedad aunque falle esa etiqueta.
   return familyDirectedMedicationQuestion;
+}
+
+function recoverExplicitToxicHabits(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  const substancePattern = /\b(?:tabaco|fuma|cigarr|alcohol|cerveza|vino|licor|cannabis|porros?|marihuana|cocaina|cocaína|heroina|heroína|anfetaminas?|drogas?|sustancias?)\b/i;
+  const answerPattern = /\b(?:nieg[oa]|no\s+(?:fumo|bebo|tomo|consumo)|consum[oa]|fum[oa]|beb[oa]|abstinencia|abstinente|lleva\s+\w+\s+sin)\b/i;
+  const candidates = [];
+
+  for (const line of lines) {
+    if (!isPatientSpeaker(line.speaker)) continue;
+    const text = line.text.trim();
+    const previous = previousSpeakerLine(lines, line);
+    const answersSubstanceQuestion = previous?.speaker === "PSIQUIATRA" && substancePattern.test(previous.text);
+    if (!substancePattern.test(text) && !answersSubstanceQuestion) continue;
+    if (!answerPattern.test(text) && !answersSubstanceQuestion) continue;
+    candidates.push(text);
+  }
+
+  if (!candidates.length) return;
+  const section = assessment.sections?.habitos_toxicos;
+  if (!section) return;
+  section.text = [...new Set(candidates)].join(" ");
+  section.evidence_status = "supported";
+  const patientSourceId = (assessment.sources || []).find((source) => source.kind === "patient")?.id;
+  section.source_ids = patientSourceId ? [patientSourceId] : [];
+  warnings.push("toxic_habits_recovered_from_explicit_patient_statement");
+}
+
+const EXPLICIT_DIAGNOSIS_CATALOG = [
+  { pattern: /\btrastorno\s+de\s+ansiedad\s+generalizada\b/i, name: "Trastorno de ansiedad generalizada", cie10: "F41.1", dsm5: "300.02" },
+  { pattern: /\btrastorno\s+de\s+la\s+conducta\s+alimentaria(?:\s+no\s+especificad[oa])?\b/i, name: "Trastorno de la conducta alimentaria no especificado", cie10: "F50.9", dsm5: "307.50" },
+  { pattern: /\bepisodio\s+depresivo\s+moderado\b/i, name: "Episodio depresivo moderado", cie10: "F32.1", dsm5: "296.22" },
+  { pattern: /\bpsicosis\s+no\s+especificada\b/i, name: "Psicosis no especificada", cie10: "F29", dsm5: "298.9" },
+];
+
+function recoverExplicitClinicianDiagnosis(assessment, transcript, warnings) {
+  const explicitAnchor = /\b(?:diagnostico|diagnóstico|juicio\s+clinico|juicio\s+clínico|presenta|padece|se\s+trata\s+de|estamos\s+ante)\b/i;
+  const clinicianText = speakerLines(transcript)
+    .filter((line) => line.speaker === "PSIQUIATRA" && explicitAnchor.test(line.text))
+    .map((line) => line.text)
+    .join(" ");
+  if (!clinicianText || clean(assessment.diagnostic_judgment?.primary_diagnosis)) return;
+
+  const match = EXPLICIT_DIAGNOSIS_CATALOG.find((item) => item.pattern.test(clinicianText));
+  if (!match) return;
+  assessment.diagnostic_judgment ||= {};
+  assessment.diagnostic_judgment.primary_diagnosis = match.name;
+  assessment.diagnostic_judgment.cie10_code = match.cie10;
+  assessment.diagnostic_judgment.dsm5_code = match.dsm5;
+  assessment.diagnostic_judgment.provisional = /\b(?:posible|probable|provisional|compatible\s+con|sugiere)\b/i.test(clinicianText);
+  assessment.diagnostic_judgment.basis_summary = "Diagnóstico expresamente indicado durante la valoración.";
+  assessment.diagnostic_judgment.requires_clinician_validation = true;
+  const section = assessment.sections?.orientacion_diagnostica;
+  if (section) {
+    section.text = `JUICIO CLÍNICO: ${match.name}. CIE-10: ${match.cie10}. DSM-5-TR: ${match.dsm5}.`;
+    section.evidence_status = "supported";
+    const psychiatristId = (assessment.sources || []).find((source) => source.kind === "psychiatrist")?.id;
+    section.source_ids = psychiatristId ? [psychiatristId] : [];
+  }
+  if (Array.isArray(assessment.missing_or_not_explored)) {
+    assessment.missing_or_not_explored = assessment.missing_or_not_explored.filter((item) =>
+      !/orientacion\s+diagnostica|diagnostico|juicio\s+clinico/i.test(normalize(item?.topic))
+    );
+  }
+  warnings.push("diagnostic_judgment_recovered_from_explicit_clinician_statement");
 }
 
 function medicationCandidateNames(med) {
@@ -297,7 +370,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   const hasHabitualPatientEvidence = (med) => lines.some((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
-    if (line.speaker === "PACIENTE") return !isFamilySelfMedicationLine(lines, line);
+    if (isPatientSpeaker(line.speaker)) return !isFamilySelfMedicationLine(lines, line);
     if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
       const text = normalize(line.text);
       return !FAMILY_SELF_MEDICATION_PATTERN.test(text)
@@ -309,7 +382,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   const habitualPatientEvidenceLine = (med) => lines.find((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
-    if (line.speaker === "PACIENTE") return !isFamilySelfMedicationLine(lines, line);
+    if (isPatientSpeaker(line.speaker)) return !isFamilySelfMedicationLine(lines, line);
     if (!FAMILY_SPEAKER_LABELS.has(line.speaker)) return false;
     const text = normalize(line.text);
     return !FAMILY_SELF_MEDICATION_PATTERN.test(text)
@@ -420,7 +493,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   const hasCurrentPatientEvidence = (med) => lines.some((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (!lineMentionsMedication(line, med)) return false;
-    if (line.speaker === "PACIENTE" && line.index >= medicationPlanIndex) return true;
+    if (isPatientSpeaker(line.speaker) && line.index >= medicationPlanIndex) return true;
     if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
       const text = normalize(line.text);
       return !FAMILY_SELF_MEDICATION_PATTERN.test(text)
@@ -526,13 +599,12 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   }) || retainedHabitual.some((habitualMed) => hasExplicitDiscontinuation(habitualMed));
 
   // Si durante la consulta hay una actualización, ACTUAL representa la pauta
-  // final completa. Se incorporan los fármacos que el clínico mantiene de
-  // forma expresa (también cuando dice «mantener el resto del tratamiento»).
+  // final completa. Todo fármaco habitual no retirado continúa en la pauta
+  // final, aunque el profesional solo verbalice el elemento modificado.
   if (hasPharmacologicalUpdate) {
     for (const habitualMed of retainedHabitual) {
       if (hasExplicitDiscontinuation(habitualMed)) continue;
-      const maintained = hasClinicianMaintenanceEvidence(habitualMed) || hasGenericMaintenanceEvidence;
-      if (!maintained || withoutDiscontinued.some((item) => overlaps(item, habitualMed))) continue;
+      if (withoutDiscontinued.some((item) => overlaps(item, habitualMed))) continue;
       withoutDiscontinued.push({ ...habitualMed, status: "active" });
       const name = clean(habitualMed.display_name) || clean(habitualMed.raw_name) || "medicamento";
       warnings.push(`medication_explicitly_maintained_added_to_current:${name}`);
@@ -545,7 +617,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   assessment.medications.current = withoutDiscontinued.filter((currentMed) => {
     const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
     if (!hasPharmacologicalUpdate) return false;
-    if (previous && (hasClinicianMaintenanceEvidence(currentMed) || hasGenericMaintenanceEvidence)) return true;
+    if (previous) return true;
     if (!previous || regimenChanged(currentMed, previous)) return true;
     const name = clean(currentMed.display_name) || clean(currentMed.raw_name) || "medicamento";
     warnings.push(`medication_unchanged_pruned_from_current:${name}`);
@@ -606,7 +678,7 @@ function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
       .map(normalize)
     : [normalize(line.text)];
 
-  if (line.speaker === "PACIENTE") {
+  if (isPatientSpeaker(line.speaker)) {
     const previous = previousSpeakerLine(lines, line);
     return evidenceTexts.some((text) => {
       if (NO_CURRENT_MEDICATION_PATTERN.test(text)) return false;
@@ -822,7 +894,7 @@ function restoreExplicitNoHabitualMedication(assessment, transcript, warnings) {
         && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text)));
     if (!hasMedicationContext || isFamilySelfMedicationLine(lines, line)) return false;
 
-    if (line.speaker === "PACIENTE") return true;
+    if (isPatientSpeaker(line.speaker)) return true;
     return FAMILY_SPEAKER_LABELS.has(line.speaker)
       && COLLATERAL_PATIENT_MEDICATION_PATTERN.test(text);
   });
@@ -1007,6 +1079,8 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
 
   recoverExplicitPatientHabitualMedications(assessment, transcript, warnings);
   recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
+  recoverExplicitToxicHabits(assessment, transcript, warnings);
+  recoverExplicitClinicianDiagnosis(assessment, transcript, warnings);
   // La fotografía previa debe estar completa antes de conciliar la pauta
   // actual; así los fármacos mantenidos sin cambios no se arrastran a ACTUAL.
   pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);

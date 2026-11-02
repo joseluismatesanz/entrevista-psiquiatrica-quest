@@ -30,7 +30,9 @@ function assessmentFixture() {
       motivo_consulta: { text: "Agitación y nerviosismo subjetivos; preocupación materna no especificada.", evidence_status: "supported", source_ids: ["patient", "mother"] },
       antecedentes_salud_mental: { text: "En tratamiento psicofarmacológico habitual. Diagnóstico, evolución y antecedentes asistenciales no explorados.", evidence_status: "insufficient", source_ids: ["patient"] },
       situacion_sociofamiliar: { text: "Convive con su padre y una hermana menor. Acude acompañada por su madre.", evidence_status: "supported", source_ids: ["patient", "mother"] },
+      habitos_toxicos: { text: "", evidence_status: "insufficient", source_ids: [] },
       tratamiento_habitual: { text: "Sertralina 50 mg. Risperdal por la noche. Cetralina.", evidence_status: "supported", source_ids: ["patient"] },
+      orientacion_diagnostica: { text: "", evidence_status: "insufficient", source_ids: [] },
       tratamiento_actual: { text: "", evidence_status: "not_provided", source_ids: [] },
     },
     medications: {
@@ -41,6 +43,16 @@ function assessmentFixture() {
       ],
       current: [],
     },
+    diagnostic_judgment: {
+      primary_diagnosis: "",
+      cie10_code: "",
+      dsm5_code: "",
+      provisional: true,
+      differential: [],
+      basis_summary: "",
+      requires_clinician_validation: true,
+    },
+    missing_or_not_explored: [],
     conflicts: [
       {
         topic: "Agitación actual",
@@ -363,7 +375,7 @@ test("V0.6 medicación: una presentación inicial no oculta las pautas previas d
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Mirtazapina:30 mg", "Escitalopram:20 mg"],
+    ["Mirtazapina:30 mg", "Escitalopram:20 mg", "Sertralina:50 mg"],
   );
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/i);
   assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg: 0 - 0 - 1/i);
@@ -392,7 +404,7 @@ test("V0.6 medicación: recupera mirtazapina habitual aunque el dictado fonétic
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Mirtazapina:30 mg"],
+    ["Mirtazapina:30 mg", "Sertralina:50 mg", "Clonazepam:0,5 mg"],
   );
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/i);
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonazepam 0,5 mg.*a demanda/i);
@@ -853,4 +865,54 @@ test("V0.6 medicación: una confirmación posterior a la prescripción no convie
   assert.ok(result.warnings.some((warning) =>
     warning.startsWith("medication_new_prescription_moved_habitual_to_current:Sertralina")
   ));
+});
+
+test("V0.6 medicación: ENTREVISTADO conserva la fotografía previa y la pauta final completa", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Mirtazapina", "Mirtazapina", "active", "30 mg", "por la noche"),
+  ];
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente antes de esta consulta?",
+    "ENTREVISTADO: Duloxetina 60 mg por la mañana, mirtazapina 15 mg por la noche y Rivotril 0,5 mg cuando lo necesito.",
+    "PSIQUIATRA: Aumentamos la mirtazapina a 30 mg por la noche y añadimos olanzapina 5 mg de rescate.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Duloxetina:60 mg", "Mirtazapina:15 mg", "Rivotril:0,5 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Mirtazapina:30 mg", "Duloxetina:60 mg", "Rivotril:0,5 mg"],
+  );
+});
+
+test("V0.6 hábitos: recupera negaciones y consumos expresos del paciente", () => {
+  const fixture = assessmentFixture();
+  const transcript = [
+    "PSIQUIATRA: ¿Fuma, bebe alcohol o consume cannabis u otras drogas?",
+    "PACIENTE: No fumo, no bebo alcohol y no consumo cannabis ni otras drogas.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.equal(result.assessment.sections.habitos_toxicos.evidence_status, "supported");
+  assert.match(result.assessment.sections.habitos_toxicos.text, /no fumo/i);
+  assert.match(result.assessment.sections.habitos_toxicos.text, /no bebo alcohol/i);
+  assert.match(result.assessment.sections.habitos_toxicos.text, /no consumo cannabis/i);
+});
+
+test("V0.6 diagnóstico: conserva el diagnóstico expresamente indicado por el psiquiatra", () => {
+  const fixture = assessmentFixture();
+  fixture.missing_or_not_explored = [{ topic: "Orientación diagnóstica", status: "insufficient", note: "Información insuficiente." }];
+  const transcript = "PSIQUIATRA: El diagnóstico es trastorno de la conducta alimentaria, actualmente en remisión.";
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.equal(result.assessment.diagnostic_judgment.primary_diagnosis, "Trastorno de la conducta alimentaria no especificado");
+  assert.equal(result.assessment.diagnostic_judgment.cie10_code, "F50.9");
+  assert.equal(result.assessment.diagnostic_judgment.dsm5_code, "307.50");
+  assert.match(result.assessment.sections.orientacion_diagnostica.text, /F50\.9/);
+  assert.deepEqual(result.assessment.missing_or_not_explored, []);
 });
