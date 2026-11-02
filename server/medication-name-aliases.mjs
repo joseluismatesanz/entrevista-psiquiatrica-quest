@@ -12,6 +12,12 @@ export const MEDICATION_NAME_ALIASES = [
     pattern: /\bsertalina\b/giu,
   },
   {
+    id: "acertarina_to_sertralina",
+    source: "acertarina",
+    canonical: "sertralina",
+    pattern: /\bacertarina\b/giu,
+  },
+  {
     id: "ribotril_to_rivotril",
     source: "ribotril",
     canonical: "rivotril",

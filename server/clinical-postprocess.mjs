@@ -82,14 +82,17 @@ function recoverExplicitPatientHabitualMedications(assessment, transcript, warni
   const patientSourceId = (assessment.sources || []).find((source) => source.kind === "patient")?.id;
 
   for (const line of lines) {
-    const explicitClinicianHistory = line.speaker === "PSIQUIATRA"
-      && /\b(?:tratamiento\s+habitual|hasta\s+(?:ahora|hoy)|venia\s+tomando|estaba\s+tomando|actualmente\s+toma|esta\s+tomando)\b/i.test(normalize(line.text))
-      && !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text));
-    if ((!isPatientSpeaker(line.speaker) && !explicitClinicianHistory) || isFamilySelfMedicationLine(lines, line)) continue;
-    const text = normalize(normalizeMedicationAsrText(line.text).text);
     const previous = previousSpeakerLine(lines, line);
     const answersHabitualQuestion = previous?.speaker === "PSIQUIATRA"
       && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text));
+    const explicitClinicianHistory = line.speaker === "PSIQUIATRA"
+      && /\b(?:tratamiento\s+habitual|hasta\s+(?:ahora|hoy)|venia\s+tomando|estaba\s+tomando|actualmente\s+toma|esta\s+tomando)\b/i.test(normalize(line.text))
+      && !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text));
+    // La atribución por bloques puede marcar como PSIQUIATRA una respuesta corta
+    // que enumera medicación. La pregunta inmediatamente anterior fija que esa
+    // lista es la pauta previa aunque el rol acústico haya fallado.
+    if ((!isPatientSpeaker(line.speaker) && !explicitClinicianHistory && !answersHabitualQuestion) || isFamilySelfMedicationLine(lines, line)) continue;
+    const text = normalize(normalizeMedicationAsrText(line.text).text);
     const statesActiveTreatment = ACTIVE_MEDICATION_PATTERN.test(text)
       && !HISTORICAL_MEDICATION_PATTERN.test(text)
       && !NO_CURRENT_MEDICATION_PATTERN.test(text);
@@ -104,10 +107,15 @@ function recoverExplicitPatientHabitualMedications(assessment, transcript, warni
       .filter(({ medicationIndex }) => medicationIndex >= 0)
       .sort((left, right) => left.medicationIndex - right.medicationIndex);
 
-    for (const { canonical, wanted, medicationIndex } of mentionedMedications) {
+    for (let index = 0; index < mentionedMedications.length; index += 1) {
+      const { canonical, wanted, medicationIndex } = mentionedMedications[index];
       if (habitual.some((med) => medicationCandidateNames(med).includes(wanted))) continue;
 
-      const nearby = text.slice(medicationIndex + wanted.length, medicationIndex + wanted.length + 100)
+      const nextMedicationIndex = mentionedMedications[index + 1]?.medicationIndex;
+      const nearbyEnd = Number.isInteger(nextMedicationIndex)
+        ? nextMedicationIndex
+        : medicationIndex + wanted.length + 100;
+      const nearby = text.slice(medicationIndex + wanted.length, nearbyEnd)
         .split(/\s+y\s+(?=[a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2}\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b)/i)[0];
       const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui|miligramos?)\b/i);
       const schedules = nearby.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|para\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia)\b/gi);
@@ -208,6 +216,7 @@ function recoverExplicitToxicHabits(assessment, transcript, warnings) {
 }
 
 const EXPLICIT_DIAGNOSIS_CATALOG = [
+  { pattern: /\banorexia\s+nerviosa\b/i, name: "Anorexia nerviosa", cie10: "F50.0", dsm5: "307.1" },
   { pattern: /\btrastorno\s+de\s+ansiedad\s+generalizada\b/i, name: "Trastorno de ansiedad generalizada", cie10: "F41.1", dsm5: "300.02" },
   { pattern: /\btrastorno\s+de\s+la\s+conducta\s+alimentaria(?:\s+no\s+especificad[oa])?\b/i, name: "Trastorno de la conducta alimentaria no especificado", cie10: "F50.9", dsm5: "307.50" },
   { pattern: /\bepisodio\s+depresivo\s+moderado\b/i, name: "Episodio depresivo moderado", cie10: "F32.1", dsm5: "296.22" },
@@ -217,7 +226,8 @@ const EXPLICIT_DIAGNOSIS_CATALOG = [
 function recoverExplicitClinicianDiagnosis(assessment, transcript, warnings) {
   const explicitAnchor = /\b(?:diagnostico|diagnóstico|juicio\s+clinico|juicio\s+clínico|presenta|padece|se\s+trata\s+de|estamos\s+ante)\b/i;
   const clinicianText = speakerLines(transcript)
-    .filter((line) => line.speaker === "PSIQUIATRA" && explicitAnchor.test(line.text))
+    .filter((line) => (line.speaker === "PSIQUIATRA" || isPatientSpeaker(line.speaker))
+      && (explicitAnchor.test(line.text) || EXPLICIT_DIAGNOSIS_CATALOG.some((item) => item.pattern.test(line.text))))
     .map((line) => line.text)
     .join(" ");
   if (!clinicianText || clean(assessment.diagnostic_judgment?.primary_diagnosis)) return;
@@ -246,6 +256,40 @@ function recoverExplicitClinicianDiagnosis(assessment, transcript, warnings) {
   warnings.push("diagnostic_judgment_recovered_from_explicit_clinician_statement");
 }
 
+function recoverMedicationReviewEncounterContext(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  const hasExplicitChange = lines.some((line) =>
+    line.speaker === "PSIQUIATRA"
+    && CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
+    && (MEDICATION_NOUN_PATTERN.test(normalize(line.text))
+      || PSYCHIATRIC_MEDICATION_VOCABULARY.some((name) => normalize(normalizeMedicationAsrText(line.text).text).includes(normalize(name))))
+  );
+  if (!hasExplicitChange) return;
+
+  const psychiatristId = (assessment.sources || []).find((source) => source.kind === "psychiatrist")?.id;
+  const patientId = (assessment.sources || []).find((source) => source.kind === "patient")?.id;
+  const sourceIds = [psychiatristId, patientId].filter(Boolean);
+  const diagnosis = clean(assessment.diagnostic_judgment?.primary_diagnosis);
+
+  const motive = assessment.sections?.motivo_consulta;
+  if (motive && !clean(motive.text)) {
+    motive.text = "Revisión y modificación del tratamiento farmacológico.";
+    motive.evidence_status = "supported";
+    motive.source_ids = sourceIds;
+    warnings.push("motive_recovered_from_explicit_medication_change");
+  }
+
+  const illness = assessment.sections?.enfermedad_actual;
+  if (illness && !clean(illness.text)) {
+    illness.text = diagnosis
+      ? `En seguimiento por ${diagnosis.toLocaleLowerCase("es")}, acude para revisión y modificación del tratamiento farmacológico.`
+      : "Acude para revisión y modificación del tratamiento farmacológico.";
+    illness.evidence_status = "supported";
+    illness.source_ids = sourceIds;
+    warnings.push("current_illness_recovered_from_explicit_medication_change");
+  }
+}
+
 function medicationCandidateNames(med) {
   const values = [
     med?.raw_name,
@@ -269,15 +313,19 @@ function lineMentionsMedication(line, med) {
 }
 
 function medicationPlanCutoffIndex(lines, med, planAnchorIndex) {
-  const firstExplicitPrescription = lines.find((line) =>
-    line.speaker === "PSIQUIATRA"
-    && lineMentionsMedication(line, med)
-    && (
-      CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
-      || CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
-      || CLINICIAN_DISCONTINUATION_PATTERN.test(normalize(line.text))
-    )
-  );
+  const firstExplicitPrescription = lines.find((line) => {
+    if (line.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
+    const text = normalize(line.text);
+    const previous = previousSpeakerLine(lines, line);
+    const isHabitualAnswer = previous?.speaker === "PSIQUIATRA"
+      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text))
+      && !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(text)
+      && !CLINICIAN_DISCONTINUATION_PATTERN.test(text);
+    if (isHabitualAnswer) return false;
+    return CLINICIAN_PRESCRIPTION_PATTERN.test(text)
+      || CLINICIAN_TREATMENT_CHANGE_PATTERN.test(text)
+      || CLINICIAN_DISCONTINUATION_PATTERN.test(text);
+  });
   // Una presentación genérica al inicio (p. ej. «soy psiquiatra y voy a
   // valorar...») no puede convertir en pauta nueva la medicación que el
   // paciente enumera después. El corte debe ser específico de cada fármaco.
@@ -371,6 +419,11 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
     if (isPatientSpeaker(line.speaker)) return !isFamilySelfMedicationLine(lines, line);
+    if (line.speaker === "PSIQUIATRA") {
+      const previous = previousSpeakerLine(lines, line);
+      return previous?.speaker === "PSIQUIATRA"
+        && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text));
+    }
     if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
       const text = normalize(line.text);
       return !FAMILY_SELF_MEDICATION_PATTERN.test(text)
@@ -383,6 +436,11 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
     if (isPatientSpeaker(line.speaker)) return !isFamilySelfMedicationLine(lines, line);
+    if (line.speaker === "PSIQUIATRA") {
+      const previous = previousSpeakerLine(lines, line);
+      return previous?.speaker === "PSIQUIATRA"
+        && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text));
+    }
     if (!FAMILY_SPEAKER_LABELS.has(line.speaker)) return false;
     const text = normalize(line.text);
     return !FAMILY_SELF_MEDICATION_PATTERN.test(text)
@@ -687,6 +745,13 @@ function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
         && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text))
         && !HISTORICAL_MEDICATION_PATTERN.test(text);
     });
+  }
+
+  if (line.speaker === "PSIQUIATRA") {
+    const previous = previousSpeakerLine(lines, line);
+    return previous?.speaker === "PSIQUIATRA"
+      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text))
+      && evidenceTexts.every((text) => !HISTORICAL_MEDICATION_PATTERN.test(text));
   }
 
   if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
@@ -1081,6 +1146,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
   recoverExplicitToxicHabits(assessment, transcript, warnings);
   recoverExplicitClinicianDiagnosis(assessment, transcript, warnings);
+  recoverMedicationReviewEncounterContext(assessment, transcript, warnings);
   // La fotografía previa debe estar completa antes de conciliar la pauta
   // actual; así los fármacos mantenidos sin cambios no se arrastran a ACTUAL.
   pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);

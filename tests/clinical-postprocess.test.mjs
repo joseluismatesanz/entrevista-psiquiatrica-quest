@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyClinicalPostprocessing, finalizeVerifiedMedicationNames } from "../server/clinical-postprocess.mjs";
+import { renderClinicalReport } from "../server/render-report.mjs";
 
 function med(rawName, displayName, status = "active", dose = "", schedule = "") {
   return {
@@ -915,4 +916,38 @@ test("V0.6 diagnóstico: conserva el diagnóstico expresamente indicado por el p
   assert.equal(result.assessment.diagnostic_judgment.dsm5_code, "307.50");
   assert.match(result.assessment.sections.orientacion_diagnostica.text, /F50\.9/);
   assert.deepEqual(result.assessment.missing_or_not_explored, []);
+});
+
+test("Regresión real: separa pauta previa/final y recupera anorexia, motivo y enfermedad actual", () => {
+  const fixture = assessmentFixture();
+  fixture.sections.motivo_consulta = { text: "", evidence_status: "not_provided", source_ids: [] };
+  fixture.sections.enfermedad_actual = { text: "", evidence_status: "not_provided", source_ids: [] };
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Duloxetina", "Duloxetina", "active", "60 mg", "por la mañana"),
+    med("Mirtazapina", "Mirtazapina", "active", "30 mg", "por la noche"),
+    med("Olanzapina", "Olanzapina", "active", "5 mg", "a demanda"),
+    med("acertarina", "Sertralina", "active", "50 mg", "por la mañana"),
+    med("Rivotril", "Clonazepam (Rivotril)", "active", "0,5 mg", "a demanda"),
+  ];
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente antes de esta consulta?",
+    "PSIQUIATRA: Duloxetina 60 mg por la mañana, mirtazapina 15 mg por la noche, acertarina 50 mg por la mañana y Rivotril 0,5 mg a demanda.",
+    "PACIENTE: No fumo, no bebo alcohol y no consumo otras sustancias.",
+    "PSIQUIATRA: El diagnóstico es anorexia nerviosa, actualmente en remisión.",
+    "PSIQUIATRA: Aumentamos mirtazapina a 30 mg por la noche y añadimos olanzapina 5 mg de rescate; se mantiene el resto.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  const report = renderClinicalReport(result.assessment);
+
+  assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Duloxetina 60 mg: 1 - 0 - 0/);
+  assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Mirtazapina 15 mg: 0 - 0 - 1/);
+  assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Sertralina 50 mg: 1 - 0 - 0/);
+  assert.match(report, /TRATAMIENTO ACTUAL\n[\s\S]*Mirtazapina 30 mg: 0 - 0 - 1/);
+  assert.doesNotMatch(report, /TRATAMIENTO ACTUAL\n[\s\S]*Mirtazapina 15 mg/);
+  assert.match(report, /JUICIO CLÍNICO: Anorexia nerviosa\. CIE-10: F50\.0\. DSM-5-TR: 307\.1\./);
+  assert.match(report, /MOTIVO DE LA CONSULTA\nRevisión y modificación del tratamiento farmacológico\./);
+  assert.match(report, /ENFERMEDAD ACTUAL\nEn seguimiento por anorexia nerviosa/);
+  assert.match(report, /HÁBITOS TÓXICOS\nNo fumo, no bebo alcohol y no consumo otras sustancias\./i);
 });
