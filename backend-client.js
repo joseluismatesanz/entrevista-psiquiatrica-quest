@@ -30,13 +30,13 @@
     antecedentes_familiares_psiquiatricos: 'ANTECEDENTES FAMILIARES PSIQUIÁTRICOS',
     situacion_sociofamiliar: 'SITUACIÓN SOCIOFAMILIAR',
     habitos_toxicos: 'HÁBITOS TÓXICOS',
-    tratamiento_habitual: 'TRATAMIENTO HABITUAL',
+    tratamiento_habitual: 'TRATAMIENTO VIGENTE',
     enfermedad_actual: 'ENFERMEDAD ACTUAL',
     intervencion: 'INTERVENCIÓN',
     exploracion_psicopatologica: 'EXPLORACIÓN PSICOPATOLÓGICA',
     orientacion_diagnostica: 'ORIENTACIÓN DIAGNÓSTICA',
     plan_terapeutico: 'PLAN TERAPÉUTICO',
-    tratamiento_actual: 'TRATAMIENTO ACTUAL',
+    tratamiento_actual: 'TRATAMIENTO REVISADO',
   };
 
   const SPEAKER_ROLES = [

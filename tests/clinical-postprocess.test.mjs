@@ -699,3 +699,39 @@ test("V0.6 medicación: una confirmación posterior a la prescripción no convie
     warning.startsWith("medication_new_prescription_moved_habitual_to_current:Sertralina")
   ));
 });
+
+test("ADELANTO medicación: la lista previa confirmada por el paciente sustenta el habitual", () => {
+  const fixture = assessmentFixture();
+  const duloxetina = med("Duloxetina", "Duloxetina", "active", "60 mg", "1 - 0 - 0");
+  const mirtazapinaActual = med("Mirtazapina", "Mirtazapina", "active", "30 mg", "0 - 0 - 1");
+  const sertralina = med("Sertralina", "Sertralina", "active", "50 mg", "1 - 0 - 0");
+  fixture.medications.habitual = [];
+  fixture.medications.current = [duloxetina, mirtazapinaActual, sertralina];
+  fixture.sections.tratamiento_habitual = { text: "", evidence_status: "not_provided", source_ids: [] };
+  const transcript = [
+    "PSIQUIATRA: ¿Me confirma que antes de esta consulta toma duloxetina 60 mg por la mañana, mirtazapina 15 mg por la noche y sertralina 50 mg por la mañana?",
+    "PACIENTE: Sí, correcto.",
+    "PSIQUIATRA: A partir de hoy vamos a aumentar la mirtazapina a 30 mg por la noche y mantenemos el resto.",
+  ].join("\n");
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.deepEqual(result.assessment.medications.habitual.map((item) => item.raw_name), ["Duloxetina", "Mirtazapina", "Sertralina"]);
+  assert.equal(result.assessment.medications.habitual.find((item) => item.raw_name === "Mirtazapina").dose, "15 mg");
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg: 0 - 0 - 1/);
+});
+
+test("ADELANTO medicación: tratamiento actual conserva lo mantenido y excluye lo retirado", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [
+    med("Duloxetina", "Duloxetina", "active", "60 mg", "1 - 0 - 0"),
+    med("Sertralina", "Sertralina", "active", "50 mg", "1 - 0 - 0"),
+  ];
+  fixture.medications.current = [];
+  const transcript = [
+    "PACIENTE: Tomo duloxetina 60 mg por la mañana y sertralina 50 mg por la mañana.",
+    "PSIQUIATRA: A partir de hoy retiramos la sertralina y mantenemos la duloxetina.",
+  ].join("\n");
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.deepEqual(result.assessment.medications.current.map((item) => item.raw_name), ["Duloxetina"]);
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Sertralina/);
+});

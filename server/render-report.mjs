@@ -7,13 +7,13 @@ export const SECTION_ORDER = [
   ["antecedentes_familiares_psiquiatricos", "ANTECEDENTES FAMILIARES PSIQUIÁTRICOS"],
   ["situacion_sociofamiliar", "SITUACIÓN SOCIOFAMILIAR"],
   ["habitos_toxicos", "HÁBITOS TÓXICOS"],
-  ["tratamiento_habitual", "TRATAMIENTO HABITUAL"],
+  ["tratamiento_habitual", "TRATAMIENTO VIGENTE"],
   ["enfermedad_actual", "ENFERMEDAD ACTUAL"],
   ["intervencion", "INTERVENCIÓN"],
   ["exploracion_psicopatologica", "EXPLORACIÓN PSICOPATOLÓGICA"],
   ["orientacion_diagnostica", "ORIENTACIÓN DIAGNÓSTICA"],
   ["plan_terapeutico", "PLAN TERAPÉUTICO"],
-  ["tratamiento_actual", "TRATAMIENTO ACTUAL"],
+  ["tratamiento_actual", "TRATAMIENTO REVISADO"],
 ];
 
 function clean(value) {
@@ -60,6 +60,15 @@ function medicationBlock(list, allowedStatuses) {
     .join("\n");
 }
 
+function medicationWarnings(assessment) {
+  return (assessment.safety_review || [])
+    .filter((item) => String(item?.topic || "").startsWith("medication_safety:"))
+    .map((item) => clean(item.evidence))
+    .filter(Boolean)
+    .map((text) => `WARNING: ${text}`)
+    .join("\n");
+}
+
 export function renderClinicalReport(assessment) {
   const lines = [];
   for (const [key, title] of SECTION_ORDER) {
@@ -79,23 +88,25 @@ export function renderClinicalReport(assessment) {
 
     let body = clean(section.text);
 
-    // Habitual = exclusivamente medicación vigente antes de la valoración.
-    // Current = régimen final + dosis administradas una sola vez durante el episodio actual.
+    // Vigente = exclusivamente medicación que el paciente tomaba al llegar.
+    // Revisado = régimen completo que queda indicado al terminar la consulta.
     // Si existe estructura de medicación, es la fuente canónica: nunca volver al texto libre
     // cuando el único contenido estructurado era histórico.
     if (key === "tratamiento_habitual") {
       const list = assessment.medications?.habitual;
       if (Array.isArray(list) && list.length > 0) {
         body = medicationBlock(list, ["active"]);
-        if (!body) body = "No consta tratamiento habitual activo.";
+        if (!body) body = "No consta tratamiento vigente activo.";
       }
     }
     if (key === "tratamiento_actual") {
       const list = assessment.medications?.current;
       if (Array.isArray(list) && list.length > 0) {
         body = medicationBlock(list, ["active", "administered_once"]);
-        if (!body) body = "No consta tratamiento actual activo.";
+        if (!body) body = "No consta tratamiento revisado activo.";
       }
+      const warnings = medicationWarnings(assessment);
+      if (warnings) body = [body, warnings].filter(Boolean).join("\n");
     }
 
     if (!body) {

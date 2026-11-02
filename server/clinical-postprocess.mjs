@@ -41,7 +41,7 @@ const FAMILY_SPEAKER_LABELS = new Set([
 ]);
 const FAMILY_SELF_MEDICATION_PATTERN = /\b(?:yo\s+)?(?:ahora\s+mismo\s+)?(?:estoy\s+tomando|estaba\s+tomando|tomo|tomaba|he\s+tomado|me\s+tomo)\b/i;
 const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma)\b/i;
-const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
+const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar|cambiar|sustituir|retirar|suspender|aumentar|subir|reducir|bajar|mantener|continuar|modificar|ajustar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos|cambio|cambiamos|sustituyo|sustituimos|retiro|retiramos|suspendo|suspendemos|aumento|aumentamos|subo|subimos|reduzco|reducimos|bajo|bajamos|mantengo|mantenemos|continuo|continuamos|modifico|modificamos|ajusto|ajustamos)\b)\b/i;
 const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
 const CLINICIAN_MAINTENANCE_PATTERN = /\b(?:mantener|mantengo|mantenemos|mantenga|continuar|continua|contin\u00fao|seguimos\s+con|seguir\s+con|sin\s+cambios|misma\s+pauta|resto\s+del\s+tratamiento)\b/i;
 const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|anadir|anado|anadimos|empezar|comenzar|sustituir|cambiar|cambio|cambiamos|aumentar|aumento|aumentamos|incrementar|incremento|incrementamos|subir|subo|subimos|reducir|reduzco|reducimos|disminuir|disminuyo|disminuimos|bajar|bajo|bajamos|ajustar|ajusto|ajustamos|titular|titulo|titulamos)\b/i;
@@ -52,6 +52,8 @@ const MEDICATION_QUESTION_PATTERN = /\b(?:medicacion|medicación|tratamiento|pas
 const HABITUAL_MEDICATION_QUESTION_PATTERN = /\b(?:(?:que|qué)\s+(?:tratamiento|medicacion|medicación)\s+(?:tomas?|toma)|(?:tomas?|toma)\s+(?:alguna\s+)?medicacion|tratamiento\s+habitual)\b/i;
 const NO_CURRENT_MEDICATION_PATTERN = /\b(?:no\s+(?:tomo|toma|estoy\s+tomando|esta\s+tomando|está\s+tomando)|ningun[ao]?\s+(?:medicacion|medicación|tratamiento)|sin\s+(?:medicacion|medicación|tratamiento))\b/i;
 const MEDICATION_NOUN_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?)\b/i;
+const HABITUAL_CONFIRMATION_PATTERN = /\b(?:toma|tomando|tratamiento|medicacion|medicación|pauta)\b/i;
+const AFFIRMATIVE_RESPONSE_PATTERN = /^\s*(?:s[ií]|correcto|exacto|eso\s+es|as[ií]\s+es|de\s+acuerdo|vale)(?:\b|[.,;:])/i;
 
 function speakerLines(transcript) {
   return String(transcript || "")
@@ -134,6 +136,25 @@ function medicationCandidateNames(med) {
 function lineMentionsMedication(line, med) {
   const text = normalize(line?.text);
   return medicationCandidateNames(med).some((candidate) => text.includes(candidate));
+}
+
+function nextNonPsychiatristLine(lines, line) {
+  const position = lines.indexOf(line);
+  for (let index = position + 1; index < lines.length && index - position <= 3; index += 1) {
+    if (lines[index]?.speaker !== "PSIQUIATRA") return lines[index];
+  }
+  return null;
+}
+
+function clinicianConfirmedPreexistingMedication(lines, line, med, cutoffIndex) {
+  if (line?.speaker !== "PSIQUIATRA" || line.index >= cutoffIndex || !lineMentionsMedication(line, med)) return false;
+  const text = normalize(line.text);
+  if (CLINICIAN_PRESCRIPTION_PATTERN.test(text) || CLINICIAN_DISCONTINUATION_PATTERN.test(text)) return false;
+  const asksForConfirmation = /[?¿]/.test(line.text)
+    || /\b(?:me\s+confirma|confirma|verdad|correcto|es\s+asi|es\s+así)\b/i.test(text);
+  if (!asksForConfirmation || !HABITUAL_CONFIRMATION_PATTERN.test(text)) return false;
+  const answer = nextNonPsychiatristLine(lines, line);
+  return Boolean(answer && AFFIRMATIVE_RESPONSE_PATTERN.test(normalize(answer.text)));
 }
 
 function medicationPlanCutoffIndex(lines, med, planAnchorIndex) {
@@ -230,6 +251,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   const hasHabitualPatientEvidence = (med) => lines.some((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
+    if (clinicianConfirmedPreexistingMedication(lines, line, med, medicationPlanIndex)) return true;
     if (line.speaker === "PACIENTE") return !isFamilySelfMedicationLine(lines, line);
     if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
       const text = normalize(line.text);
@@ -242,6 +264,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   const habitualPatientEvidenceLine = (med) => lines.find((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
+    if (clinicianConfirmedPreexistingMedication(lines, line, med, medicationPlanIndex)) return true;
     if (line.speaker === "PACIENTE") return !isFamilySelfMedicationLine(lines, line);
     if (!FAMILY_SPEAKER_LABELS.has(line.speaker)) return false;
     const text = normalize(line.text);
@@ -321,8 +344,11 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\b/i);
     if (dose) prior.dose = `${dose[1]} ${dose[2]}`;
 
-    const schedules = nearby.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia)\b/gi);
-    if (schedules?.length) prior.schedule = [...new Set(schedules)].join(" y ");
+    const morning = /\b(?:por\s+la\s+manana|manana|desayuno)\b/i.test(nearby);
+    const midday = /\b(?:al\s+mediodia|mediodia|en\s+la\s+comida|comida)\b/i.test(nearby);
+    const night = /\b(?:por\s+la\s+noche|noche|antes\s+de\s+dormir|cena)\b/i.test(nearby);
+    if (morning || midday || night) prior.schedule = `${morning ? 1 : 0} - ${midday ? 1 : 0} - ${night ? 1 : 0}`;
+    else if (/\ba\s+demanda\b/i.test(nearby)) prior.schedule = "a demanda";
     return prior;
   };
 
@@ -419,6 +445,16 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     return false;
   });
 
+  // La pauta final debe ser completa. Un fármaco habitual no retirado se mantiene
+  // también en TRATAMIENTO REVISADO aunque el modelo solo haya devuelto los cambios.
+  for (const med of retainedHabitual) {
+    if (med?.status !== "active" || hasExplicitDiscontinuation(med)) continue;
+    if (assessment.medications.current.some((existing) => overlaps(existing, med))) continue;
+    assessment.medications.current.push({ ...med, status: "active" });
+    const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
+    warnings.push(`medication_maintained_carried_to_current:${name}`);
+  }
+
   // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
   // Si el único respaldo del fármaco es una prescripción del psiquiatra posterior
   // al anclaje del nuevo plan, se elimina cualquier adherencia arrastrada por el modelo.
@@ -466,6 +502,10 @@ function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
   if (line.index >= planAnchorIndex) return false;
   if (med && !lineMentionsMedication(line, med)) return false;
   if (isFamilySelfMedicationLine(lines, line)) return false;
+
+  if (med && clinicianConfirmedPreexistingMedication(lines, line, med, planAnchorIndex)) {
+    return true;
+  }
 
   const evidenceTexts = med
     ? transcriptUnits(line.text)

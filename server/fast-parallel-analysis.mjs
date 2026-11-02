@@ -15,6 +15,8 @@ import { groundReportContentToTranscript } from "./report-content-grounding.mjs"
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
 import { verifyAssessmentMedications } from "./medication-verification.mjs";
+import { groundExplicitClinicalFacts } from "./explicit-clinical-grounding.mjs";
+import { applyMedicationSafetyReview } from "./medication-safety-review.mjs";
 import { clinicalModelRequestOptions } from "./model-request-policy.mjs";
 
 function extractRefusal(response) {
@@ -148,9 +150,10 @@ export async function analyzeFastParallelTranscript(transcript, options = {}) {
 
   const merged = mergeParallelClinicalAssessment(history.parsed, current.parsed);
   const deterministicStartedAt = Date.now();
-  const invariantResult = applyClinicalInvariants(merged);
+  const explicitGroundResult = groundExplicitClinicalFacts(merged, transcript);
+  const invariantResult = applyClinicalInvariants(explicitGroundResult.assessment);
   let assessment = invariantResult.assessment;
-  const warnings = [...invariantResult.warnings];
+  const warnings = [...explicitGroundResult.warnings, ...invariantResult.warnings];
 
   let medicationMeta = {
     medication_verification_enabled: false,
@@ -171,6 +174,10 @@ export async function analyzeFastParallelTranscript(transcript, options = {}) {
   const postprocessResult = applyClinicalPostprocessing(assessment, transcript);
   assessment = postprocessResult.assessment;
   warnings.push(...postprocessResult.warnings);
+
+  const medicationSafetyResult = applyMedicationSafetyReview(assessment);
+  assessment = medicationSafetyResult.assessment;
+  warnings.push(...medicationSafetyResult.warnings);
 
   const interventionGroundResult = groundInterventionToTranscript(assessment, transcript);
   assessment = interventionGroundResult.assessment;
