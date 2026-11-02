@@ -347,7 +347,7 @@
     $('copyReport').disabled = true;
   }
 
-  async function analyzeWithBackend() {
+  async function analyzeWithBackend(destination = 'report') {
     const transcript = $('caseText').value.trim();
     if (!transcript) {
       $('sessionMessage').textContent = 'Pega o graba primero una entrevista ficticia o anonimizada.';
@@ -359,11 +359,13 @@
       return;
     }
 
-    const button = $('analyzeCase');
+    const button = destination === 'review' ? $('organizeCase') : $('analyzeCase');
+    const otherButton = destination === 'review' ? $('analyzeCase') : $('organizeCase');
     const original = button.textContent;
     const analysisStartedAt = Date.now();
     let progressTimer = null;
     button.disabled = true;
+    if (otherButton) otherButton.disabled = true;
     button.textContent = 'Organizando información clínica…';
     $('sessionMessage').textContent = 'Preparando la organización clínica y el borrador del informe…';
     progressTimer = setInterval(() => {
@@ -389,14 +391,18 @@
       }
       state.result = payload;
       renderReview(payload);
-      showScreen('review');
+      window.__CLINICAL_REPORT_AVAILABLE = true;
+      showScreen(destination === 'review' ? 'review' : 'report');
+      window.dispatchEvent(new CustomEvent('clinical-report-ready'));
     } catch (error) {
       console.error('Backend analysis failed without logging transcript.', error);
       $('sessionMessage').textContent = `No se pudo completar el análisis: ${error.message}`;
       showScreen('input');
+      document.body.classList.add('transcription-actions-only');
     } finally {
       if (progressTimer) clearInterval(progressTimer);
       button.disabled = false;
+      if (otherButton) otherButton.disabled = false;
       button.textContent = original;
     }
   }
@@ -432,7 +438,18 @@
   for (const id of ['loadCase1', 'loadCase2']) {
     $(id)?.addEventListener('click', () => clearAudioMappingState());
   }
-  $('analyzeCase')?.addEventListener('click', analyzeWithBackend);
+  $('analyzeCase')?.addEventListener('click', () => analyzeWithBackend('report'));
+  $('organizeCase')?.addEventListener('click', () => analyzeWithBackend('review'));
+  window.runClinicalReportGeneration = () => analyzeWithBackend('report');
+  function syncWorkflowActions() {
+    const hasTranscript = Boolean($('caseText').value.trim());
+    $('workflowActions')?.classList.toggle('hidden', !hasTranscript);
+    if ($('analyzeCase')) $('analyzeCase').disabled = !hasTranscript;
+    if ($('organizeCase')) $('organizeCase').disabled = !hasTranscript;
+  }
+  $('caseText')?.addEventListener('input', syncWorkflowActions);
+  window.addEventListener('clinical-transcription-ready', syncWorkflowActions);
+  syncWorkflowActions();
   $('recordButton')?.addEventListener('click', () => {
     if (state.recorder?.state === 'recording') stopRecording();
     else startRecording();
