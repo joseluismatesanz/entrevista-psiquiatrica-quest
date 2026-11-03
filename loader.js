@@ -24,7 +24,7 @@
   }
 
   const script = document.createElement('script');
-  script.src = backendMode ? 'backend-client.js?v=20261102-clinical-flow-3' : 'app.js';
+  script.src = backendMode ? 'backend-client.js?v=20261103-post-transcription-1' : 'app.js';
   script.async = false;
   script.dataset.engine = backendMode ? 'structured' : 'local';
   document.body.appendChild(script);

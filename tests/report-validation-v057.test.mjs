@@ -66,7 +66,7 @@ test("V0.5.6 informe: el pie validado se reduce a flecha, re-edición, copia y e
 
 test("V0.5.6 informe: el navegador fuerza la carga de la nueva capa de validación y chequea desidentificación", () => {
   assert.match(indexHtml, /report-v056\.js\?v=20260909-3/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20261102-clinical-flow-3/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20261103-post-transcription-1/);
   assert.match(packageJson, /node --check server\/person-name-redaction\.mjs/);
   assert.doesNotMatch(packageJson, /node --check api\/send-report\.mjs/);
   assert.match(packageJson, /node --check report-validation-v058\.js/);

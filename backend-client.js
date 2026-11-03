@@ -347,6 +347,54 @@
     $('copyReport').disabled = true;
   }
 
+  function startWorkflowTimer(timerId, initialLabel) {
+    const timer = $(timerId);
+    const startedAt = Date.now();
+    let label = initialLabel;
+    let intervalId = null;
+    let finished = false;
+
+    const render = () => {
+      if (!timer) return;
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      timer.textContent = `${formatClock(elapsedSeconds)} · ${label}`;
+    };
+
+    timer?.classList.remove('hidden', 'is-complete', 'is-error');
+    timer?.classList.add('is-running');
+    render();
+    intervalId = setInterval(render, 1_000);
+
+    return {
+      setLabel(nextLabel) {
+        if (finished) return;
+        label = nextLabel;
+        render();
+      },
+      finish(finalLabel, { error = false } = {}) {
+        if (finished) return;
+        finished = true;
+        label = finalLabel;
+        if (intervalId) clearInterval(intervalId);
+        intervalId = null;
+        render();
+        timer?.classList.remove('is-running');
+        timer?.classList.add(error ? 'is-error' : 'is-complete');
+      },
+      stop() {
+        if (intervalId) clearInterval(intervalId);
+        intervalId = null;
+      },
+    };
+  }
+
+  function resetWorkflowTimer(timerId, text) {
+    const timer = $(timerId);
+    if (!timer) return;
+    timer.textContent = text;
+    timer.classList.remove('is-running', 'is-complete', 'is-error');
+  }
+
   async function analyzeWithBackend(destination = 'report') {
     const transcript = $('caseText').value.trim();
     if (!transcript) {
@@ -359,23 +407,29 @@
       return;
     }
 
+    const directEmail = destination === 'email';
     const button = destination === 'review' ? $('organizeTranscript') : $('analyzeCase');
     const otherButton = destination === 'review' ? null : $('organizeCase');
     const original = button.textContent;
-    const analysisStartedAt = Date.now();
-    let progressTimer = null;
+    const progressTimer = startWorkflowTimer(
+      directEmail ? 'analyzeCaseTimer' : 'organizationProcessTimer',
+      directEmail ? 'Organizando información clínica' : 'Organizando información clínica',
+    );
+    let directEmailPrepared = false;
+
+    if (directEmail) {
+      document.body.classList.add('transcription-actions-only');
+      $('workflowActions')?.classList.remove('hidden');
+    }
     button.disabled = true;
     if (otherButton) otherButton.disabled = true;
-    button.textContent = destination === 'email'
+    button.classList.add('processing');
+    button.textContent = directEmail
       ? 'Creando informe y correo…'
       : 'Organizando información clínica…';
-    $('sessionMessage').textContent = destination === 'email'
+    $('sessionMessage').textContent = directEmail
       ? 'Preparando el informe clínico para su envío directo…'
       : 'Preparando la organización clínica y el borrador del informe…';
-    progressTimer = setInterval(() => {
-      const elapsedSeconds = Math.max(1, Math.round((Date.now() - analysisStartedAt) / 1000));
-      $('sessionMessage').textContent = `Organizando la entrevista · ${elapsedSeconds} s. La transcripción permanece disponible y el proceso tiene un límite de seguridad.`;
-    }, 10_000);
 
     try {
       const response = await window.ClinicalRequest.fetchWithDeadline(`${baseUrl}/api/analyze`, {
@@ -397,27 +451,36 @@
       renderReview(payload);
       window.__CLINICAL_REPORT_AVAILABLE = true;
       window.dispatchEvent(new CustomEvent('clinical-report-ready'));
-      if (destination === 'email') {
+      if (directEmail) {
+        progressTimer.setLabel('Validando el informe automáticamente');
         if (typeof window.sendClinicalReportDirect !== 'function') {
+          progressTimer.finish('Informe creado · envío manual disponible', { error: true });
           showScreen('report');
           $('sessionMessage').textContent = 'El envío directo no está disponible. El informe queda abierto para revisión y envío manual.';
           return;
         }
-        window.sendClinicalReportDirect(payload.report);
+        directEmailPrepared = window.sendClinicalReportDirect(payload.report) === true;
+        progressTimer.finish(directEmailPrepared
+          ? 'Informe validado · correo preparado'
+          : 'Informe creado · no se pudo preparar el correo', { error: !directEmailPrepared });
         return;
       }
+      progressTimer.finish('Organización completada');
       $('organizationTranscriptAction')?.classList.add('hidden');
       showScreen(destination === 'review' ? 'review' : 'report');
     } catch (error) {
       console.error('Backend analysis failed without logging transcript.', error);
+      progressTimer.finish(`Error: ${error.message}`, { error: true });
       $('sessionMessage').textContent = `No se pudo completar el análisis: ${error.message}`;
       showScreen('input');
-      document.body.classList.add('transcription-actions-only');
+      if (directEmail) document.body.classList.add('transcription-actions-only');
     } finally {
-      if (progressTimer) clearInterval(progressTimer);
+      progressTimer.stop();
+      const directMailReady = directEmailPrepared || button?.dataset.directMailReady === 'true';
       button.disabled = false;
-      if (otherButton) otherButton.disabled = false;
-      button.textContent = original;
+      button.classList.remove('processing');
+      if (otherButton) otherButton.disabled = directMailReady;
+      button.textContent = directMailReady ? 'Abrir correo' : original;
     }
   }
 
@@ -454,9 +517,12 @@
     $(id)?.addEventListener('click', () => clearAudioMappingState());
   }
   function openTranscriptForOrganization() {
+    resetWorkflowTimer('organizeCaseTimer', '00:00 · Transcripción disponible');
     document.body.classList.remove('transcription-actions-only');
     $('workflowActions')?.classList.add('hidden');
     $('organizationTranscriptAction')?.classList.remove('hidden');
+    $('organizationProcessTimer')?.classList.remove('hidden');
+    resetWorkflowTimer('organizationProcessTimer', '00:00 · Listo para organizar');
     showScreen('input');
     $('sessionMessage').textContent = 'Revisa la transcripción y pulsa «Organizar información clínica» para continuar.';
     $('caseText')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -474,7 +540,13 @@
     if ($('organizeCase')) $('organizeCase').disabled = !hasTranscript;
   }
   $('caseText')?.addEventListener('input', syncWorkflowActions);
-  window.addEventListener('clinical-transcription-ready', syncWorkflowActions);
+  window.addEventListener('clinical-transcription-ready', () => {
+    window.resetClinicalReportDirect?.();
+    resetWorkflowTimer('analyzeCaseTimer', '00:00 · Listo');
+    resetWorkflowTimer('organizeCaseTimer', '00:00 · Recorrido manual');
+    resetWorkflowTimer('organizationProcessTimer', '00:00 · Listo para organizar');
+    syncWorkflowActions();
+  });
   syncWorkflowActions();
   $('recordButton')?.addEventListener('click', () => {
     if (state.recorder?.state === 'recording') stopRecording();

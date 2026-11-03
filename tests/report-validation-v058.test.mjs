@@ -74,6 +74,15 @@ test("V0.5.6 correo: entrega el mailto y destruye inmediatamente el estado clín
   assert.match(validationJs, /window\.location\.replace/);
 });
 
+test("V0.5.6 correo directo: autovalida, abre Mail y conserva un reintento visible para iPhone", () => {
+  assert.match(validationJs, /function sendClinicalReportDirect/);
+  assert.match(validationJs, /validateReport\(\)/);
+  assert.match(validationJs, /pendingDirectMailto = createReportMailto\(validatedText\)/);
+  assert.match(validationJs, /directButton\.dataset\.directMailReady = 'true'/);
+  assert.match(validationJs, /window\.location\.assign\(pendingDirectMailto\)/);
+  assert.match(validationJs, /#analyzeCase\[data-direct-mail-ready="true"\]/);
+});
+
 test("privacidad: la portada informa del resultado sin exponer documentación técnica", () => {
   assert.match(indexHtml, /La información se desidentifica antes de generar el informe/);
   assert.doesNotMatch(indexHtml, /Microsoft Presidio|nombres verificados adicionalmente/);
@@ -83,6 +92,6 @@ test("privacidad: la portada informa del resultado sin exponer documentación t�
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
   assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20261102-clinical-flow-3/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20261103-post-transcription-1/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });

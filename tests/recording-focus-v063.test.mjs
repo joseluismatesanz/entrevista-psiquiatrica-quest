@@ -19,10 +19,13 @@ test("grabación: la capa negra cubre toda la pantalla hasta terminar la transcr
 });
 
 test("tras la transcripción solo presenta Informe y Organización", () => {
-  assert.equal((index.match(/class="primary workflow-main-button"/g) || []).length, 2);
+  assert.equal((index.match(/workflow-main-button/g) || []).length, 2);
   assert.match(index, />Informe<\/button>/);
   assert.match(index, />Organización<\/button>/);
+  assert.match(index, /id="analyzeCaseTimer"/);
+  assert.match(index, /id="organizeCaseTimer"/);
   assert.match(css, /body\.transcription-actions-only \.app-shell > :not\(#workflowActions\)/);
+  assert.match(css, /\.workflow-action-timer\.is-running/);
 });
 
 test("Informe prepara el correo directo y Organización abre la transcripción antes de la revisión", () => {
@@ -30,4 +33,5 @@ test("Informe prepara el correo directo y Organización abre la transcripción a
   assert.match(backend, /analyzeWithBackend\('review'\)/);
   assert.match(backend, /openTranscriptForOrganization/);
   assert.match(backend, /window\.sendClinicalReportDirect\(payload\.report\)/);
+  assert.match(backend, /Validando el informe automáticamente/);
 });

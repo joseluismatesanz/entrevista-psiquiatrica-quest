@@ -1,6 +1,7 @@
 (() => {
   const state = { validated: false };
   const EMAIL_RECIPIENT = 'joseluis.matesanz@salud-juntaex.es';
+  let pendingDirectMailto = '';
 
   function checkbox() {
     return document.getElementById('validateCheck');
@@ -225,14 +226,19 @@
     }
   }
 
-  function openReportEmail(text) {
+  function createReportMailto(text) {
     const subject = 'Informe clínico validado';
     const body = `Informe clínico validado\n\n${text}`;
-    const mailto = `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    return `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
+  function openReportEmail(text) {
+    const mailto = createReportMailto(text);
 
     // Navegar la pestaña actual al esquema mailto funciona de forma más fiable
     // en Safari/iOS que un clic sintético creado después de una petición asíncrona.
     window.location.assign(mailto);
+    return mailto;
   }
 
   function sendAndDestroy() {
@@ -259,19 +265,42 @@
     const text = String(rawText || '').trim();
     if (!text) return false;
 
-    state.validated = true;
+    // El recorrido directo aplica exactamente la misma validación que el botón
+    // manual, pero sin mostrar las pantallas intermedias de organización e informe.
+    validateReport();
+    const validatedText = getValidatedReportText() || text;
+    if (!state.validated || !validatedText) return false;
+
+    pendingDirectMailto = createReportMailto(validatedText);
     const directButton = document.getElementById('analyzeCase');
     if (directButton) {
-      directButton.disabled = true;
-      directButton.textContent = 'Abriendo correo…';
+      directButton.disabled = false;
+      directButton.dataset.directMailReady = 'true';
+      directButton.textContent = 'Abrir correo';
     }
     setHint(`Informe generado · abriendo correo para ${EMAIL_RECIPIENT}`);
     destroyEphemeralSession({ reload: false });
-    openReportEmail(text);
+    window.location.assign(pendingDirectMailto);
     return true;
   }
 
+  function resetClinicalReportDirect() {
+    pendingDirectMailto = '';
+    const directButton = document.getElementById('analyzeCase');
+    if (!directButton) return;
+    delete directButton.dataset.directMailReady;
+    if (directButton.textContent === 'Abrir correo') directButton.textContent = 'Informe';
+  }
+
   document.addEventListener('click', (event) => {
+    const directRetry = event.target.closest?.('#analyzeCase[data-direct-mail-ready="true"]');
+    if (directRetry && pendingDirectMailto) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.location.assign(pendingDirectMailto);
+      return;
+    }
+
     if (event.target.closest?.('#validateReport')) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -322,5 +351,6 @@
 
   window.addEventListener('pageshow', resetValidation);
   window.sendClinicalReportDirect = sendClinicalReportDirect;
+  window.resetClinicalReportDirect = resetClinicalReportDirect;
   resetValidation();
 })();

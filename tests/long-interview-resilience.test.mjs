@@ -51,8 +51,8 @@ test('transcripción: las peticiones y el cierre tienen límites explícitos', (
 
 test('navegador: carga la protección antes de los controladores y evita caché antigua', () => {
   const timeoutLayer = index.indexOf('client-request-timeout.js?v=20261004-recording-1');
-  const loaderPosition = index.indexOf('loader.js?v=20261102-clinical-flow-3');
-  const longPosition = index.indexOf('long-interview-v06.js?v=20261102-clinical-flow-3');
+  const loaderPosition = index.indexOf('loader.js?v=20261103-post-transcription-1');
+  const longPosition = index.indexOf('long-interview-v06.js?v=20261103-post-transcription-1');
   assert.ok(timeoutLayer >= 0 && loaderPosition > timeoutLayer && longPosition > loaderPosition);
-  assert.match(loader, /backend-client\.js\?v=20261102-clinical-flow-3/);
+  assert.match(loader, /backend-client\.js\?v=20261103-post-transcription-1/);
 });

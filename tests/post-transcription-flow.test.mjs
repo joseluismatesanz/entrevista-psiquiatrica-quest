@@ -10,17 +10,24 @@ const [html, client, validation] = await Promise.all([
 
 test("flujo posterior: Informe genera y abre directamente el correo", () => {
   assert.match(html, /id="analyzeCase"[^>]*>Informe<\/button>/);
+  assert.match(html, /id="analyzeCaseTimer"[^>]*>00:00 · Listo<\/p>/);
   assert.match(client, /analyzeCase'\)\?\.addEventListener\('click', \(\) => analyzeWithBackend\('email'\)\)/);
+  assert.match(client, /startWorkflowTimer\([\s\S]*?'analyzeCaseTimer'/);
+  assert.match(client, /document\.body\.classList\.add\('transcription-actions-only'\)/);
   assert.match(client, /window\.sendClinicalReportDirect\(payload\.report\)/);
   assert.match(validation, /window\.sendClinicalReportDirect = sendClinicalReportDirect/);
+  assert.match(validation, /function sendClinicalReportDirect[\s\S]*?validateReport\(\)[\s\S]*?destroyEphemeralSession\(\{ reload: false \}\)[\s\S]*?window\.location\.assign\(pendingDirectMailto\)/);
   assert.match(validation, /mailto:\$\{EMAIL_RECIPIENT\}/);
   assert.match(validation, /window\.location\.assign\(mailto\)/);
+  assert.match(validation, /data-direct-mail-ready/);
   assert.doesNotMatch(validation, /document\.createElement\('a'\)[\s\S]{0,400}link\.click\(\)/);
 });
 
 test("flujo posterior: Organización muestra la transcripción antes de organizar", () => {
   assert.match(html, /id="organizeCase"[^>]*>Organización<\/button>/);
+  assert.match(html, /id="organizeCaseTimer"[^>]*>00:00 · Recorrido manual<\/p>/);
   assert.match(html, /id="organizeTranscript"[^>]*>Organizar información clínica<\/button>/);
+  assert.match(html, /id="organizationProcessTimer"[^>]*>00:00 · Listo para organizar<\/p>/);
   assert.match(client, /organizeCase'\)\?\.addEventListener\('click', openTranscriptForOrganization\)/);
   assert.match(client, /document\.body\.classList\.remove\('transcription-actions-only'\)/);
   assert.match(client, /organizeTranscript'\)\?\.addEventListener\('click', \(\) => analyzeWithBackend\('review'\)\)/);
