@@ -232,12 +232,19 @@
     return `mailto:${EMAIL_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
+  function triggerReportEmail(mailto) {
+    const link = document.createElement('a');
+    link.href = mailto;
+    link.style.display = 'none';
+    link.setAttribute('aria-hidden', 'true');
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }
+
   function openReportEmail(text) {
     const mailto = createReportMailto(text);
-
-    // Navegar la pestaña actual al esquema mailto funciona de forma más fiable
-    // en Safari/iOS que un clic sintético creado después de una petición asíncrona.
-    window.location.assign(mailto);
+    triggerReportEmail(mailto);
     return mailto;
   }
 
@@ -257,8 +264,8 @@
     }
     setHint('Abriendo el correo institucional y destruyendo la sesión local…');
 
-    destroyEphemeralSession({ reload: false });
     openReportEmail(text);
+    destroyEphemeralSession();
   }
 
   function sendClinicalReportDirect(rawText) {
@@ -279,8 +286,8 @@
       directButton.textContent = 'Abrir correo';
     }
     setHint(`Informe generado · abriendo correo para ${EMAIL_RECIPIENT}`);
-    destroyEphemeralSession({ reload: false });
-    window.location.assign(pendingDirectMailto);
+    triggerReportEmail(pendingDirectMailto);
+    destroyEphemeralSession();
     return true;
   }
 
@@ -297,7 +304,7 @@
     if (directRetry && pendingDirectMailto) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      window.location.assign(pendingDirectMailto);
+      triggerReportEmail(pendingDirectMailto);
       return;
     }
 

@@ -52,6 +52,7 @@ test("V0.5.6 privacidad: el cierre destruye el estado local y abre el mailto ins
   assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENT\}/);
   assert.match(validationJs, /EMAIL_RECIPIENT = 'joseluis\.matesanz@salud-juntaex\.es'/);
   assert.doesNotMatch(validationJs, /gmail\.com|\/api\/send-report/);
-  assert.match(validationJs, /destroyEphemeralSession\(\{ reload: false \}\);\s*openReportEmail\(text\)/);
-  assert.match(validationJs, /window\.location\.assign\(mailto\)/);
+  assert.match(validationJs, /link\.href = mailto[\s\S]*?link\.click\(\)/);
+  assert.match(validationJs, /openReportEmail\(text\);\s*destroyEphemeralSession\(\)/);
+  assert.doesNotMatch(validationJs, /window\.location\.assign\(mailto\)/);
 });

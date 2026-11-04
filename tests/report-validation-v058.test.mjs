@@ -62,7 +62,8 @@ test("V0.5.6 correo: usa solo la cuenta institucional mediante mailto y no llama
   assert.doesNotMatch(validationJs, /jlmatesanzperez@gmail\.com/);
   assert.match(validationJs, /function sendAndDestroy/);
   assert.match(validationJs, /mailto:\$\{EMAIL_RECIPIENT\}/);
-  assert.match(validationJs, /window\.location\.assign\(mailto\)/);
+  assert.match(validationJs, /function triggerReportEmail/);
+  assert.match(validationJs, /link\.click\(\)/);
   assert.doesNotMatch(validationJs, /\/api\/send-report|RESEND_API_KEY/);
 });
 
@@ -70,7 +71,7 @@ test("V0.5.6 correo: entrega el mailto y destruye inmediatamente el estado clín
   assert.match(validationJs, /function destroyEphemeralSession/);
   assert.match(validationJs, /reportEditor\.replaceChildren\(\)/);
   assert.match(validationJs, /field\.value = ''/);
-  assert.match(validationJs, /destroyEphemeralSession\(\{ reload: false \}\);\s*openReportEmail\(text\)/);
+  assert.match(validationJs, /openReportEmail\(text\);\s*destroyEphemeralSession\(\)/);
   assert.match(validationJs, /window\.location\.replace/);
 });
 
@@ -79,7 +80,7 @@ test("V0.5.6 correo directo: autovalida, abre Mail y conserva un reintento visib
   assert.match(validationJs, /validateReport\(\)/);
   assert.match(validationJs, /pendingDirectMailto = createReportMailto\(validatedText\)/);
   assert.match(validationJs, /directButton\.dataset\.directMailReady = 'true'/);
-  assert.match(validationJs, /window\.location\.assign\(pendingDirectMailto\)/);
+  assert.match(validationJs, /triggerReportEmail\(pendingDirectMailto\);\s*destroyEphemeralSession\(\)/);
   assert.match(validationJs, /#analyzeCase\[data-direct-mail-ready="true"\]/);
 });
 
@@ -92,6 +93,6 @@ test("privacidad: la portada informa del resultado sin exponer documentación t�
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
   assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20261103-post-transcription-1/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20261104-direct-email-1/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });

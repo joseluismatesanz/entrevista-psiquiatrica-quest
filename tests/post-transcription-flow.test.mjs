@@ -16,11 +16,10 @@ test("flujo posterior: Informe genera y abre directamente el correo", () => {
   assert.match(client, /document\.body\.classList\.add\('transcription-actions-only'\)/);
   assert.match(client, /window\.sendClinicalReportDirect\(payload\.report\)/);
   assert.match(validation, /window\.sendClinicalReportDirect = sendClinicalReportDirect/);
-  assert.match(validation, /function sendClinicalReportDirect[\s\S]*?validateReport\(\)[\s\S]*?destroyEphemeralSession\(\{ reload: false \}\)[\s\S]*?window\.location\.assign\(pendingDirectMailto\)/);
+  assert.match(validation, /function sendClinicalReportDirect[\s\S]*?validateReport\(\)[\s\S]*?triggerReportEmail\(pendingDirectMailto\);\s*destroyEphemeralSession\(\)/);
   assert.match(validation, /mailto:\$\{EMAIL_RECIPIENT\}/);
-  assert.match(validation, /window\.location\.assign\(mailto\)/);
+  assert.match(validation, /document\.createElement\('a'\)[\s\S]{0,400}link\.click\(\)/);
   assert.match(validation, /data-direct-mail-ready/);
-  assert.doesNotMatch(validation, /document\.createElement\('a'\)[\s\S]{0,400}link\.click\(\)/);
 });
 
 test("flujo posterior: Organización muestra la transcripción antes de organizar", () => {
