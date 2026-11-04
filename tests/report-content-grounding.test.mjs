@@ -54,9 +54,11 @@ test("informe: la presentación del psiquiatra nunca aparece en plan terapéutic
     "PSIQUIATRA: Buenas noches, mi nombre es XXXXXXXXXXX, soy psiquiatra y voy a valorar toda la información médica que tiene.\nPSIQUIATRA: Se aumenta sertralina a 100 mg por la mañana.",
   );
 
-  assert.equal(result.assessment.sections.plan_terapeutico.text, "Aumentar sertralina a 100 mg por la mañana.");
+  assert.equal(result.assessment.sections.plan_terapeutico.text, "");
+  assert.equal(result.assessment.sections.plan_terapeutico.evidence_status, "not_provided");
   assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /buenas noches|mi nombre|soy psiquiatra|voy a valorar/i);
   assert.ok(result.warnings.includes("report_clinician_introduction_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_medication_regimen_pruned_from_plan"));
 });
 
 test("Informe: conserva una negación de autolesiones cuando la paciente la expresa de forma específica", () => {
@@ -112,10 +114,11 @@ test("V0.6 informe: elimina frases metadiscursivas de ausencia de MSE y plan", (
   );
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "Sertralina 50 mg por la mañana.",
+    "",
   );
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_medication_regimen_pruned_from_plan"));
 });
 
 test("V0.6 informe: elimina 'no se dispone de una exploración psicopatológica completa'", () => {
@@ -233,12 +236,12 @@ test("V0.6 informe: limpia las nuevas variantes metadiscursivas de sociofamiliar
   );
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "El psiquiatra indica la pauta de sertralina, clonazepam de rescate y mirtazapina nocturna",
+    "",
   );
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_sociofamily"));
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
-  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_medication_regimen_pruned_from_plan"));
 });
 
 test("V0.6 informe: limpia las variantes del informe tras la nueva prueba completa", () => {
@@ -290,13 +293,13 @@ test("V0.6 informe: limpia las variantes del informe tras la nueva prueba comple
   );
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "Se indica sertralina 50 mg por la mañana, en una sola dosis con el desayuno. Se prescribe Rivotril (clonazepam) 0,5 mg como medicación de rescate durante el día cuando aparezca ansiedad. Se indica mirtazapina 15 mg por la noche antes de dormir.",
+    "",
   );
   assert.ok(result.warnings.includes("report_family_self_symptoms_pruned_from_sociofamily"));
   assert.ok(result.warnings.includes("report_family_self_symptoms_pruned_from_current_illness"));
   assert.ok(result.warnings.includes("report_unsupported_habitual_medication_pruned_from_current_illness"));
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
-  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_medication_regimen_pruned_from_plan"));
 });
 
 test("V0.6 informe: limpia la contaminación madre-paciente observada tras la regresión", () => {
@@ -427,7 +430,7 @@ test("V0.6 informe: normaliza la referencia indirecta a una próxima visita", ()
 
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "Sertralina 50 mg por la mañana. Seguimiento en próxima consulta.",
+    "Seguimiento en próxima consulta.",
   );
   assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
 });
@@ -457,7 +460,7 @@ test("V0.6 informe: limpia las variantes de metatexto visibles en exploración y
   );
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "Sertralina 50 mg por la mañana. Seguimiento en próxima consulta.",
+    "Seguimiento en próxima consulta.",
   );
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_mse"));
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
@@ -573,10 +576,11 @@ test("V0.6 informe: limpia los dos restos detectados al verificar el Preview", (
   );
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "Se indica sertralina 50 mg por la mañana, clonazepam 0,5 mg de rescate durante el día si aparece ansiedad y mirtazapina 15 mg por la noche.",
+    "",
   );
   assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_medication_regimen_pruned_from_plan"));
 });
 
 test("V0.6 informe: limpia variantes plurales y colaterales del Preview final", () => {
@@ -680,11 +684,11 @@ test("V0.6 informe: limpia el nuevo metatexto sociofamiliar y la medicación noc
   assert.equal(result.assessment.sections.situacion_sociofamiliar.evidence_status, "insufficient");
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "Se indica sertralina 50 mg por la mañana, clonazepam 0,5 mg como rescate y «clatipina» 15 mg antes de dormir. Seguimiento en próxima consulta.",
+    "Seguimiento en próxima consulta.",
   );
   assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /identificada|discurso|transcripci[oó]n/i);
   assert.ok(result.warnings.includes("report_meta_absence_pruned_from_sociofamily"));
-  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_medication_regimen_pruned_from_plan"));
 });
 
 test("V0.6 informe: elimina 'el resto de dominios' detectado en la prueba del Preview", () => {
@@ -734,10 +738,10 @@ test("V0.6 informe: la medicación propia de la madre no se convierte en anteced
   assert.doesNotMatch(familyHistory.text, /lorazepam|sertralina|corresponde|establece/i);
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "Se propone sertralina 50 mg por la mañana; clonazepam, 0,5 mg de rescate; y mirtazapina 15 mg antes de dormir.",
+    "",
   );
   assert.ok(result.warnings.includes("report_family_self_medication_pruned_from_family_psychiatric_history"));
-  assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
+  assert.ok(result.warnings.includes("report_medication_regimen_pruned_from_plan"));
 });
 
 test("V0.6 informe: conserva un antecedente familiar psiquiátrico explícito aunque incluya medicación", () => {
@@ -795,7 +799,7 @@ test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaj
   );
   assert.equal(
     result.assessment.sections.plan_terapeutico.text,
-    "sertralina 50 mg por la mañana, en una sola dosis con el desayuno; clonazepam 0,5 mg durante el día como medicación de rescate ante ansiedad; y «catapina», 5 mg antes de dormir. Seguimiento en próxima consulta.",
+    "Seguimiento en próxima consulta.",
   );
   assert.doesNotMatch(result.assessment.sections.plan_terapeutico.text, /transcripci[oó]n|principio activo|mencionado|sin fecha/i);
   assert.ok(result.warnings.includes("report_current_treatment_plan_pruned_from_current_illness"));

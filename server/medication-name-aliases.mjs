@@ -87,6 +87,7 @@ export const MEDICATION_NAME_ALIASES = [
 ];
 
 export const PSYCHIATRIC_MEDICATION_VOCABULARY = [
+  "melatonina",
   "sertralina",
   "mirtazapina",
   "lorazepam",

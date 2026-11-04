@@ -59,7 +59,7 @@ const NO_CURRENT_MEDICATION_PATTERN = /\b(?:no\s+(?:tomo|toma|estoy\s+tomando|es
 const MEDICATION_NOUN_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?)\b/i;
 const HABITUAL_CONFIRMATION_PATTERN = /\b(?:toma|tomando|tratamiento|medicacion|medicación|pauta)\b/i;
 const AFFIRMATIVE_RESPONSE_PATTERN = /^\s*(?:s[ií]|correcto|exacto|eso\s+es|as[ií]\s+es|de\s+acuerdo|vale)(?:\b|[.,;:])/i;
-const COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN = /\b(?:(?:sustituir|sustituimos|sustituyo|cambiar|cambiamos|cambio)\s+(?:(?:por\s+completo|completamente)\s+)?(?:la\s+|el\s+|toda\s+la\s+|todo\s+el\s+)?(?:pauta|tratamiento|medicacion)\s+(?:previa|anterior|vigente|actual)\s+por\b|(?:retirar|retiramos|retiro|suspender|suspendemos|suspendo)\s+(?:por\s+completo\s+|completamente\s+|toda\s+la\s+|todo\s+el\s+)(?:pauta|tratamiento|medicacion)(?:\s+(?:previa|anterior|vigente|actual))?)\b/i;
+const COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN = /\b(?:(?:sustituir|sustituimos|sustituyo|cambiar|cambiamos|cambio)\s+(?:(?:por\s+completo|completamente)\s+)?(?:la\s+|el\s+|su\s+|toda\s+la\s+|todo\s+el\s+)?(?:pauta|tratamiento|medicacion)(?:\s+(?:previa|anterior|vigente|actual|que\s+(?:toma|esta\s+tomando|llevaba)))?(?=\s+(?:por|y|para|porque)\b|[,.]|$)|(?:retirar|retiramos|retiro|suspender|suspendemos|suspendo)\s+(?:por\s+completo\s+|completamente\s+|toda\s+la\s+|todo\s+el\s+)(?:pauta|tratamiento|medicacion)(?:\s+(?:previa|anterior|vigente|actual))?)\b/i;
 
 function speakerLines(transcript) {
   return String(transcript || "")
@@ -152,8 +152,8 @@ function nextNonPsychiatristLine(lines, line) {
   return null;
 }
 
-function clinicianConfirmedPreexistingMedication(lines, line, med, cutoffIndex) {
-  if (line?.speaker !== "PSIQUIATRA" || line.index >= cutoffIndex || !lineMentionsMedication(line, med)) return false;
+function clinicianConfirmedPreexistingMedication(lines, line, med) {
+  if (line?.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
   const text = normalize(line.text);
   if (CLINICIAN_PRESCRIPTION_PATTERN.test(text) || CLINICIAN_DISCONTINUATION_PATTERN.test(text)) return false;
   const asksForConfirmation = /[?¿]/.test(line.text)
@@ -161,6 +161,28 @@ function clinicianConfirmedPreexistingMedication(lines, line, med, cutoffIndex) 
   if (!asksForConfirmation || !HABITUAL_CONFIRMATION_PATTERN.test(text)) return false;
   const answer = nextNonPsychiatristLine(lines, line);
   return Boolean(answer && AFFIRMATIVE_RESPONSE_PATTERN.test(normalize(answer.text)));
+}
+
+function isExplicitHabitualMedicationAnswer(lines, line) {
+  const text = normalize(line?.text);
+  const previous = previousSpeakerLine(lines, line);
+
+  if (line?.speaker === "PACIENTE") {
+    if (NO_CURRENT_MEDICATION_PATTERN.test(text) || isFamilySelfMedicationLine(lines, line)) return false;
+    return previous?.speaker === "PSIQUIATRA"
+      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text));
+  }
+
+  if (FAMILY_SPEAKER_LABELS.has(line?.speaker)) {
+    if (NO_CURRENT_MEDICATION_PATTERN.test(text) || isFamilySelfMedicationLine(lines, line)) return false;
+    return COLLATERAL_PATIENT_MEDICATION_PATTERN.test(text)
+      && previous?.speaker === "PSIQUIATRA"
+      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text));
+  }
+
+  if (line?.speaker !== "PSIQUIATRA") return false;
+  if (!HABITUAL_MEDICATION_QUESTION_PATTERN.test(text)) return false;
+  return Boolean(nextNonPsychiatristLine(lines, line)?.text.match(AFFIRMATIVE_RESPONSE_PATTERN));
 }
 
 function titleCaseMedication(value) {
@@ -253,11 +275,14 @@ function recoverHabitualMedicationFromPreconsultTranscript(assessment, transcrip
   const current = Array.isArray(assessment.medications?.current) ? assessment.medications.current : [];
 
   for (const line of lines) {
-    if (line.index >= planAnchorIndex) continue;
     const previous = previousSpeakerLine(lines, line);
+    const explicitHabitualAnswer = isExplicitHabitualMedicationAnswer(lines, line);
+    if (line.index >= planAnchorIndex && !explicitHabitualAnswer) continue;
     const patientMedicationAnswer = line.speaker === "PACIENTE"
       && !isFamilySelfMedicationLine(lines, line)
       && (
+        explicitHabitualAnswer
+        ||
         /\b(?:tomo|tomando|tratamiento|medicacion|medicación|pauta|pastillas?)\b/i.test(normalize(line.text))
         || (previous?.speaker === "PSIQUIATRA" && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text)))
       );
@@ -363,7 +388,7 @@ function medicationFromPriorSubstitutionPhrase(phrase, sourceIds = []) {
     .replace(/\s+(?:de|en|por)\s+la\s*$/i, "")
     .trim();
   if (!rawName || rawName.split(/\s+/).length > 4) return null;
-  if (/^(?:(?:la|el|toda\s+la|todo\s+el)\s+)?(?:pauta|tratamiento|medicacion)\s+(?:previa|anterior|vigente|actual)$/i.test(normalize(rawName))) {
+  if (/^(?:(?:la|el|su|toda\s+la|todo\s+el)\s+)?(?:pauta|tratamiento|medicacion)\s+(?:previ[oa]|anterior|vigente|actual)$/i.test(normalize(rawName))) {
     return null;
   }
   return {
@@ -422,8 +447,9 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
 
   const hasHabitualPatientEvidence = (med) => lines.some((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
-    if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
-    if (clinicianConfirmedPreexistingMedication(lines, line, med, medicationPlanIndex)) return true;
+    if (!lineMentionsMedication(line, med)) return false;
+    if (line.index >= medicationPlanIndex && !isExplicitHabitualMedicationAnswer(lines, line)) return false;
+    if (clinicianConfirmedPreexistingMedication(lines, line, med)) return true;
     if (line.speaker === "PACIENTE") return !isFamilySelfMedicationLine(lines, line);
     if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
       const text = normalize(line.text);
@@ -435,8 +461,9 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
 
   const habitualPatientEvidenceLine = (med) => lines.find((line) => {
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
-    if (line.index >= medicationPlanIndex || !lineMentionsMedication(line, med)) return false;
-    if (clinicianConfirmedPreexistingMedication(lines, line, med, medicationPlanIndex)) return true;
+    if (!lineMentionsMedication(line, med)) return false;
+    if (line.index >= medicationPlanIndex && !isExplicitHabitualMedicationAnswer(lines, line)) return false;
+    if (clinicianConfirmedPreexistingMedication(lines, line, med)) return true;
     if (line.speaker === "PACIENTE") return !isFamilySelfMedicationLine(lines, line);
     if (!FAMILY_SPEAKER_LABELS.has(line.speaker)) return false;
     const text = normalize(line.text);
@@ -701,6 +728,10 @@ function inferMedicationTemporality(transcript, rawName) {
 }
 
 function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
+  if (isExplicitHabitualMedicationAnswer(lines, line)) {
+    if (med) return lineMentionsMedication(line, med);
+    return medicationNamesInText(line.text).length > 0;
+  }
   const explicitPriorDoseChange = line.speaker === "PSIQUIATRA"
     && CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
     && (med
@@ -711,7 +742,7 @@ function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
   if (med && !lineMentionsMedication(line, med)) return false;
   if (isFamilySelfMedicationLine(lines, line)) return false;
 
-  if (med && clinicianConfirmedPreexistingMedication(lines, line, med, planAnchorIndex)) {
+  if (med && clinicianConfirmedPreexistingMedication(lines, line, med)) {
     return true;
   }
 

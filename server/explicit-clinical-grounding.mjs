@@ -128,19 +128,29 @@ function groundExplicitNegativeSubstanceUse(assessment, transcript, warnings) {
 }
 
 function groundMedicationChangeEncounter(assessment, transcript, warnings) {
-  const line = speakerLines(transcript).find((item) => {
+  const lines = speakerLines(transcript);
+  const explicitUpdateLine = lines.find((item) => {
     const text = normalize(item.text);
-    return /\b(?:cambiar|cambio|modificar|modificacion|adaptar|adaptacion|ajustar|ajuste|revisar)\b/i.test(text)
+    return /\b(?:actualizacion|actualizar|revision|revisar)\b/i.test(text)
+      && /\b(?:tratamiento|medicacion|farmacolog|psicofarmacolog)\b/i.test(text);
+  });
+  const line = explicitUpdateLine || lines.find((item) => {
+    const text = normalize(item.text);
+    return /\b(?:cambiar|cambio|modificar|modificacion|adaptar|adaptacion|ajustar|ajuste|revisar|actualizar|actualizacion)\b/i.test(text)
       && /\b(?:tratamiento|medicacion|farmacolog|psicofarmacolog)\b/i.test(text);
   });
   if (!line) return;
   const sourceId = sourceIdForLine(assessment, line);
   const motive = assessment.sections?.motivo_consulta;
-  if (motive && !(motive.evidence_status === "supported" && clean(motive.text))) {
-    motive.text = "Valoración para modificación del tratamiento farmacológico.";
+  if (motive && (explicitUpdateLine || !(motive.evidence_status === "supported" && clean(motive.text)))) {
+    motive.text = explicitUpdateLine
+      ? "Actualización del tratamiento farmacológico."
+      : "Valoración para modificación del tratamiento farmacológico.";
     motive.evidence_status = "supported";
     motive.source_ids = sourceId ? [sourceId] : [];
-    warnings.push("medication_change_motive_recovered");
+    warnings.push(explicitUpdateLine
+      ? "medication_update_motive_canonicalized"
+      : "medication_change_motive_recovered");
   }
   const current = assessment.sections?.enfermedad_actual;
   if (current && !(current.evidence_status === "supported" && clean(current.text))) {

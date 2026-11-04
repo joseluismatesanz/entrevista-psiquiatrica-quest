@@ -214,6 +214,152 @@ function pruneCurrentTreatmentPlanFromIllness(section, warnings) {
   warnings.push("report_current_treatment_plan_pruned_from_current_illness");
 }
 
+function clinicalContentWords(value) {
+  const ignored = new Set([
+    "ante", "como", "con", "del", "desde", "durante", "esta", "este", "para", "pero",
+    "por", "que", "sin", "una", "uno", "unos", "unas", "y", "se", "la", "el", "los", "las",
+  ]);
+  return normalize(value)
+    .match(/[a-z0-9]+/g)?.filter((word) => word.length >= 4 && !ignored.has(word)) || [];
+}
+
+function contentAlreadyCovered(existingText, candidate) {
+  const candidateWords = [...new Set(clinicalContentWords(candidate))];
+  if (!candidateWords.length) return normalize(existingText).includes(normalize(candidate));
+  const existing = new Set(clinicalContentWords(existingText));
+  const overlap = candidateWords.filter((word) => existing.has(word)).length / candidateWords.length;
+  return overlap >= 0.65;
+}
+
+function appendUniqueClinicalContent(section, candidates, sourceIds = []) {
+  if (!section || !candidates.length) return;
+  const retained = [];
+  let combined = String(section.text || "").trim();
+  for (const candidate of candidates) {
+    if (contentAlreadyCovered(combined, candidate)) continue;
+    retained.push(candidate);
+    combined = [combined, candidate].filter(Boolean).join(" ").trim();
+  }
+  if (!retained.length) return;
+  section.text = combined;
+  section.evidence_status = "supported";
+  section.source_ids = [...new Set([...(section.source_ids || []), ...sourceIds])];
+}
+
+const MSE_CONTENT_PATTERN = /\b(?:vigil|orientad[oa]|desorientad[oa]|centrad[oa]\s+en\s+la\s+conversacion|comunicacion\s+adecuada|discurso|lenguaje|psicomotric|sintomatologia\s+psicotica|clinica\s+psicotica|alucin|delir|biorritmos?|ideacion\s+(?:de\s+muerte|autolitica)|planificacion\s+autolitica|autoagresiv|heteroagresiv|conciencia\s+de\s+enfermedad|insight|juicio\s+de\s+realidad|autocontencion|desbordamiento\s+vital)\b/i;
+const MSE_BLOCK_START_PATTERN = /\b(?:durante\s+(?:la\s+)?(?:entrevista|valoracion|exploracion)|en\s+(?:la\s+)?(?:entrevista|valoracion|exploracion)|a\s+la\s+exploracion)\b/i;
+
+function routeMseContentOutOfCurrentIllness(currentIllness, mse, warnings) {
+  if (!currentIllness?.text || !mse) return;
+  const sentences = splitSentences(currentIllness.text);
+  let inMseBlock = false;
+  const moved = [];
+  for (const sentence of sentences) {
+    const text = normalize(sentence);
+    const startsMseBlock = MSE_BLOCK_START_PATTERN.test(text) && MSE_CONTENT_PATTERN.test(text);
+    if (startsMseBlock) inMseBlock = true;
+    if (inMseBlock && MSE_CONTENT_PATTERN.test(text)) {
+      moved.push(sentence);
+      continue;
+    }
+    inMseBlock = false;
+  }
+  if (!moved.length) return;
+
+  const sourceIds = [...(currentIllness.source_ids || [])];
+  currentIllness.text = sentences.filter((sentence) => !moved.includes(sentence)).join(" ").trim();
+  if (!currentIllness.text) {
+    currentIllness.evidence_status = "not_provided";
+    currentIllness.source_ids = [];
+  }
+  appendUniqueClinicalContent(mse, moved, sourceIds);
+  warnings.push("report_mse_content_routed_out_of_current_illness");
+}
+
+const PLAN_CONTENT_PATTERN = /\b(?:(?:se\s+)?(?:decide|indica|propone|acuerda|prescribe|inicia|anade|retira|suspende|sustituye|modifica|ajusta|deriva|ingresa)|mantener|permanecer|permanencia|observacion|seguimiento|reevaluacion|alta\s+clinica)\b/i;
+
+function routePlanContentOutOfCurrentIllness(currentIllness, plan, warnings) {
+  if (!currentIllness?.text || !plan) return;
+  const sentences = splitSentences(currentIllness.text);
+  const moved = sentences.filter((sentence) => PLAN_CONTENT_PATTERN.test(normalize(sentence)));
+  if (!moved.length) return;
+
+  const sourceIds = [...(currentIllness.source_ids || [])];
+  currentIllness.text = sentences.filter((sentence) => !moved.includes(sentence)).join(" ").trim();
+  if (!currentIllness.text) {
+    currentIllness.evidence_status = "not_provided";
+    currentIllness.source_ids = [];
+  }
+  appendUniqueClinicalContent(plan, moved, sourceIds);
+  warnings.push("report_plan_content_routed_out_of_current_illness");
+  warnings.push("report_current_treatment_plan_pruned_from_current_illness");
+}
+
+const MEDICATION_PLAN_ACTION_PATTERN = /\b(?:iniciar|inicio|introducir|anadir|anade|pautar|pauta|prescribir|prescribe|indicar|indica|retirar|retira|suspender|suspende|sustituir|sustituye|cambiar|cambia|aumentar|aumenta|subir|sube|reducir|reduce|bajar|baja|modificar|modifica|ajustar|ajusta|revisar|revisa|mantener|mantiene)\b/i;
+const MEDICATION_PLAN_NOUN_PATTERN = /\b(?:tratamiento|medicacion|farmacolog|psicofarmacolog|farmaco|pauta|tomar(?:la|lo|las|los)?)\b/i;
+const NONMEDICAL_PLAN_CONTINUATION_PATTERN = /\b(?:mantener|permanecer|permanencia|continuar|observacion|ingreso|seguimiento|reevaluar|reevaluacion|valorar|realizar|solicitar|derivar|alta|vigilancia|medidas)\b/i;
+
+function medicationNamesFromAssessment(assessment) {
+  return [...new Set(["habitual", "current"].flatMap((group) =>
+    (assessment.medications?.[group] || []).flatMap((medication) => [
+      medication?.raw_name,
+      medication?.display_name,
+      ...(medication?.medication_verification?.activeIngredients || []),
+    ])
+  ).map(normalize).filter((name) => name.length >= 4))];
+}
+
+function splitPlanMedicationClauses(sentence) {
+  return String(sentence || "")
+    .split(/\s*;\s*|\s*,\s+(?=(?:y\s+)?(?:mantener|permanecer|continuar|observaci[oó]n|ingreso|seguimiento|reevaluar|reevaluaci[oó]n|valorar|realizar|solicitar|derivar|alta|vigilancia|medidas)\b)|\s+y\s+(?=(?:mantener|permanecer|continuar|observaci[oó]n|ingreso|seguimiento|reevaluar|reevaluaci[oó]n|valorar|realizar|solicitar|derivar|alta|vigilancia|medidas)\b)/i)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+}
+
+function isMedicationPlanClause(clause, medicationNames) {
+  const text = normalize(clause);
+  const mentionsKnownMedication = medicationNames.some((name) => text.includes(name));
+  const includesDose = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b/i.test(text);
+  const genericMedicationAction = MEDICATION_PLAN_ACTION_PATTERN.test(text)
+    && MEDICATION_PLAN_NOUN_PATTERN.test(text)
+    && !(/^mantener\b/i.test(text) && NONMEDICAL_PLAN_CONTINUATION_PATTERN.test(text.replace(/^mantener\b/i, "")));
+  return mentionsKnownMedication || includesDose || genericMedicationAction;
+}
+
+function pruneMedicationRegimenFromPlan(section, assessment, warnings) {
+  if (!section?.text) return;
+  let changed = false;
+  const medicationNames = medicationNamesFromAssessment(assessment);
+  const retained = [];
+
+  for (const sentence of splitSentences(section.text)) {
+    const clauses = isMedicationPlanClause(sentence, medicationNames)
+      ? splitPlanMedicationClauses(sentence)
+      : [sentence];
+    const kept = clauses.filter((clause) => {
+      const remove = isMedicationPlanClause(clause, medicationNames);
+      if (remove) changed = true;
+      return !remove;
+    });
+    for (const clause of kept) {
+      const cleanClause = clause
+        .replace(/^(?:y|e)\s+/i, "")
+        .replace(/^([a-záéíóúñ])/, (letter) => letter.toUpperCase())
+        .replace(/[.!?]+$/, "")
+        .trim();
+      if (cleanClause) retained.push(`${cleanClause}.`);
+    }
+  }
+
+  if (!changed) return;
+  section.text = retained.join(" ").trim();
+  if (!section.text) {
+    section.evidence_status = "not_provided";
+    section.source_ids = [];
+  }
+  warnings.push("report_medication_regimen_pruned_from_plan");
+}
+
 function cleanClinicalMetaPhrasing(section, warnings, warningCode) {
   if (!section?.text) return;
   const original = section.text;
@@ -385,6 +531,18 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     warnings,
   );
 
+  routeMseContentOutOfCurrentIllness(
+    assessment.sections?.enfermedad_actual,
+    assessment.sections?.exploracion_psicopatologica,
+    warnings,
+  );
+
+  routePlanContentOutOfCurrentIllness(
+    assessment.sections?.enfermedad_actual,
+    assessment.sections?.plan_terapeutico,
+    warnings,
+  );
+
   pruneCurrentTreatmentPlanFromIllness(
     assessment.sections?.enfermedad_actual,
     warnings,
@@ -450,6 +608,12 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
 
   pruneClinicianIntroductionFromPlan(
     assessment.sections?.plan_terapeutico,
+    warnings,
+  );
+
+  pruneMedicationRegimenFromPlan(
+    assessment.sections?.plan_terapeutico,
+    assessment,
     warnings,
   );
 

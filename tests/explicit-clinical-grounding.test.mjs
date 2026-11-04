@@ -134,3 +134,73 @@ test("ADELANTO integración: corrige el caso real de aumento de sertralina y mir
   assert.match(revisado, /Mirtazapina 30 mg: 0 - 0 - 1/);
   assert.doesNotMatch(plan, /buenas noches|mi nombre|soy psiquiatra|voy a valorar/i);
 });
+
+test("ADELANTO integración: separa actualización, pauta vigente, pauta revisada y evita duplicidades", async () => {
+  const modelOutput = fixture();
+  const medication = (raw_name, dose, schedule, source = "psy") => ({
+    raw_name, display_name: raw_name, active_ingredient_known: true, role: "psychiatric",
+    dose, schedule, route: "oral", prn: false, adherence_status: "unknown",
+    adherence_text: "", status: "active", source_ids: [source],
+  });
+
+  modelOutput.sections.motivo_consulta = section("Adaptación de la medicación.", "supported", ["psy"]);
+  modelOutput.sections.enfermedad_actual = section(
+    "Acude para adaptación farmacológica. Durante la entrevista permanece vigil, orientado y centrado en la conversación, con comunicación adecuada. No presenta sintomatología psicótica, alteraciones de los biorritmos, pensamientos intrusivos de muerte, ideación o planificación autolítica ni autoagresividad. Se aprecia poca conciencia de enfermedad y cierto desbordamiento vital. Se decide sustituir el tratamiento previo y mantener observación hasta el día siguiente para valorar tolerancia, respuesta y evolución nocturna.",
+    "supported",
+    ["pat", "psy"],
+  );
+  modelOutput.sections.exploracion_psicopatologica = section(
+    "Vigil y orientado, centrado en la conversación. Comunicación adecuada. Sin sintomatología psicótica. Biorritmos conservados. Sin pensamientos intrusivos de muerte, ideación o planificación autolítica ni autoagresividad. Poca conciencia de enfermedad y cierto desbordamiento vital.",
+    "supported",
+    ["pat", "psy"],
+  );
+  modelOutput.sections.plan_terapeutico = section(
+    "Sustituir el tratamiento previo por duloxetina 60 mg por la mañana, mirtazapina 30 mg por la noche y clonazepam 0,5 mg por la mañana. Permanencia en observación hasta el día siguiente para valorar tolerancia, respuesta y evolución nocturna.",
+    "supported",
+    ["psy"],
+  );
+  modelOutput.medications.current = [
+    medication("Melatonina", "1,9 mg", "0 - 0 - 1", "pat"),
+    medication("Fluoxetina", "20 mg", "1 - 1 - 0", "pat"),
+    medication("Lorazepam", "2 mg", "0 - 0 - 1", "pat"),
+    medication("Duloxetina", "60 mg", "1 - 0 - 0"),
+    medication("Mirtazapina", "30 mg", "0 - 0 - 1"),
+    medication("Clonazepam (Rivotril)", "0,5 mg", "1 - 0 - 0"),
+  ];
+
+  const client = { responses: { async create() { return { status: "completed", output: [], output_text: JSON.stringify(modelOutput) }; } } };
+  const transcript = [
+    "PSIQUIATRA: El motivo de hoy es realizar una actualización del tratamiento farmacológico.",
+    "PSIQUIATRA: Vamos a cambiar por completo el tratamiento vigente.",
+    "PSIQUIATRA: ¿Qué tratamiento está tomando ahora mismo, antes del cambio?",
+    "PACIENTE: Melatonina 1,9 mg por la noche, fluoxetina 20 mg por la mañana y al mediodía y lorazepam 2 mg por la noche.",
+    "PSIQUIATRA: A partir de hoy tome duloxetina 60 mg por la mañana, mirtazapina 30 mg por la noche y clonazepam, Rivotril, 0,5 mg por la mañana.",
+    "PSIQUIATRA: Permanecerá en observación hasta mañana para valorar tolerancia y evolución nocturna.",
+    "PSIQUIATRA: Durante la entrevista permanece vigil, orientado y centrado en la conversación, con comunicación adecuada. No presenta sintomatología psicótica ni ideación autolítica. Se aprecia poca conciencia de enfermedad.",
+  ].join("\n");
+
+  const result = await analyzeTranscript(transcript, { client, model: "test-model" });
+  const report = result.report;
+  const vigente = report.split("TRATAMIENTO VIGENTE\n")[1].split("\n\nENFERMEDAD ACTUAL")[0];
+  const enfermedad = report.split("ENFERMEDAD ACTUAL\n")[1].split("\n\nEXPLORACIÓN PSICOPATOLÓGICA")[0];
+  const exploracion = report.split("EXPLORACIÓN PSICOPATOLÓGICA\n")[1].split("\n\nORIENTACIÓN DIAGNÓSTICA")[0];
+  const plan = report.split("PLAN TERAPÉUTICO\n")[1].split("\n\nTRATAMIENTO REVISADO")[0];
+  const revisado = report.split("TRATAMIENTO REVISADO\n")[1];
+
+  assert.match(report, /MOTIVO DE LA CONSULTA\nActualización del tratamiento farmacológico\./);
+  assert.match(vigente, /Melatonina 1,9 mg: 0 - 0 - 1/);
+  assert.match(vigente, /Fluoxetina 20 mg: 1 - 1 - 0/);
+  assert.match(vigente, /Lorazepam 2 mg: 0 - 0 - 1/);
+  assert.doesNotMatch(vigente, /Duloxetina|Mirtazapina|Clonazepam/);
+
+  assert.match(revisado, /Duloxetina 60 mg: 1 - 0 - 0/);
+  assert.match(revisado, /Mirtazapina 30 mg: 0 - 0 - 1/);
+  assert.match(revisado, /Clonazepam \(Rivotril\) 0,5 mg: 1 - 0 - 0/);
+  assert.doesNotMatch(revisado, /Melatonina|Fluoxetina|Lorazepam/);
+
+  assert.doesNotMatch(enfermedad, /vigil|orientad|psicótica|biorritmos|autolítica|conciencia de enfermedad|observación|sustituir/i);
+  assert.equal((exploracion.match(/\bvigil\b/gi) || []).length, 1);
+  assert.equal((exploracion.match(/\borientado\b/gi) || []).length, 1);
+  assert.match(plan, /Permanencia en observación hasta el día siguiente/);
+  assert.doesNotMatch(plan, /Melatonina|Fluoxetina|Lorazepam|Duloxetina|Mirtazapina|Clonazepam|\bmg\b|sustituir el tratamiento/i);
+});
