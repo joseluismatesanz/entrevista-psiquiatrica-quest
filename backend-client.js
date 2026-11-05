@@ -443,6 +443,7 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || `Error del backend (${response.status})`);
+      if (!String(payload.report || '').trim()) throw new Error('El servidor no devolvió un informe. Puedes reintentar el proceso.');
       if (typeof payload.deidentified_transcript === 'string' && payload.deidentified_transcript.trim()) {
         $('caseText').value = payload.deidentified_transcript;
         $('sessionMessage').textContent = 'Transcripción desidentificada aplicada. Al volver a Entrevista puedes comprobar literalmente la máscara XXXXXXXXXXX y las entidades conservadas.';
@@ -557,6 +558,7 @@
   $('applySpeakerMapping')?.addEventListener('click', applySpeakerMapping);
   $('destroyInput')?.addEventListener('click', () => wipeTransientState());
   $('destroySession')?.addEventListener('click', () => wipeTransientState());
+  window.addEventListener('clinical-session-cleared', () => wipeTransientState('Transcripción y sesión clínica eliminadas.'));
   $('validateCheck')?.addEventListener('change', (event) => { $('copyReport').disabled = !event.target.checked; });
   $('copyReport')?.addEventListener('click', async () => {
     if (!$('validateCheck').checked) return;

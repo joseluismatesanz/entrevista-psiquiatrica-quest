@@ -16,7 +16,7 @@ test("flujo posterior: Informe genera y abre directamente el correo", () => {
   assert.match(client, /document\.body\.classList\.add\('transcription-actions-only'\)/);
   assert.match(client, /window\.sendClinicalReportDirect\(payload\.report\)/);
   assert.match(validation, /window\.sendClinicalReportDirect = sendClinicalReportDirect/);
-  assert.match(validation, /function sendClinicalReportDirect[\s\S]*?validateReport\(\)[\s\S]*?triggerReportEmail\(pendingDirectMailto\);\s*destroyEphemeralSession\(\)/);
+  assert.match(validation, /function sendClinicalReportDirect[\s\S]*?validateReport\(\)[\s\S]*?destroyEphemeralSession\(\{ reload: false \}\)/);
   assert.match(validation, /mailto:\$\{EMAIL_RECIPIENT\}/);
   assert.match(validation, /document\.createElement\('a'\)[\s\S]{0,400}link\.click\(\)/);
   assert.match(validation, /data-direct-mail-ready/);
@@ -31,3 +31,4 @@ test("flujo posterior: Organización muestra la transcripción antes de organiza
   assert.match(client, /document\.body\.classList\.remove\('transcription-actions-only'\)/);
   assert.match(client, /organizeTranscript'\)\?\.addEventListener\('click', \(\) => analyzeWithBackend\('review'\)\)/);
 });
+

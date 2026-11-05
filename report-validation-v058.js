@@ -2,30 +2,7 @@
   const state = { validated: false };
   const EMAIL_RECIPIENT = 'joseluis.matesanz@salud-juntaex.es';
   let pendingDirectMailto = '';
-  let reservedEmailWindow = null;
-  function reserveClinicalEmailLaunch() {
-    if (reservedEmailWindow && !reservedEmailWindow.closed) return true;
-    try {
-      reservedEmailWindow = window.open('about:blank', '_blank');
-      if (reservedEmailWindow) {
-        reservedEmailWindow.document.title = 'Preparando correo';
-        reservedEmailWindow.document.body.textContent = 'Preparando el informe para el correo…';
-        return true;
-      }
-    } catch {}
-    return false;
-  }
-  function cancelClinicalEmailLaunch() {
-    try { if (reservedEmailWindow && !reservedEmailWindow.closed) reservedEmailWindow.close(); } catch {}
-    reservedEmailWindow = null;
-  }
-  function openReservedEmail(mailto) {
-    if (reservedEmailWindow && !reservedEmailWindow.closed) {
-      const target = reservedEmailWindow; reservedEmailWindow = null;
-      try { target.location.href = mailto; return; } catch {}
-    }
-    triggerReportEmail(mailto);
-  }
+  function cancelClinicalEmailLaunch() { /* No se reserva ninguna ventana. */ }
 
   function checkbox() {
     return document.getElementById('validateCheck');
@@ -161,6 +138,7 @@
     if (check) check.checked = false;
     if (copy) copy.disabled = true;
     if (email) email.disabled = true;
+
     if (validate) validate.classList.remove('hidden');
     if (reopen) reopen.classList.add('hidden');
 
@@ -248,6 +226,7 @@
         window.location.replace(cleanUrl);
       }, 900);
     }
+    window.dispatchEvent(new CustomEvent('clinical-session-cleared'));
   }
 
   function createReportMailto(text) {
@@ -310,8 +289,28 @@
       directButton.textContent = 'Abrir correo';
     }
     setHint(`Informe generado · abriendo correo para ${EMAIL_RECIPIENT}`);
-    openReservedEmail(pendingDirectMailto);
-    destroyEphemeralSession();
+    // Borra la entrevista y el estado clínico sin recargar: la recarga destruía
+    // el reintento cuando el navegador rechazaba el protocolo externo.
+    destroyEphemeralSession({ reload: false });
+    const actions = document.getElementById('workflowActions');
+    actions?.classList.remove('hidden');
+    let restart = document.getElementById('newInterviewAfterMail');
+    if (actions && !restart) {
+      restart = document.createElement('button');
+      restart.id = 'newInterviewAfterMail';
+      restart.type = 'button';
+      restart.textContent = 'Nueva entrevista';
+      restart.addEventListener('click', () => {
+        pendingDirectMailto = '';
+        window.location.reload();
+      });
+      actions.append(restart);
+    }
+    const message = document.getElementById('sessionMessage');
+    if (message) message.textContent = 'Informe preparado. Si el correo no se abre, pulsa «Abrir correo». La transcripción ya se ha eliminado. Confirma el envío en tu aplicación de correo.';
+    try { triggerReportEmail(pendingDirectMailto); } catch {
+      if (message) message.textContent = 'El navegador no pudo abrir el correo. Pulsa «Abrir correo» para reintentarlo sin generar de nuevo el informe.';
+    }
     return true;
   }
 
@@ -324,16 +323,14 @@
   }
 
   document.addEventListener('click', (event) => {
-    const reportButton = event.target.closest?.('#analyzeCase');
-    if (reportButton && reportButton.dataset.directMailReady !== 'true' && document.getElementById('caseText')?.value.trim()) reserveClinicalEmailLaunch();
-  }, true);
-
-  document.addEventListener('click', (event) => {
     const directRetry = event.target.closest?.('#analyzeCase[data-direct-mail-ready="true"]');
     if (directRetry && pendingDirectMailto) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      triggerReportEmail(pendingDirectMailto);
+      try { triggerReportEmail(pendingDirectMailto); } catch {
+        const message = document.getElementById('sessionMessage');
+        if (message) message.textContent = 'No se pudo abrir el correo. Comprueba que tienes una aplicación de correo configurada y vuelve a intentarlo.';
+      }
       return;
     }
 
@@ -386,6 +383,7 @@
   });
 
   window.addEventListener('pageshow', resetValidation);
+  window.addEventListener('pagehide', () => { pendingDirectMailto = ''; });
   window.sendClinicalReportDirect = sendClinicalReportDirect;
   window.cancelClinicalEmailLaunch = cancelClinicalEmailLaunch;
   window.resetClinicalReportDirect = resetClinicalReportDirect;

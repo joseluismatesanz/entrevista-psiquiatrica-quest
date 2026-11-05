@@ -648,6 +648,23 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
   );
 
   restoreExplicitRegimenDecision(assessment, transcript);
+  const diagnosis = assessment.sections?.orientacion_diagnostica;
+  const judgment = assessment.diagnostic_judgment;
+  if (/trastorno depresivo mayor/.test(normalize(diagnosis?.text || judgment?.primary_diagnosis))
+    && !/\b(?:episodio unico|primer episodio)\b/.test(normalize(transcript))
+    && /\bepisodio unico\b/.test(normalize(diagnosis?.text || judgment?.primary_diagnosis))) {
+    if (diagnosis) diagnosis.text = diagnosis.text
+      .replace(/,?\s*episodio\s+[uú]nico\s*,?/gi, "")
+      .replace(/\s*(?:CIE-?10|DSM-?5)\s*:[\s\S]*$/i, "")
+      .replace(/\.\s*$/, "") + ". Curso no especificado; codificación pendiente de revisión.";
+    if (judgment) {
+      judgment.primary_diagnosis = String(judgment.primary_diagnosis || "").replace(/,?\s*episodio\s+[uú]nico\s*,?/gi, "");
+      judgment.cie10_code = "";
+      judgment.dsm5_code = "";
+      judgment.requires_clinician_validation = true;
+    }
+    warnings.push("unsupported_single_episode_specifier_removed");
+  }
   return { assessment, warnings };
 }
 

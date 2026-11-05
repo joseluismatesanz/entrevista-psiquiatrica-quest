@@ -1,5 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+
+test('no añade episodio único ni sus códigos si la fuente no especifica el curso', () => {
+  const input = { sections: { orientacion_diagnostica: { text: 'JUICIO CLÍNICO: Trastorno depresivo mayor, episodio único. CIE-10: F32.9. DSM-5: 296.20.', source_ids: [], evidence_status: 'supported' } }, diagnostic_judgment: { primary_diagnosis: 'Trastorno depresivo mayor, episodio único', cie10_code: 'F32.9', dsm5_code: '296.20' } };
+  const result = groundReportContentToTranscript(input, 'PSIQUIATRA: Consta diagnóstico de trastorno depresivo mayor.');
+  assert.doesNotMatch(result.assessment.sections.orientacion_diagnostica.text, /episodio único|F32|296/);
+  assert.equal(result.assessment.diagnostic_judgment.cie10_code, '');
+  const explicit = groundReportContentToTranscript(input, 'PSIQUIATRA: Consta un primer episodio de trastorno depresivo mayor.');
+  assert.match(explicit.assessment.sections.orientacion_diagnostica.text, /episodio único/);
+});
 import { groundReportContentToTranscript } from "../server/report-content-grounding.mjs";
 
 function assessment(overrides = {}) {
@@ -806,3 +815,4 @@ test("V0.6 informe: separa la pauta nueva de enfermedad actual y elimina lenguaj
   assert.ok(result.warnings.includes("report_meta_phrasing_pruned_from_plan"));
   assert.ok(result.warnings.includes("report_collateral_content_pruned_from_mse"));
 });
+

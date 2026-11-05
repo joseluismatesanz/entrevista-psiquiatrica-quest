@@ -80,7 +80,7 @@ test("V0.5.6 correo directo: autovalida, abre Mail y conserva un reintento visib
   assert.match(validationJs, /validateReport\(\)/);
   assert.match(validationJs, /pendingDirectMailto = createReportMailto\(validatedText\)/);
   assert.match(validationJs, /directButton\.dataset\.directMailReady = 'true'/);
-  assert.match(validationJs, /triggerReportEmail\(pendingDirectMailto\);\s*destroyEphemeralSession\(\)/);
+  assert.match(validationJs, /destroyEphemeralSession\(\{ reload: false \}\)/);
   assert.match(validationJs, /#analyzeCase\[data-direct-mail-ready="true"\]/);
 });
 
@@ -93,6 +93,7 @@ test("privacidad: la portada informa del resultado sin exponer documentación t�
 
 test("V0.5.6 validación: index fuerza la carga de esta revisión del script y CSS", () => {
   assert.match(indexHtml, /report-v056\.css\?v=20260909-4/);
-  assert.match(indexHtml, /report-validation-v058\.js\?v=20261104-direct-email-1/);
+  assert.match(indexHtml, /report-validation-v058\.js\?v=20261106-mail-retry-1/);
   assert.doesNotMatch(indexHtml, /report-validation-v057\.js/);
 });
+
