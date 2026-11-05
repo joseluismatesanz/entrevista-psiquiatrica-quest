@@ -2,6 +2,30 @@
   const state = { validated: false };
   const EMAIL_RECIPIENT = 'joseluis.matesanz@salud-juntaex.es';
   let pendingDirectMailto = '';
+  let reservedEmailWindow = null;
+  function reserveClinicalEmailLaunch() {
+    if (reservedEmailWindow && !reservedEmailWindow.closed) return true;
+    try {
+      reservedEmailWindow = window.open('about:blank', '_blank');
+      if (reservedEmailWindow) {
+        reservedEmailWindow.document.title = 'Preparando correo';
+        reservedEmailWindow.document.body.textContent = 'Preparando el informe para el correo…';
+        return true;
+      }
+    } catch {}
+    return false;
+  }
+  function cancelClinicalEmailLaunch() {
+    try { if (reservedEmailWindow && !reservedEmailWindow.closed) reservedEmailWindow.close(); } catch {}
+    reservedEmailWindow = null;
+  }
+  function openReservedEmail(mailto) {
+    if (reservedEmailWindow && !reservedEmailWindow.closed) {
+      const target = reservedEmailWindow; reservedEmailWindow = null;
+      try { target.location.href = mailto; return; } catch {}
+    }
+    triggerReportEmail(mailto);
+  }
 
   function checkbox() {
     return document.getElementById('validateCheck');
@@ -286,7 +310,7 @@
       directButton.textContent = 'Abrir correo';
     }
     setHint(`Informe generado · abriendo correo para ${EMAIL_RECIPIENT}`);
-    triggerReportEmail(pendingDirectMailto);
+    openReservedEmail(pendingDirectMailto);
     destroyEphemeralSession();
     return true;
   }
@@ -298,6 +322,11 @@
     delete directButton.dataset.directMailReady;
     if (directButton.textContent === 'Abrir correo') directButton.textContent = 'Informe';
   }
+
+  document.addEventListener('click', (event) => {
+    const reportButton = event.target.closest?.('#analyzeCase');
+    if (reportButton && reportButton.dataset.directMailReady !== 'true' && document.getElementById('caseText')?.value.trim()) reserveClinicalEmailLaunch();
+  }, true);
 
   document.addEventListener('click', (event) => {
     const directRetry = event.target.closest?.('#analyzeCase[data-direct-mail-ready="true"]');
@@ -358,6 +387,7 @@
 
   window.addEventListener('pageshow', resetValidation);
   window.sendClinicalReportDirect = sendClinicalReportDirect;
+  window.cancelClinicalEmailLaunch = cancelClinicalEmailLaunch;
   window.resetClinicalReportDirect = resetClinicalReportDirect;
   resetValidation();
 })();

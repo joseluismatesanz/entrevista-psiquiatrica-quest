@@ -454,6 +454,7 @@
       if (directEmail) {
         progressTimer.setLabel('Validando el informe automáticamente');
         if (typeof window.sendClinicalReportDirect !== 'function') {
+          window.cancelClinicalEmailLaunch?.();
           progressTimer.finish('Informe creado · envío manual disponible', { error: true });
           showScreen('report');
           $('sessionMessage').textContent = 'El envío directo no está disponible. El informe queda abierto para revisión y envío manual.';
@@ -469,6 +470,7 @@
       $('organizationTranscriptAction')?.classList.add('hidden');
       showScreen(destination === 'review' ? 'review' : 'report');
     } catch (error) {
+      if (directEmail) window.cancelClinicalEmailLaunch?.();
       console.error('Backend analysis failed without logging transcript.', error);
       progressTimer.finish(`Error: ${error.message}`, { error: true });
       $('sessionMessage').textContent = `No se pudo completar el análisis: ${error.message}`;

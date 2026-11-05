@@ -59,6 +59,7 @@ const NO_CURRENT_MEDICATION_PATTERN = /\b(?:no\s+(?:tomo|toma|estoy\s+tomando|es
 const MEDICATION_NOUN_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastillas?)\b/i;
 const HABITUAL_CONFIRMATION_PATTERN = /\b(?:toma|tomando|tratamiento|medicacion|medicación|pauta)\b/i;
 const AFFIRMATIVE_RESPONSE_PATTERN = /^\s*(?:s[ií]|correcto|exacto|eso\s+es|as[ií]\s+es|de\s+acuerdo|vale)(?:\b|[.,;:])/i;
+const EXPLICIT_MEDICATION_REGIMEN_PATTERN = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\s*:?\s*\d+(?:[.,]\d+)?\s*[-–]\s*\d+(?:[.,]\d+)?\s*[-–]\s*\d+(?:[.,]\d+)?\b/i;
 const COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN = /\b(?:(?:sustituir|sustituimos|sustituyo|cambiar|cambiamos|cambio)\s+(?:(?:por\s+completo|completamente)\s+)?(?:la\s+|el\s+|su\s+|toda\s+la\s+|todo\s+el\s+)?(?:pauta|tratamiento|medicacion)(?:\s+(?:previa|anterior|vigente|actual|que\s+(?:toma|esta\s+tomando|llevaba)))?(?=\s+(?:por|y|para|porque)\b|[,.]|$)|(?:retirar|retiramos|retiro|suspender|suspendemos|suspendo)\s+(?:por\s+completo\s+|completamente\s+|toda\s+la\s+|todo\s+el\s+)(?:pauta|tratamiento|medicacion)(?:\s+(?:previa|anterior|vigente|actual))?)\b/i;
 
 function speakerLines(transcript) {
@@ -278,12 +279,17 @@ function recoverHabitualMedicationFromPreconsultTranscript(assessment, transcrip
     const previous = previousSpeakerLine(lines, line);
     const explicitHabitualAnswer = isExplicitHabitualMedicationAnswer(lines, line);
     if (line.index >= planAnchorIndex && !explicitHabitualAnswer) continue;
+    const explicitPreconsultRegimen = line.speaker === "PACIENTE"
+      && line.index < planAnchorIndex
+      && medicationNamesInText(line.text).length > 0
+      && EXPLICIT_MEDICATION_REGIMEN_PATTERN.test(normalize(line.text))
+      && !HISTORICAL_MEDICATION_PATTERN.test(normalize(line.text));
     const patientMedicationAnswer = line.speaker === "PACIENTE"
       && !isFamilySelfMedicationLine(lines, line)
       && (
         explicitHabitualAnswer
-        ||
-        /\b(?:tomo|tomando|tratamiento|medicacion|medicación|pauta|pastillas?)\b/i.test(normalize(line.text))
+        || explicitPreconsultRegimen
+        || /\b(?:tomo|tomando|tratamiento|medicacion|medicación|pauta|pastillas?)\b/i.test(normalize(line.text))
         || (previous?.speaker === "PSIQUIATRA" && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text)))
       );
     const collateralMedicationAnswer = FAMILY_SPEAKER_LABELS.has(line.speaker)
@@ -405,6 +411,20 @@ function medicationFromPriorSubstitutionPhrase(phrase, sourceIds = []) {
     status: "active",
     source_ids: [...new Set(sourceIds)],
   };
+}
+
+function prunePlaceholderMedicationEntities(assessment, warnings) {
+  const placeholder = /^(?:no\s+consta|no\s+explorado|no\s+explorada|ninguno|ninguna|sin\s+tratamiento|sin\s+medicaci[oó]n|no\s+toma\s+medicaci[oó]n)$/i;
+  for (const group of ["habitual", "current"]) {
+    const list = assessment.medications?.[group];
+    if (!Array.isArray(list)) continue;
+    assessment.medications[group] = list.filter((med) => {
+      const name = clean(med?.display_name) || clean(med?.raw_name);
+      if (!placeholder.test(name)) return true;
+      warnings.push(`placeholder_medication_entity_pruned:${group}`);
+      return false;
+    });
+  }
 }
 
 function recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings) {
@@ -756,6 +776,7 @@ function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
     const previous = previousSpeakerLine(lines, line);
     return evidenceTexts.some((text) => {
       if (NO_CURRENT_MEDICATION_PATTERN.test(text)) return false;
+      if (EXPLICIT_MEDICATION_REGIMEN_PATTERN.test(text) && !HISTORICAL_MEDICATION_PATTERN.test(text)) return true;
       if (ACTIVE_MEDICATION_PATTERN.test(text) && !HISTORICAL_MEDICATION_PATTERN.test(text)) return true;
       return previous?.speaker === "PSIQUIATRA"
         && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text))
@@ -1179,10 +1200,68 @@ function pruneGenericUnspecifiedConcernFromMotive(assessment, warnings) {
   warnings.push("generic_unspecified_family_concern_pruned_from_motive");
 }
 
+function splitReportSentences(text) {
+  return String(text || "").match(/[^.!?]+[.!?]?/g)?.map((item) => item.trim()).filter(Boolean) || [];
+}
+function appendReportText(section, text, sourceIds = []) {
+  if (!section || !text) return;
+  const placeholder = /^(?:no explorado|no explorada|no consta|informaci[oó]n insuficiente)\.?$/i;
+  const existing = placeholder.test(clean(section.text)) ? "" : clean(section.text);
+  const seen = new Set();
+  section.text = splitReportSentences([existing, text].filter(Boolean).join(" ")).filter((sentence) => {
+    const key = normalize(sentence).replace(/[^a-z0-9 ]/g, "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).join(" ");
+  section.evidence_status = "supported";
+  section.source_ids = [...new Set([...(section.source_ids || []), ...sourceIds])];
+}
+function transcriptSupportsConcept(transcript, sentence, conceptPattern) {
+  const terms = (normalize(sentence).match(/[a-z0-9]{5,}/g) || []).filter((term) => conceptPattern.test(term));
+  const source = normalize(transcript);
+  return terms.some((term) => source.includes(term));
+}
+function repairClinicalSectionRouting(assessment, transcript, warnings) {
+  const sections = assessment.sections || {};
+  const illness = sections.enfermedad_actual, mse = sections.exploracion_psicopatologica, plan = sections.plan_terapeutico;
+  const sourceIds = sourceIdsForSpeaker(assessment, "PSIQUIATRA");
+  const msePattern = /\b(?:durante\s+la\s+entrevista\s+(?:permanece|se\s+muestra)|permanece\s+(?:vigil|alerta|orientad[oa]|centrad[oa])|comunicaci[oó]n\s+adecuada|no\s+presenta\s+sintomatolog[ií]a\s+psic[oó]tica|no\s+presenta\s+alteraciones?\s+de\s+los\s+biorritmos|pensamientos?\s+intrusivos?\s+de\s+muerte|ideaci[oó]n\s+(?:o\s+planificaci[oó]n\s+)?autol[ií]tica|autoagresividad|poca\s+conciencia\s+de\s+enfermedad|desbordamiento\s+vital)\b/i;
+  const planPattern = /\b(?:se\s+decide|se\s+acuerda|mantener\s+observaci[oó]n|observaci[oó]n\s+hasta\s+(?:el\s+)?d[ií]a\s+siguiente|valorar\s+(?:la\s+)?tolerancia|respuesta\s+y\s+evoluci[oó]n|evoluci[oó]n\s+nocturna|seguimiento|revisi[oó]n\s+(?:en|por)|ingreso|alta\s+domiciliaria|derivaci[oó]n)\b/i;
+  const greeting = /^(?:buenas\s+(?:noches|tardes|d[ií]as)|mi\s+nombre\s+es|me\s+llamo|soy\s+(?:el\s+|la\s+)?psiquiatra|voy\s+a\s+valorar)\b/i;
+  if (illness?.text) {
+    const keep=[], moveMse=[], movePlan=[];
+    for (const sentence of splitReportSentences(illness.text)) {
+      if (msePattern.test(sentence) && transcriptSupportsConcept(transcript,sentence,/(?:vigil|orientad|centrad|comunicacion|sintomatologia|psicotica|biorritmos|intrusivos|ideacion|autoagresividad|conciencia|desbordamiento)/i)) moveMse.push(sentence);
+      else if (planPattern.test(sentence) && transcriptSupportsConcept(transcript,sentence,/(?:decide|acuerda|observacion|tolerancia|respuesta|evolucion|seguimiento|revision|ingreso|alta|derivacion)/i)) movePlan.push(sentence);
+      else keep.push(sentence);
+    }
+    if (moveMse.length) { appendReportText(mse,moveMse.join(" "),sourceIds); warnings.push("clinical_observation_rerouted_from_current_illness"); }
+    if (movePlan.length) { appendReportText(plan,movePlan.join(" "),sourceIds); warnings.push("treatment_plan_rerouted_from_current_illness"); }
+    illness.text=keep.join(" ");
+    if (!illness.text) { illness.evidence_status="not_provided"; illness.source_ids=[]; }
+  }
+  for (const section of Object.values(sections)) if (section?.text) section.text=splitReportSentences(section.text).filter((s)=>!greeting.test(s)).join(" ");
+  if (plan?.text) {
+    const names=[...(assessment.medications?.habitual||[]),...(assessment.medications?.current||[])].flatMap(medicationCandidateNames);
+    let removed=false;
+    plan.text=splitReportSentences(plan.text).filter((sentence)=>{
+      const normalized=normalize(sentence);
+      const hasName=names.some((name)=>normalized.includes(name))||medicationNamesInText(sentence).length>0;
+      const hasDose=/\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b|\b\d+\s*[-–]\s*\d+\s*[-–]\s*\d+\b/i.test(sentence);
+      if(hasName&&hasDose){removed=true;return false;} return true;
+    }).join(" ");
+    if(removed&&!plan.text){plan.text="Ajuste farmacológico según la pauta consignada en TRATAMIENTO REVISADO.";plan.evidence_status="supported";}
+    if(removed)warnings.push("duplicate_medication_regimen_removed_from_plan");
+  }
+}
+
 export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
 
+  prunePlaceholderMedicationEntities(assessment, warnings);
+  repairClinicalSectionRouting(assessment, transcript, warnings);
   recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
   recoverHabitualMedicationFromPreconsultTranscript(assessment, transcript, warnings);
   recoverMedicationDoseChanges(assessment, transcript, warnings);

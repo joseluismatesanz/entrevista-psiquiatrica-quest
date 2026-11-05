@@ -24,7 +24,7 @@
   }
 
   const script = document.createElement('script');
-  script.src = backendMode ? 'backend-client.js?v=20261104-direct-email-1' : 'app.js';
+  script.src = backendMode ? 'backend-client.js?v=20261105-adelanto-mail-reservation-1' : 'app.js';
   script.async = false;
   script.dataset.engine = backendMode ? 'structured' : 'local';
   document.body.appendChild(script);

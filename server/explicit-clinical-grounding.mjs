@@ -142,10 +142,8 @@ function groundMedicationChangeEncounter(assessment, transcript, warnings) {
   if (!line) return;
   const sourceId = sourceIdForLine(assessment, line);
   const motive = assessment.sections?.motivo_consulta;
-  if (motive && (explicitUpdateLine || !(motive.evidence_status === "supported" && clean(motive.text)))) {
-    motive.text = explicitUpdateLine
-      ? "Actualización del tratamiento farmacológico."
-      : "Valoración para modificación del tratamiento farmacológico.";
+  if (motive && line) {
+    motive.text = "Actualización del tratamiento farmacológico.";
     motive.evidence_status = "supported";
     motive.source_ids = sourceId ? [sourceId] : [];
     warnings.push(explicitUpdateLine
