@@ -1,5 +1,13 @@
 export const MEDICATION_NAME_ALIASES = [
   {
+    id: "se_receta_linea_to_sertralina",
+    source: "se receta línea",
+    canonical: "sertralina",
+    // Confusión de transcripción confirmada por el profesional. En texto libre
+    // exige una dosis contigua; no sustituye usos administrativos de «línea».
+    pattern: /\bse\s+receta\s+l[ií]nea\b(?=\s*[»”"']?\s*\d+(?:[.,]\d+)?\s*(?:mg|miligramos?)\b)/giu,
+  },
+  {
     id: "cetralina_to_sertralina",
     source: "cetralina",
     canonical: "sertralina",

@@ -141,7 +141,7 @@ export function renderClinicalReport(assessment) {
     // cuando el único contenido estructurado era histórico.
     if (key === "tratamiento_habitual") {
       const list = assessment.medications?.habitual;
-      if (Array.isArray(list) && list.length > 0) {
+      if (Array.isArray(list) && !(section.evidence_status === "supported" && /^no\s+toma\s+medicaci[oó]n\s+habitual\.?$/i.test(body))) {
         body = medicationBlock(list, ["active"]);
         if (!body) body = "No consta tratamiento vigente activo.";
       }
@@ -150,7 +150,7 @@ export function renderClinicalReport(assessment) {
     }
     if (key === "tratamiento_actual") {
       const list = assessment.medications?.current;
-      if (Array.isArray(list) && list.length > 0) {
+      if (Array.isArray(list)) {
         body = medicationBlock(list, ["active", "administered_once"]);
         if (!body) body = "No consta tratamiento revisado activo.";
       }

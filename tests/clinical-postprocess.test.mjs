@@ -950,3 +950,51 @@ test('ADELANTO: una pregunta del profesional sin respuesta no confirma una pauta
   assert.deepEqual(assessment.medications.habitual, []);
   assert.equal(assessment.medications.current[0].dose, '20 mg');
 });
+
+test('ADELANTO: una lista revisada vacía no recupera el texto descartado del modelo', () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [med('Melatonina', 'Melatonina', 'active', '2 mg', '0 - 0 - 1')];
+  fixture.sections.tratamiento_actual = { text: 'Melatonina 2 mg: 0 - 0 - 1', evidence_status: 'supported', source_ids: ['patient'] };
+  const { assessment } = applyClinicalPostprocessing(fixture, 'PACIENTE: Tomo melatonina 2 mg por la noche.');
+  assert.deepEqual(assessment.medications.current, []);
+  assert.equal(assessment.sections.tratamiento_actual.text, '');
+  assert.doesNotMatch(renderClinicalReport(assessment).split('TRATAMIENTO REVISADO\n')[1], /Melatonina 2 mg/);
+  const direct = structuredClone(fixture);
+  direct.medications.current = [];
+  assert.doesNotMatch(renderClinicalReport(direct).split('TRATAMIENTO REVISADO\n')[1], /Melatonina/);
+});
+
+test('ADELANTO: pauta previa narrada y alias confirmado quedan en vigente sin duplicarse en enfermedad actual', () => {
+  // Caso sintético basado en el error comunicado; no sustituye la transcripción original.
+  const source = 'PSIQUIATRA: Hasta la valoración tenía pautados «Se receta línea» 50 mg por la mañana y melatonina 2 mg antes de dormir.';
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med('Se receta línea', 'Se receta línea', 'active', '50 mg', 'por la mañana'),
+    med('Melatonina', 'Melatonina', 'active', '2 mg', 'por la noche'),
+  ];
+  fixture.sections.enfermedad_actual = { text: 'Consulta para modificar el tratamiento. Hasta la valoración tenía pautados «Se receta línea» 50 mg por la mañana y melatonina 2 mg por la noche.', evidence_status: 'supported', source_ids: ['psychiatrist'] };
+  fixture.sections.tratamiento_actual = { text: 'Melatonina 2 mg: 0 - 0 - 1', evidence_status: 'supported', source_ids: ['psychiatrist'] };
+  const { assessment } = applyClinicalPostprocessing(fixture, source);
+  assert.match(assessment.sections.tratamiento_habitual.text, /Sertralina 50 mg: 1 - 0 - 0/);
+  assert.match(assessment.sections.tratamiento_habitual.text, /Melatonina 2 mg: 0 - 0 - 1/);
+  assert.deepEqual(assessment.medications.current, []);
+  assert.equal(assessment.sections.enfermedad_actual.text, 'Consulta para modificar el tratamiento.');
+  assert.doesNotMatch(renderClinicalReport(assessment), /Se receta línea/);
+});
+
+test('ADELANTO: la retirada de listas duplicadas conserva respuesta y evolución clínica', () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [med('Sertralina', 'Sertralina', 'active', '50 mg', '1 - 0 - 0')];
+  fixture.sections.enfermedad_actual = { text: 'Tomaba sertralina 50 mg con mala respuesta y persistencia de ansiedad.', evidence_status: 'supported', source_ids: ['patient'] };
+  const { assessment } = applyClinicalPostprocessing(fixture, 'PACIENTE: Tomo sertralina 50 mg por la mañana con mala respuesta.');
+  assert.match(assessment.sections.enfermedad_actual.text, /mala respuesta/);
+});
+
+test('ADELANTO: el alias confirmado exige contexto de dosis en texto libre', async () => {
+  const { normalizeKnownMedicationAliasText, resolveKnownMedicationAlias } = await import('../server/medication-name-aliases.mjs');
+  assert.equal(normalizeKnownMedicationAliasText('Se receta línea de tratamiento según evolución.').text, 'Se receta línea de tratamiento según evolución.');
+  assert.match(normalizeKnownMedicationAliasText('«Se receta línea» 50 mg por la mañana').text, /Sertralina/);
+  assert.equal(resolveKnownMedicationAlias('Se receta línea').aliasId, 'se_receta_linea_to_sertralina');
+});

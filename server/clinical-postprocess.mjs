@@ -1,5 +1,7 @@
 import {
   normalizeKnownMedicationAliasText,
+  resolveKnownMedicationAlias,
+  MEDICATION_NAME_ALIASES,
   PSYCHIATRIC_MEDICATION_VOCABULARY,
 } from "./medication-name-aliases.mjs";
 
@@ -283,7 +285,8 @@ function clinicianPriorRegimenLine(lines, line) {
   const changes = /\b(?:vamos\s+a\s+cambiar(?:lo|la)?|a\s+partir\s+de|desde\s+hoy|iniciar|iniciamos|retiramos|sustituir|aumentar|aumentamos|reducir|reducimos)\b/i;
   const isDeclaration = (item) => item.speaker === "PSIQUIATRA"
     && !/[?¿]/.test(item.text)
-    && declaration.test(normalize(item.text))
+    && (declaration.test(normalize(item.text))
+      || /\bhasta\s+(?:(?:la|esta)\s+(?:valoracion|consulta)|ahora|hoy)\s+(?:(?:el\s+paciente|la\s+paciente)\s+)?(?:tenia\s+pautad[oa]s?|tomaba|toma|estaba\s+tomando)\b/i.test(normalize(item.text)))
     && !changes.test(normalize(item.text))
     && !/\b(?:no\s+toma|no\s+tiene|si\s+tomara|podria|por\s+ejemplo)\b/.test(normalize(item.text));
   if (changes.test(normalize(line.text))) return false;
@@ -691,6 +694,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   );
   const hasPostChangeMedicationEvidence = (med) => lines.some((line) =>
     line.speaker === "PSIQUIATRA"
+    && !clinicianPriorRegimenLine(lines, line)
     && lineMentionsMedication(line, med)
     && (
       (line.index >= planAnchorIndex && CLINICIAN_MAINTENANCE_PATTERN.test(normalize(line.text)))
@@ -1073,7 +1077,10 @@ function syncMedicationSection(assessment, group, sectionKey, statuses) {
     return;
   }
 
-  if (list.length) {
+  // Una lista vacía también es autoritativa. El texto antiguo del modelo no
+  // puede resucitar los medicamentos descartados por falta de evidencia.
+  if (Array.isArray(assessment.medications?.[group])
+    && !(section.evidence_status === "supported" && /^no\s+toma\s+medicaci[oó]n\s+habitual\.?$/i.test(clean(section.text)))) {
     section.text = "";
     section.evidence_status = "not_provided";
     section.source_ids = [];
@@ -1104,6 +1111,28 @@ function refreshMedicationPresentationInPlace(assessment, warnings) {
   syncMedicationSection(assessment, "habitual", "tratamiento_habitual", ["active"]);
   syncMedicationSection(assessment, "current", "tratamiento_actual", ["active", "administered_once"]);
   pruneGenericMedicationSectionPlaceholders(assessment, warnings);
+  pruneDuplicatedPriorRegimenNarrative(assessment, warnings);
+}
+
+function pruneDuplicatedPriorRegimenNarrative(assessment, warnings) {
+  const section = assessment.sections?.enfermedad_actual;
+  if (!section?.text) return;
+  const prior = assessment.medications?.habitual || [];
+  const sentences = splitReportSentences(section.text);
+  const retained = sentences.filter((sentence) => {
+    const text = normalize(sentence);
+    const isList = /^(?:hasta\s+(?:la\s+valoracion|la\s+consulta|ahora|hoy)\s+)?(?:tenia\s+pautad[oa]s?|tomaba|toma|tratamiento\s+(?:previo|vigente|habitual)\s*:)/.test(text);
+    const names = medicationNamesInText(sentence);
+    const allRecovered = names.length && names.every((name) => prior.some((med) =>
+      med.status === "active" && medicationCandidateNames(med).includes(normalize(name))));
+    const clinicalEvolution = /\b(?:respuesta|eficacia|efecto|efectos|tolerancia|empeor|mejor|sintomas|insomnio|ansiedad|adherencia|abandono|desde\s+hace)\w*/.test(text);
+    return !(isList && allRecovered && !clinicalEvolution);
+  });
+  if (retained.length !== sentences.length) {
+    section.text = retained.join(" ");
+    if (!section.text) section.evidence_status = "not_provided";
+    warnings.push("prior_medication_list_removed_from_current_illness_after_recovery");
+  }
 }
 
 export function applyVerifiedMedicationPresentation(inputAssessment) {
@@ -1378,6 +1407,19 @@ function repairClinicalSectionRouting(assessment, transcript, warnings) {
 export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
+  const confirmedSplitName = MEDICATION_NAME_ALIASES.find((alias) => alias.id === "se_receta_linea_to_sertralina");
+  transcript = String(transcript || "").replace(confirmedSplitName.pattern, "Sertralina");
+  for (const section of Object.values(assessment.sections || {})) {
+    if (section?.text) section.text = section.text.replace(confirmedSplitName.pattern, "Sertralina");
+  }
+  for (const group of ["habitual", "current"]) for (const med of assessment.medications?.[group] || []) {
+    const alias = resolveKnownMedicationAlias(med.raw_name);
+    if (alias.aliasId !== "se_receta_linea_to_sertralina") continue;
+    med.raw_name = "Sertralina";
+    med.display_name = "Sertralina";
+    delete med.medication_verification;
+    warnings.push("confirmed_transcription_alias_restored:sertralina");
+  }
 
   prunePlaceholderMedicationEntities(assessment, warnings);
   repairClinicalSectionRouting(assessment, transcript, warnings);
