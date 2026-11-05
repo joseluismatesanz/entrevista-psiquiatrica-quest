@@ -628,11 +628,10 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   );
   const hasPostChangeMedicationEvidence = (med) => lines.some((line) =>
     line.speaker === "PSIQUIATRA"
-    && line.index >= planAnchorIndex
     && lineMentionsMedication(line, med)
     && (
-      CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
-      || CLINICIAN_MAINTENANCE_PATTERN.test(normalize(line.text))
+      (line.index >= planAnchorIndex && CLINICIAN_MAINTENANCE_PATTERN.test(normalize(line.text)))
+      || CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
       || CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
     )
   );
@@ -732,6 +731,41 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     assessment.medications.current.push({ ...med, status: "active" });
     const name = clean(med.display_name) || clean(med.raw_name) || "medicamento";
     warnings.push(`medication_maintained_carried_to_current:${name}`);
+  }
+
+  // La lista devuelta por el modelo no basta para afirmar qué debe tomar después
+  // de la consulta. Exige una pauta/prescripción nombrada en el plan, o una decisión
+  // explícita de mantener el tratamiento previo. Si falta esa evidencia, no presentes
+  // automáticamente la medicación previa como tratamiento revisado.
+  const explicitGlobalMaintenance = lines.some((line) => {
+    if (line.speaker !== "PSIQUIATRA") return false;
+    const text = normalize(line.text);
+    if (!CLINICIAN_MAINTENANCE_PATTERN.test(text) || !MEDICATION_NOUN_PATTERN.test(text)) return false;
+    // La indicación global puede seguir a una prescripción que no active
+    // CURRENT_PLAN_ANCHOR_PATTERN (p. ej. «vamos a introducir X»).
+    return lines.some((previous) => previous.speaker === "PSIQUIATRA"
+      && previous.index < line.index
+      && (CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(previous.text))
+        || CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(previous.text))));
+  });
+  const hasExplicitRevisedEvidence = (med) => hasPostChangeMedicationEvidence(med)
+    || (explicitGlobalMaintenance && hasPreexistingEvidence(med))
+    || lines.some((line) => line.speaker === "PSIQUIATRA"
+      && line.index >= planAnchorIndex
+      && lineMentionsMedication(line, med)
+      && EXPLICIT_MEDICATION_REGIMEN_PATTERN.test(normalize(line.text)));
+  const currentBeforeEvidenceFilter = assessment.medications.current;
+  const unsupportedCurrent = currentBeforeEvidenceFilter.filter((med) => !hasExplicitRevisedEvidence(med));
+  if (unsupportedCurrent.length) {
+    assessment.medications.current = currentBeforeEvidenceFilter.filter(hasExplicitRevisedEvidence);
+    const sourceIds = [...new Set(unsupportedCurrent.flatMap((med) => Array.isArray(med?.source_ids) ? med.source_ids : []))];
+    const topic = "medication_safety:revised_regimen_unconfirmed";
+    const evidence = "No se encontró en la transcripción una indicación posterior a la consulta para uno o más fármacos extraídos; no se consignan como tratamiento revisado confirmado.";
+    assessment.safety_review ||= [];
+    if (!assessment.safety_review.some((item) => item?.topic === topic && item?.evidence === evidence)) {
+      assessment.safety_review.push({ topic, evidence, source_ids: sourceIds, needs_clinician_review: true });
+    }
+    warnings.push("medication_revised_entities_without_explicit_postconsultation_evidence_pruned");
   }
 
   // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
