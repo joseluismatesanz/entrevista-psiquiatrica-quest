@@ -762,7 +762,7 @@ test("ADELANTO medicación: sustitución de toda la pauta separa vigente y revis
     source_ids: ["patient"],
   };
   fixture.sections.plan_terapeutico = {
-    text: "Sustituir la pauta previa por duloxetina 60 mg por la mañana y en la comida, olanzapina 5 mg de rescate y De Prax 100 mg antes de dormir.",
+    text: "Sustituir el tratamiento previo por duloxetina 60 mg por la mañana y en la comida, olanzapina 5 mg de rescate y De Prax 100 mg antes de dormir.",
     evidence_status: "supported",
     source_ids: ["psychiatrist"],
   };
@@ -775,7 +775,7 @@ test("ADELANTO medicación: sustitución de toda la pauta separa vigente y revis
   const transcript = [
     "PSIQUIATRA: ¿Cuál es el tratamiento que está tomando ahora mismo?",
     "PACIENTE: Fluoxetina 20 mg por la mañana, mirtazapina 15 mg por la noche y clonazepam 0,5 mg a demanda.",
-    "PSIQUIATRA: Vamos a sustituir la pauta previa por duloxetina 60 mg por la mañana y en la comida, olanzapina 5 mg de rescate y De Prax 100 mg antes de dormir.",
+    "PSIQUIATRA: Vamos a sustituir el tratamiento previo por duloxetina 60 mg por la mañana y en la comida, olanzapina 5 mg de rescate y De Prax 100 mg antes de dormir.",
   ].join("\n");
 
   const result = applyClinicalPostprocessing(fixture, transcript);
