@@ -1121,11 +1121,12 @@ function pruneDuplicatedPriorRegimenNarrative(assessment, warnings) {
   const sentences = splitReportSentences(section.text);
   const retained = sentences.filter((sentence) => {
     const text = normalize(sentence);
-    const isList = /^(?:hasta\s+(?:la\s+valoracion|la\s+consulta|ahora|hoy)\s+)?(?:tenia\s+pautad[oa]s?|tomaba|toma|tratamiento\s+(?:previo|vigente|habitual)\s*:)/.test(text);
+    const isList = /^(?:hasta|antes|tenia|tenian|tiene|tienen|tomaba|toma|constaba|constaban|figuraba|figuraban|tratamiento|medicacion|pauta)\b/.test(text)
+      && /\b\d+(?:[.,]\d+)?\s*(?:mg|miligramos?|mcg|ml)\b/.test(text);
     const names = medicationNamesInText(sentence);
     const allRecovered = names.length && names.every((name) => prior.some((med) =>
       med.status === "active" && medicationCandidateNames(med).includes(normalize(name))));
-    const clinicalEvolution = /\b(?:respuesta|eficacia|efecto|efectos|tolerancia|empeor|mejor|sintomas|insomnio|ansiedad|adherencia|abandono|desde\s+hace)\w*/.test(text);
+    const clinicalEvolution = /\b(?:respuesta|eficacia|efecto|efectos|tolerancia|empeor|mejor|sintomas|insomnio|ansiedad|adherencia|abandono|desde\s+hace|desconocid|no\s+identificad)\w*/.test(text);
     return !(isList && allRecovered && !clinicalEvolution);
   });
   if (retained.length !== sentences.length) {

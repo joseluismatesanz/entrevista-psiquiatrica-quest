@@ -998,3 +998,17 @@ test('ADELANTO: el alias confirmado exige contexto de dosis en texto libre', asy
   assert.match(normalizeKnownMedicationAliasText('«Se receta línea» 50 mg por la mañana').text, /Sertralina/);
   assert.equal(resolveKnownMedicationAlias('Se receta línea').aliasId, 'se_receta_linea_to_sertralina');
 });
+
+test('ADELANTO: elimina la lista duplicada con la redacción observada en la generación real', () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [];
+  fixture.sections.enfermedad_actual = {
+    text: 'Se realiza valoración psiquiátrica con el objetivo de modificar el tratamiento farmacológico prescrito por el médico de familia. Hasta el momento de la valoración constaban pautados «Sertralina» 50 mg por la mañana y melatonina 2 mg antes de dormir.',
+    evidence_status: 'supported', source_ids: ['psychiatrist'],
+  };
+  const { assessment } = applyClinicalPostprocessing(fixture, 'PSIQUIATRA: Hasta la valoración tenía pautados sertralina 50 mg por la mañana y melatonina 2 mg antes de dormir.');
+  assert.match(assessment.sections.tratamiento_habitual.text, /Sertralina 50 mg: 1 - 0 - 0/);
+  assert.doesNotMatch(assessment.sections.enfermedad_actual.text, /Sertralina|melatonina/);
+  assert.match(assessment.sections.enfermedad_actual.text, /Se realiza valoración psiquiátrica/);
+});
