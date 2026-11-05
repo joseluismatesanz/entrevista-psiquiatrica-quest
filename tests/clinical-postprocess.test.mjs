@@ -836,3 +836,21 @@ test("ADELANTO medicación: una pauta previa omitida por el modelo se recupera y
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
   assert.match(result.assessment.sections.tratamiento_actual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
 });
+
+test("ADELANTO medicación: recupera el tratamiento vigente con etiquetas de hablante en formato mixto", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [med("Fluoxetina", "Fluoxetina", "active", "20 mg", "1 - 0 - 0")];
+  fixture.sections.tratamiento_habitual = { text: "No consta.", evidence_status: "not_provided", source_ids: [] };
+  fixture.sections.tratamiento_actual = { text: "", evidence_status: "supported", source_ids: ["psychiatrist"] };
+
+  const transcript = [
+    "Psiquiatra: ¿Qué medicación está tomando ahora?",
+    "Paciente: Tomo fluoxetina 20 mg por la mañana.",
+    "Psiquiatra: Vamos a mantener fluoxetina sin cambios.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
+});

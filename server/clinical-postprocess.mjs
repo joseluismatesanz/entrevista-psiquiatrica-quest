@@ -66,7 +66,9 @@ function speakerLines(transcript) {
   return String(transcript || "")
     .split(/\n+/)
     .map((line, index) => {
-      const match = line.match(/^\s*([A-ZÁÉÍÓÚÜÑ_/ ]+)\s*:\s*(.*)$/u);
+      // Las transcripciones editadas pueden usar «Paciente:»/«Psiquiatra:»;
+      // el estado temporal no debe perderse por la capitalización del hablante.
+      const match = line.match(/^\s*([A-ZÁÉÍÓÚÜÑ_/ ]+)\s*:\s*(.*)$/iu);
       if (!match) return null;
       return { index, speaker: match[1].toUpperCase(), text: match[2].trim() };
     })
