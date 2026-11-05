@@ -98,6 +98,17 @@ function planWithoutMedicationRegimens(text, assessment) {
 function medicationWarnings(assessment) {
   return (assessment.safety_review || [])
     .filter((item) => String(item?.topic || "").startsWith("medication_safety:"))
+    .filter((item) => !String(item?.topic || "").startsWith("medication_safety:unidentified_name:"))
+    .map((item) => clean(item.evidence))
+    .filter(Boolean)
+    .map((text) => `WARNING: ${text}`)
+    .join("\n");
+}
+
+function unidentifiedMedicationWarnings(assessment, group) {
+  const topic = `medication_safety:unidentified_name:${group}`;
+  return (assessment.safety_review || [])
+    .filter((item) => item?.topic === topic)
     .map((item) => clean(item.evidence))
     .filter(Boolean)
     .map((text) => `WARNING: ${text}`)
@@ -134,6 +145,8 @@ export function renderClinicalReport(assessment) {
         body = medicationBlock(list, ["active"]);
         if (!body) body = "No consta tratamiento vigente activo.";
       }
+      const warnings = unidentifiedMedicationWarnings(assessment, "habitual");
+      if (warnings) body = [body, warnings].filter(Boolean).join("\n");
     }
     if (key === "tratamiento_actual") {
       const list = assessment.medications?.current;
@@ -141,7 +154,10 @@ export function renderClinicalReport(assessment) {
         body = medicationBlock(list, ["active", "administered_once"]);
         if (!body) body = "No consta tratamiento revisado activo.";
       }
-      const warnings = medicationWarnings(assessment);
+      const warnings = [
+        medicationWarnings(assessment),
+        unidentifiedMedicationWarnings(assessment, "current"),
+      ].filter(Boolean).join("\n");
       if (warnings) body = [body, warnings].filter(Boolean).join("\n");
     }
 

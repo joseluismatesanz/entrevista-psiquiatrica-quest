@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyClinicalPostprocessing } from "../server/clinical-postprocess.mjs";
+import { renderClinicalReport } from "../server/render-report.mjs";
 
 function med(rawName, displayName, status = "active", dose = "", schedule = "") {
   return {
@@ -853,4 +854,23 @@ test("ADELANTO medicación: recupera el tratamiento vigente con etiquetas de hab
   const result = applyClinicalPostprocessing(fixture, transcript);
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
   assert.match(result.assessment.sections.tratamiento_actual.text, /Fluoxetina 20 mg: 1 - 0 - 0/);
+});
+
+test("ADELANTO medicación: excluye marcadores ininteligibles de la pauta confirmada y los señala para revisión", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "1 - 0 - 0"),
+    med("[UBICACIÓN]", "[UBICACIÓN]", "active", "15 mg", "0 - 0 - 1"),
+  ];
+  fixture.sections.tratamiento_habitual = { text: "", evidence_status: "not_provided", source_ids: [] };
+  fixture.sections.tratamiento_actual = { text: "[UBICACIÓN] 15 mg: 0 - 0 - 1", evidence_status: "supported", source_ids: ["psychiatrist"] };
+
+  const { assessment: result } = applyClinicalPostprocessing(fixture, "PSIQUIATRA: Voy a pautar sertralina 50 mg por la mañana.");
+  const report = renderClinicalReport(result);
+  const revised = report.split("TRATAMIENTO REVISADO\n")[1];
+  assert.deepEqual(result.medications.current.map((item) => item.raw_name), ["Sertralina"]);
+  assert.match(revised, /Sertralina 50 mg: 1 - 0 - 0/);
+  assert.match(revised, /nombre ininteligible; se excluye de la pauta confirmada/);
+  assert.doesNotMatch(revised, /\[UBICACIÓN\]/);
 });

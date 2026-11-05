@@ -422,15 +422,38 @@ function medicationFromPriorSubstitutionPhrase(phrase, sourceIds = []) {
 
 function prunePlaceholderMedicationEntities(assessment, warnings) {
   const placeholder = /^(?:no\s+consta|no\s+explorado|no\s+explorada|ninguno|ninguna|sin\s+tratamiento|sin\s+medicaci[oó]n|no\s+toma\s+medicaci[oó]n)$/i;
+  const unreadableName = /^\[(?:ubicaci[oó]n|inaudible|ininteligible|medicamento\s+no\s+identificado)\](?:\s+.*)?$/i;
   for (const group of ["habitual", "current"]) {
     const list = assessment.medications?.[group];
     if (!Array.isArray(list)) continue;
     assessment.medications[group] = list.filter((med) => {
       const name = clean(med?.display_name) || clean(med?.raw_name);
-      if (!placeholder.test(name)) return true;
-      warnings.push(`placeholder_medication_entity_pruned:${group}`);
+      const genericPlaceholder = placeholder.test(name);
+      const unreadable = unreadableName.test(name);
+      if (!genericPlaceholder && !unreadable) return true;
+      warnings.push(`${unreadable ? "unreadable" : "placeholder"}_medication_entity_pruned:${group}`);
+      if (unreadable) {
+        const evidence = "Se menciona un medicamento con nombre ininteligible; se excluye de la pauta confirmada y requiere revisión clínica.";
+        assessment.safety_review ||= [];
+        const topic = `medication_safety:unidentified_name:${group}`;
+        if (!assessment.safety_review.some((item) => item?.topic === topic && item?.evidence === evidence)) {
+          assessment.safety_review.push({
+            topic,
+            evidence,
+            source_ids: Array.isArray(med?.source_ids) ? [...med.source_ids] : [],
+            needs_clinician_review: true,
+          });
+        }
+      }
       return false;
     });
+    const sectionKey = group === "habitual" ? "tratamiento_habitual" : "tratamiento_actual";
+    const section = assessment.sections?.[sectionKey];
+    if (section?.text && unreadableName.test(section.text.trim())) {
+      section.text = "";
+      section.evidence_status = "not_provided";
+      section.source_ids = [];
+    }
   }
 }
 
