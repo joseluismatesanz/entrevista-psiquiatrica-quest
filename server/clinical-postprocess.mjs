@@ -46,10 +46,10 @@ const FAMILY_SPEAKER_LABELS = new Set([
 ]);
 const FAMILY_SELF_MEDICATION_PATTERN = /\b(?:yo\s+)?(?:ahora\s+mismo\s+)?(?:estoy\s+tomando|estaba\s+tomando|tomo|tomaba|he\s+tomado|me\s+tomo)\b/i;
 const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma)\b/i;
-const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar|cambiar|sustituir|retirar|suspender|aumentar|subir|reducir|bajar|mantener|continuar|modificar|ajustar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos|cambio|cambiamos|sustituyo|sustituimos|retiro|retiramos|suspendo|suspendemos|aumento|aumentamos|subo|subimos|reduzco|reducimos|bajo|bajamos|mantengo|mantenemos|continuo|continuamos|modifico|modificamos|ajusto|ajustamos)\b)\b/i;
+const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar|cambiar(?:lo|la)?|sustituir|retirar|suspender|aumentar|subir|reducir|bajar|mantener|continuar|modificar|ajustar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos|cambio|cambiamos|sustituyo|sustituimos|retiro|retiramos|suspendo|suspendemos|aumento|aumentamos|subo|subimos|reduzco|reducimos|bajo|bajamos|mantengo|mantenemos|continuo|continuamos|modifico|modificamos|ajusto|ajustamos)\b)\b/i;
 const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
 const CLINICIAN_MAINTENANCE_PATTERN = /\b(?:mantener|mantengo|mantenemos|mantenga|continuar|continua|contin\u00fao|seguimos\s+con|seguir\s+con|sin\s+cambios|misma\s+pauta|resto\s+del\s+tratamiento)\b/i;
-const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|anadir|anado|anadimos|empezar|comenzar|sustituir|cambiar|cambio|cambiamos|aumentar|aumento|aumentamos|incrementar|incremento|incrementamos|subir|subo|subimos|reducir|reduzco|reducimos|disminuir|disminuyo|disminuimos|bajar|bajo|bajamos|ajustar|ajusto|ajustamos|titular|titulo|titulamos)\b/i;
+const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|iniciamos|introducir|introduzco|introducimos|anadir|anado|anadimos|empezar|comenzar|sustituir|cambiar(?:lo|la)?|cambio|cambiamos|aumentar|aumento|aumentamos|incrementar|incremento|incrementamos|subir|subo|subimos|reducir|reduzco|reducimos|disminuir|disminuyo|disminuimos|bajar|bajo|bajamos|ajustar|ajusto|ajustamos|titular|titulo|titulamos)\b/i;
 const CLINICIAN_DISCONTINUATION_PATTERN = /\b(?:retirar|retiro|retiramos|suspender|suspendo|suspendemos|suprimir|suprimo|suprimimos|quitar|quito|quitamos|dejar\s+de\s+tomar|no\s+continuar|sustituir|sustituyo|sustituimos)\b/i;
 const FAMILY_ADDRESS_PATTERN = /\b(?:señora|senora|madre|padre|familiar|cuidador(?:a)?)\b/i;
 const FORMAL_ADDRESS_PATTERN = /\busted\b/i;
@@ -60,7 +60,7 @@ const MEDICATION_NOUN_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastill
 const HABITUAL_CONFIRMATION_PATTERN = /\b(?:toma|tomando|tratamiento|medicacion|medicación|pauta)\b/i;
 const AFFIRMATIVE_RESPONSE_PATTERN = /^\s*(?:s[ií]|correcto|exacto|eso\s+es|as[ií]\s+es|de\s+acuerdo|vale)(?:\b|[.,;:])/i;
 const EXPLICIT_MEDICATION_REGIMEN_PATTERN = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\s*:?\s*\d+(?:[.,]\d+)?\s*[-–]\s*\d+(?:[.,]\d+)?\s*[-–]\s*\d+(?:[.,]\d+)?\b/i;
-const COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN = /\b(?:(?:sustituir|sustituimos|sustituyo|cambiar|cambiamos|cambio)\s+(?:(?:por\s+completo|completamente)\s+)?(?:la\s+|el\s+|su\s+|toda\s+la\s+|todo\s+el\s+)?(?:pauta|tratamiento|medicacion)(?:\s+(?:previo|previa|anterior|vigente|actual|que\s+(?:toma|esta\s+tomando|llevaba)))?(?=\s+(?:por|y|para|porque)\b|[,.]|$)|(?:retirar|retiramos|retiro|suspender|suspendemos|suspendo)\s+(?:por\s+completo\s+|completamente\s+|toda\s+la\s+|todo\s+el\s+)(?:pauta|tratamiento|medicacion)(?:\s+(?:previo|previa|anterior|vigente|actual))?)\b/i;
+const COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN = /\b(?:(?:sustituir|sustituimos|sustituyo|cambiar(?:lo|la)?|cambiamos|cambio)\s+(?:(?:por\s+completo|completamente)\s+)?(?:la\s+|el\s+|su\s+|toda\s+la\s+|todo\s+el\s+)?(?:pauta|tratamiento|medicacion)(?:\s+(?:previo|previa|anterior|vigente|actual|que\s+(?:toma|esta\s+tomando|llevaba)))?(?=\s+(?:por|y|para|porque)\b|[,.]|$)|(?:retirar|retiramos|retiro|suspender|suspendemos|suspendo)\s+(?:por\s+completo\s+|completamente\s+|toda\s+la\s+|todo\s+el\s+)(?:pauta|tratamiento|medicacion)(?:\s+(?:previo|previa|anterior|vigente|actual))?)\b/i;
 
 function speakerLines(transcript) {
   return String(transcript || "")
@@ -272,6 +272,67 @@ function medicationEntity(name, details, sourceIds = []) {
 function sameMedication(left, right) {
   const names = new Set(medicationCandidateNames(left));
   return medicationCandidateNames(right).some((name) => names.has(name));
+}
+
+// El profesional también puede leer la pauta previa del informe de AP.
+// Conserva ese contexto entre segmentos consecutivos, sin exigir una respuesta
+// del paciente ni convertir una pregunta o una propuesta en evidencia previa.
+function clinicianPriorRegimenLine(lines, line) {
+  if (line.speaker !== "PSIQUIATRA" || /[?¿]/.test(line.text)) return false;
+  const declaration = /\b(?:tratamiento|medicacion|pauta)\b.*\b(?:que\s+(?:tiene\s+ahora|toma|esta\s+tomando)|previo|previa|vigente|habitual|prescrit[oa]\s+por\s+su\s+medico)/i;
+  const changes = /\b(?:vamos\s+a\s+cambiar(?:lo|la)?|a\s+partir\s+de|desde\s+hoy|iniciar|iniciamos|retiramos|sustituir|aumentar|aumentamos|reducir|reducimos)\b/i;
+  const isDeclaration = (item) => item.speaker === "PSIQUIATRA"
+    && !/[?¿]/.test(item.text)
+    && declaration.test(normalize(item.text))
+    && !changes.test(normalize(item.text))
+    && !/\b(?:no\s+toma|no\s+tiene|si\s+tomara|podria|por\s+ejemplo)\b/.test(normalize(item.text));
+  if (changes.test(normalize(line.text))) return false;
+  if (isDeclaration(line)) return true;
+  let position = lines.indexOf(line) - 1;
+  for (; position >= 0; position -= 1) {
+    const previous = lines[position];
+    if (isDeclaration(previous)) return true;
+    if (previous.speaker !== "PSIQUIATRA" || changes.test(normalize(previous.text))
+      || !medicationNamesInText(previous.text).length) return false;
+  }
+  return false;
+}
+
+function recoverClinicianPriorRegimen(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  for (const line of lines) {
+    if (!clinicianPriorRegimenLine(lines, line)) continue;
+    const text = normalize(line.text).replace(/\bmiligramos?\b/g, "mg");
+    for (const name of medicationNamesInText(text)) {
+      const details = doseAndScheduleFromMention(text, name);
+      // «Dos fluoxetina de 40 mg por la mañana»: 40 mg es la presentación;
+      // dos es el número de unidades, y no se debe reducir a una toma unitaria.
+      const prefix = text.slice(0, text.indexOf(name));
+      const quantity = prefix.match(/\b(dos|tres|media|una?|[0-9]+(?:[.,][0-9]+)?)\s+(?:(?:comprimidos?|capsulas?)\s+de\s+)?$/);
+      const counts = { dos: "2", tres: "3", media: "0,5", una: "1", un: "1" };
+      if (quantity && /^[01] - [01] - [01]$/.test(details.schedule)) {
+        const count = counts[quantity[1]] || quantity[1];
+        details.schedule = details.schedule.split(" - ").map((slot) => slot === "1" ? count : slot).join(" - ");
+      }
+      const recovered = medicationEntity(name, details, sourceIdsForSpeaker(assessment, line.speaker));
+      assessment.medications.habitual ||= [];
+      const existing = assessment.medications.habitual.find((med) => sameMedication(med, recovered));
+      if (existing) Object.assign(existing, { dose: recovered.dose, schedule: recovered.schedule, status: "active", source_ids: recovered.source_ids });
+      else assessment.medications.habitual.push(recovered);
+      warnings.push(`medication_habitual_recovered_from_clinician_history:${name}`);
+    }
+    const next = lines[lines.indexOf(line) + 1];
+    if (medicationNamesInText(text).length && /\b(?:y\s+)?una?\s*\.{2,}$/.test(text)
+      && next && !medicationNamesInText(next.text).length
+      && /^de\s+\d+(?:[.,]\d+)?\s*(?:mg|miligramos?)\b/i.test(next.text)) {
+      assessment.safety_review ||= [];
+      const topic = "medication_safety:unidentified_name:habitual";
+      if (!assessment.safety_review.some((item) => item.topic === topic)) assessment.safety_review.push({
+        topic, evidence: `Tratamiento previo incompleto: se menciona otro medicamento ${next.text.replace(/[.]$/, "")}, pero no consta su nombre. Requiere aclaración.`,
+        source_ids: sourceIdsForSpeaker(assessment, line.speaker), needs_clinician_review: true,
+      });
+    }
+  }
 }
 
 function recoverHabitualMedicationFromPreconsultTranscript(assessment, transcript, warnings) {
@@ -496,6 +557,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   );
 
   const hasHabitualPatientEvidence = (med) => lines.some((line) => {
+    if (clinicianPriorRegimenLine(lines, line) && lineMentionsMedication(line, med)) return true;
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (!lineMentionsMedication(line, med)) return false;
     if (line.index >= medicationPlanIndex && !isExplicitHabitualMedicationAnswer(lines, line)) return false;
@@ -510,6 +572,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   });
 
   const habitualPatientEvidenceLine = (med) => lines.find((line) => {
+    if (clinicianPriorRegimenLine(lines, line) && lineMentionsMedication(line, med)) return true;
     const medicationPlanIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
     if (!lineMentionsMedication(line, med)) return false;
     if (line.index >= medicationPlanIndex && !isExplicitHabitualMedicationAnswer(lines, line)) return false;
@@ -812,6 +875,9 @@ function inferMedicationTemporality(transcript, rawName) {
 }
 
 function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
+  if (clinicianPriorRegimenLine(lines, line)) {
+    return med ? lineMentionsMedication(line, med) : medicationNamesInText(line.text).length > 0;
+  }
   if (isExplicitHabitualMedicationAnswer(lines, line)) {
     if (med) return lineMentionsMedication(line, med);
     return medicationNamesInText(line.text).length > 0;
@@ -1316,6 +1382,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   prunePlaceholderMedicationEntities(assessment, warnings);
   repairClinicalSectionRouting(assessment, transcript, warnings);
   recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
+  recoverClinicianPriorRegimen(assessment, transcript, warnings);
   recoverHabitualMedicationFromPreconsultTranscript(assessment, transcript, warnings);
   recoverMedicationDoseChanges(assessment, transcript, warnings);
   pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);

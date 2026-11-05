@@ -899,3 +899,54 @@ test("ADELANTO medicación: no confirma como revisada la lista del modelo si la 
     item.topic === "medication_safety:revised_regimen_unconfirmed"
   ));
 });
+
+const clinicianHistoryTranscript = [
+  'PSIQUIATRA: Buenas tardes. Vamos a hacer una revaluación de los tratamientos farmacológicos que tiene,',
+  'PSIQUIATRA: dado que este es el concepto de la consulta. El motivo de la consulta es revaluación del tratamiento farmacológico que tiene en este momento.',
+  'PSIQUIATRA: El informe dice que no tiene ningún tipo de alergia ni a los medicamentos ni a los alimentos,',
+  'PSIQUIATRA: que no tiene ninguna enfermedad, tampoco tiene historia en salud mental.',
+  'PSIQUIATRA: Su mujer trabaja, igual que usted,',
+  'PSIQUIATRA: como médicos de atención primaria,',
+  'PSIQUIATRA: no tienen hijos,',
+  'PSIQUIATRA: no bebe alcohol ni fuma.',
+  'PSIQUIATRA: El tratamiento que tiene ahora puesto lo ha puesto su médico de familia y es el siguiente.',
+  'PSIQUIATRA: Dos fluoxetina de 40 miligramos por la mañana y una...',
+  'INTERLOCUTOR_NO_IDENTIFICADO: de 15 mg por la noche.',
+  'PSIQUIATRA: Esta medicación es algo excesiva y vamos a cambiarlo por fluoxetina de 20 mg media por la mañana y por la noche vamos a cambiar a lorazepam de 2 mg.',
+  'INTERLOCUTOR_NO_IDENTIFICADO: Muchas gracias.',
+].join('\n');
+
+test('ADELANTO: recupera la pauta de AP narrada por el psiquiatra antes del cambio y preserva cantidades', () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.sections.tratamiento_habitual.text = 'No consta.';
+  fixture.medications.current = [
+    med('Fluoxetina', 'Fluoxetina', 'active', '20 mg', '0,5 - 0 - 0'),
+    med('Lorazepam', 'Lorazepam', 'active', '2 mg', '0 - 0 - 1'),
+  ];
+  const { assessment } = applyClinicalPostprocessing(fixture, clinicianHistoryTranscript);
+  assert.deepEqual(assessment.medications.habitual.map(({raw_name, dose, schedule}) => ({raw_name, dose, schedule})), [
+    {raw_name: 'Fluoxetina', dose: '40 mg', schedule: '2 - 0 - 0'},
+  ]);
+  assert.deepEqual(assessment.medications.current.map(({raw_name, dose, schedule}) => ({raw_name, dose, schedule})), [
+    {raw_name: 'Fluoxetina', dose: '20 mg', schedule: '0,5 - 0 - 0'},
+    {raw_name: 'Lorazepam', dose: '2 mg', schedule: '0 - 0 - 1'},
+  ]);
+  const report = renderClinicalReport(assessment);
+  const prior = report.split('TRATAMIENTO VIGENTE\n')[1].split('ENFERMEDAD ACTUAL')[0];
+  assert.match(prior, /Fluoxetina 40 mg: 2 - 0 - 0/);
+  assert.match(prior, /15 mg por la noche.*no consta su nombre/);
+  assert.doesNotMatch(prior, /Lorazepam|20 mg/);
+});
+
+test('ADELANTO: una pregunta del profesional sin respuesta no confirma una pauta previa', () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [med('Fluoxetina', 'Fluoxetina', 'active', '20 mg', '1 - 0 - 0')];
+  const { assessment } = applyClinicalPostprocessing(fixture, [
+    'PSIQUIATRA: ¿El tratamiento que tiene ahora es fluoxetina 40 mg por la mañana?',
+    'PSIQUIATRA: Vamos a iniciar fluoxetina 20 mg por la mañana.',
+  ].join('\n'));
+  assert.deepEqual(assessment.medications.habitual, []);
+  assert.equal(assessment.medications.current[0].dose, '20 mg');
+});
