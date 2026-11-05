@@ -352,6 +352,13 @@ function recoverRevisedRegimenList(assessment, transcript, warnings) {
   }
 }
 
+export function restoreExplicitRegimenDecision(assessment, transcript) {
+  const plan = assessment.sections?.plan_terapeutico;
+  if (!plan || clean(plan.text) || !(assessment.medications?.current || []).some(med => med.status === "active")) return;
+  if (!speakerLines(transcript).some(line => line.speaker === "PSIQUIATRA" && REVISED_LIST_INTRODUCTION.test(normalize(line.text)))) return;
+  appendReportText(plan, "Sustitución del tratamiento farmacológico previo.", sourceIdsForSpeaker(assessment, "PSIQUIATRA"));
+}
+
 function recoverClinicianPriorRegimen(assessment, transcript, warnings) {
   const lines = speakerLines(transcript);
   for (const line of lines) {

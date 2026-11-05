@@ -1,3 +1,5 @@
+import { restoreExplicitRegimenDecision } from "./clinical-postprocess.mjs";
+
 function normalize(value) {
   return String(value || "")
     .normalize("NFD")
@@ -645,6 +647,7 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
     "report_meta_absence_pruned_from_plan",
   );
 
+  restoreExplicitRegimenDecision(assessment, transcript);
   return { assessment, warnings };
 }
 

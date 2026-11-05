@@ -22,6 +22,10 @@ test("declared present regimen and following replacement list survive empty mode
   assert.deepEqual(values("current"), [["Venlafaxina", "75 mg", "1 - 0 - 0"], ["Mirtazapina", "15 mg", "0 - 0 - 1"]]);
   const final = groundReportContentToTranscript(result.assessment, source);
   assert.doesNotMatch(final.assessment.sections.plan_terapeutico.text, /Buenas tardes|vamos a valorar/i);
+  const lateFiltered = structuredClone(result.assessment);
+  lateFiltered.sections.plan_terapeutico.text = "Iniciar venlafaxina 75 mg por la mañana y mirtazapina 15 mg por la noche.";
+  const afterLateFilter = groundReportContentToTranscript(lateFiltered, source);
+  assert.equal(afterLateFilter.assessment.sections.plan_terapeutico.text, "Sustitución del tratamiento farmacológico previo.");
 });
 
 test("a question about current medication is not a confirmed clinician history", () => {
