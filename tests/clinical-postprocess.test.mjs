@@ -874,3 +874,28 @@ test("ADELANTO medicación: excluye marcadores ininteligibles de la pauta confir
   assert.match(revised, /nombre ininteligible; se excluye de la pauta confirmada/);
   assert.doesNotMatch(revised, /\[UBICACIÓN\]/);
 });
+
+test("ADELANTO medicación: no confirma como revisada la lista del modelo si la entrevista no indica pauta posterior", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Sertralina", "Sertralina", "active", "50 mg", "1 - 0 - 0"),
+    med("Fluoxetina", "Fluoxetina", "active", "40 mg", "1 - 0 - 0"),
+    med("Lorazepam", "Lorazepam", "active", "2 mg", "0 - 0 - 1"),
+  ];
+  const transcript = [
+    "PSIQUIATRA: ¿Qué medicación está tomando antes de esta consulta?",
+    "PACIENTE: Tomo sertralina 50 mg, fluoxetina 40 mg y lorazepam 2 mg por la noche.",
+    "PSIQUIATRA: Vamos a mantener observación y valorar cómo evoluciona.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+
+  assert.deepEqual(result.assessment.medications.habitual.map((item) => item.raw_name), [
+    "Sertralina", "Fluoxetina", "Lorazepam",
+  ]);
+  assert.deepEqual(result.assessment.medications.current, []);
+  assert.ok(result.assessment.safety_review.some((item) =>
+    item.topic === "medication_safety:revised_regimen_unconfirmed"
+  ));
+});
