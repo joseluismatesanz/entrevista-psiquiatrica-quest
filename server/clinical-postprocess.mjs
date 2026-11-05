@@ -224,6 +224,7 @@ function doseAndScheduleFromMention(value, medicationName) {
   const prn = /\b(?:a\s+demanda|de\s+rescate|si\s+precisa|cuando\s+lo\s+necesite)\b/i.test(segment);
   const scheduleSource = segment
     .replace(dose?.[0] || "", " ")
+    .replace(/^\s*de\s*/i, "")
     .replace(/^[\s:;,.-]+/, "")
     .replace(/[\s.,;:]+$/, "")
     .trim();
@@ -286,10 +287,11 @@ function clinicianPriorRegimenLine(lines, line) {
   const isDeclaration = (item) => item.speaker === "PSIQUIATRA"
     && !/[?¿]/.test(item.text)
     && (declaration.test(normalize(item.text))
-      || /\bhasta\s+(?:(?:la|esta)\s+(?:valoracion|consulta)|ahora|hoy)\s+(?:(?:el\s+paciente|la\s+paciente)\s+)?(?:tenia\s+pautad[oa]s?|tomaba|toma|estaba\s+tomando)\b/i.test(normalize(item.text)))
+      || /\bhasta\s+(?:(?:la|esta)\s+(?:valoracion|consulta)|ahora|hoy)\s+(?:(?:el\s+paciente|la\s+paciente)\s+)?(?:tenia\s+pautad[oa]s?|tomaba|toma|estaba\s+tomando)\b/i.test(normalize(item.text))
+      || /^(?:(?:el|la)\s+paciente\s+|usted\s+)?(?:esta\s+tomando|actualmente\s+toma|en\s+este\s+momento\s+toma|ademas\s+toma)\b/.test(normalize(item.text)))
     && !changes.test(normalize(item.text))
     && !/\b(?:no\s+toma|no\s+tiene|si\s+tomara|podria|por\s+ejemplo)\b/.test(normalize(item.text));
-  if (changes.test(normalize(line.text))) return false;
+  if (changes.test(normalize(line.text)) || clinicianRevisedRegimenLine(lines, line)) return false;
   if (isDeclaration(line)) return true;
   let position = lines.indexOf(line) - 1;
   for (; position >= 0; position -= 1) {
@@ -299,6 +301,55 @@ function clinicianPriorRegimenLine(lines, line) {
       || !medicationNamesInText(previous.text).length) return false;
   }
   return false;
+}
+
+// Una introducción explícita gobierna la lista de la línea siguiente, aunque
+// esta no repita el verbo de prescripción. El alcance termina al cambiar de tema.
+const REVISED_LIST_INTRODUCTION = /\b(?:tratamiento|medicacion|pauta)\b.*\b(?:vamos\s+a\s+(?:cambiar|sustituir)|cambiamos|sustituimos)\b.*\bpor\s+(?:el|la)\s+siguiente\b/;
+function clinicianRevisedRegimenLine(lines, line) {
+  if (line.speaker !== "PSIQUIATRA" || /[?¿]/.test(line.text)) return false;
+  for (let index = lines.indexOf(line) - 1; index >= 0; index -= 1) {
+    const previous = lines[index];
+    if (previous.speaker !== "PSIQUIATRA" || /[?¿]/.test(previous.text)) return false;
+    if (REVISED_LIST_INTRODUCTION.test(normalize(previous.text))) return true;
+    if (!medicationNamesInText(previous.text).length
+      || /\b(?:antes|tomaba|estaba\s+tomando|no\s+toma|su\s+madre|su\s+padre)\b/.test(normalize(previous.text))) return false;
+  }
+  return false;
+}
+
+function recoverRevisedRegimenList(assessment, transcript, warnings) {
+  const lines = speakerLines(transcript);
+  let recoveredAny = false;
+  for (const line of lines) {
+    if (!clinicianRevisedRegimenLine(lines, line)) continue;
+    // Divide por coordinación antes de asignar horarios: «X por la mañana
+    // 30 mg y por la noche Y 25 mg» son dos pautas, no dos tomas de X.
+    const clauses = line.text.split(/\s+y\s+(?=(?:por\s+la\s+(?:mañana|manana|noche|tarde)\s+)?[a-záéíóúñ])/i);
+    for (const clause of clauses) {
+      const text = normalize(clause).replace(/\bmiligramos?\b/g, "mg");
+      const names = medicationNamesInText(text);
+      if (names.length !== 1 || /\b(?:no\s+(?:tome|tomar)|retirar|suspender|si\s+fuera|podria)\b/.test(text)) continue;
+      const name = names[0];
+      const details = doseAndScheduleFromMention(text, name);
+      const prefix = text.slice(0, text.indexOf(name));
+      if (!/^\d+(?:[.,]\d+)? - \d+(?:[.,]\d+)? - \d+(?:[.,]\d+)?$/.test(details.schedule)
+        && /\b(?:manana|noche|tarde|mediodia)\b/.test(prefix)) {
+        details.schedule = normalizeMedicationSchedule(`${prefix} ${details.schedule}`, details.prn);
+      }
+      const recovered = medicationEntity(name, details, sourceIdsForSpeaker(assessment, line.speaker));
+      assessment.medications.current ||= [];
+      const existing = assessment.medications.current.find((med) => sameMedication(med, recovered));
+      if (existing) Object.assign(existing, { dose: details.dose, schedule: details.schedule, status: "active", source_ids: recovered.source_ids });
+      else assessment.medications.current.push(recovered);
+      recoveredAny = true;
+      warnings.push(`medication_revised_recovered_from_explicit_list:${name}`);
+    }
+  }
+  const plan = assessment.sections?.plan_terapeutico;
+  if (recoveredAny && plan && !clean(plan.text)) {
+    appendReportText(plan, "Sustitución del tratamiento farmacológico previo.", sourceIdsForSpeaker(assessment, "PSIQUIATRA"));
+  }
 }
 
 function recoverClinicianPriorRegimen(assessment, transcript, warnings) {
@@ -690,7 +741,8 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
 
   const completePriorRegimenReplacement = lines.some((line) =>
     line.speaker === "PSIQUIATRA"
-    && COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN.test(normalize(line.text))
+    && (COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN.test(normalize(line.text))
+      || REVISED_LIST_INTRODUCTION.test(normalize(line.text)))
   );
   const hasPostChangeMedicationEvidence = (med) => lines.some((line) =>
     line.speaker === "PSIQUIATRA"
@@ -700,6 +752,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
       (line.index >= planAnchorIndex && CLINICIAN_MAINTENANCE_PATTERN.test(normalize(line.text)))
       || CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
       || CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text))
+      || clinicianRevisedRegimenLine(lines, line)
     )
   );
   const removedByCompleteReplacement = (med) =>
@@ -1426,6 +1479,7 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
   repairClinicalSectionRouting(assessment, transcript, warnings);
   recoverHabitualMedicationFromExplicitSubstitutions(assessment, transcript, warnings);
   recoverClinicianPriorRegimen(assessment, transcript, warnings);
+  recoverRevisedRegimenList(assessment, transcript, warnings);
   recoverHabitualMedicationFromPreconsultTranscript(assessment, transcript, warnings);
   recoverMedicationDoseChanges(assessment, transcript, warnings);
   pruneFamilySelfMedicationOwnership(assessment, transcript, warnings);

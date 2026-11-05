@@ -465,6 +465,7 @@ function enrichPlanFromExplicitPsychiatristAssessment(section, assessment, lines
   for (const line of lines) {
     if (line.speaker !== "psiquiatra") continue;
     for (const sentence of splitSentences(line.text)) {
+      if (/^(?:buenas\s+(?:tardes|noches)|buenos\s+dias|hola|esta\s+entrevista|mi\s+nombre|me\s+llamo|soy\s+(?:su\s+)?psiquiatra)\b/i.test(normalize(sentence))) continue;
       if (!PLAN_ASSESSMENT_PATTERN.test(sentence)) continue;
       const normalized = normalizePlanAssessmentSentence(sentence);
       if (normalized && !candidates.some((item) => normalize(item) === normalize(normalized))) {
@@ -501,6 +502,10 @@ function pruneClinicianIntroductionFromPlan(section, warnings) {
   const retained = [];
 
   for (const sentence of splitSentences(section.text)) {
+    if (/^(?:buenas\s+(?:tardes|noches)|buenos\s+dias|hola)\b/i.test(normalize(sentence))) {
+      changed = true;
+      continue;
+    }
     const match = sentence.match(CLINICIAN_INTRODUCTION_PATTERN);
     if (!match) {
       retained.push(sentence);
@@ -642,3 +647,4 @@ export function groundReportContentToTranscript(inputAssessment, transcript) {
 
   return { assessment, warnings };
 }
+

@@ -2,6 +2,34 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { applyClinicalPostprocessing } from "../server/clinical-postprocess.mjs";
 import { renderClinicalReport } from "../server/render-report.mjs";
+import { groundReportContentToTranscript } from "../server/report-content-grounding.mjs";
+
+test("declared present regimen and following replacement list survive empty model extraction", () => {
+  const input = assessmentFixture();
+  input.medications = { habitual: [], current: [] };
+  input.sections.plan_terapeutico = { text: "", evidence_status: "not_provided", source_ids: [] };
+  const source = [
+    "PSIQUIATRA: Buenas tardes, vamos a valorar la medicación.",
+    "PSIQUIATRA: Está tomando citalopram de 10 miligramos una vez por la mañana.",
+    "PSIQUIATRA: Además toma clonazepam una vez por la noche.",
+    "PSIQUIATRA: Este tratamiento que está en vigor lo vamos a cambiar por el siguiente.",
+    "PSIQUIATRA: Venlafaxina por la mañana 75 miligramos y por la noche mirtazapina de 15 miligramos.",
+    "PSIQUIATRA: Muchas gracias.",
+  ].join("\n");
+  const result = applyClinicalPostprocessing(input, source);
+  const values = (group) => result.assessment.medications[group].map(m => [m.raw_name, m.dose, m.schedule]);
+  assert.deepEqual(values("habitual"), [["Citalopram", "10 mg", "1 - 0 - 0"], ["Clonazepam", "", "0 - 0 - 1"]]);
+  assert.deepEqual(values("current"), [["Venlafaxina", "75 mg", "1 - 0 - 0"], ["Mirtazapina", "15 mg", "0 - 0 - 1"]]);
+  const final = groundReportContentToTranscript(result.assessment, source);
+  assert.doesNotMatch(final.assessment.sections.plan_terapeutico.text, /Buenas tardes|vamos a valorar/i);
+});
+
+test("a question about current medication is not a confirmed clinician history", () => {
+  const input = assessmentFixture();
+  input.medications = { habitual: [], current: [] };
+  const result = applyClinicalPostprocessing(input, "PSIQUIATRA: ¿Está tomando citalopram de 10 mg por la mañana?");
+  assert.deepEqual(result.assessment.medications.habitual, []);
+});
 
 function med(rawName, displayName, status = "active", dose = "", schedule = "") {
   return {
