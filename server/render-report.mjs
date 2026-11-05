@@ -1,4 +1,5 @@
 import { normalizeMedicationSchedule } from "./clinical-postprocess.mjs";
+import { PSYCHIATRIC_MEDICATION_VOCABULARY } from "./medication-name-aliases.mjs";
 
 export const SECTION_ORDER = [
   ["motivo_consulta", "MOTIVO DE LA CONSULTA"],
@@ -62,6 +63,38 @@ function medicationBlock(list, allowedStatuses) {
     .join("\n");
 }
 
+function planWithoutMedicationRegimens(text, assessment) {
+  const names = new Set([
+    ...PSYCHIATRIC_MEDICATION_VOCABULARY,
+    ...(assessment.medications?.habitual || []).flatMap((med) => [
+      med?.raw_name,
+      med?.display_name,
+      ...(med?.medication_verification?.activeIngredients || []),
+    ]),
+    ...(assessment.medications?.current || []).flatMap((med) => [
+      med?.raw_name,
+      med?.display_name,
+      ...(med?.medication_verification?.activeIngredients || []),
+    ]),
+  ].map((name) => clean(name).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()).filter(Boolean));
+  const sentences = String(text || "").match(/[^.!?]+[.!?]?/g)?.map((item) => item.trim()).filter(Boolean) || [];
+  let removed = false;
+  const retained = sentences.filter((sentence) => {
+    const normalized = sentence.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const namesMedication = [...names].some((name) => normalized.includes(name));
+    const hasDoseOrSchedule = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b|\b\d+\s*[-–]\s*\d+\s*[-–]\s*\d+\b/i.test(sentence);
+    if (namesMedication && hasDoseOrSchedule) {
+      removed = true;
+      return false;
+    }
+    return true;
+  });
+  if (!retained.length && removed) {
+    return "Ajuste farmacológico según la pauta consignada en TRATAMIENTO REVISADO.";
+  }
+  return retained.join(" ");
+}
+
 function medicationWarnings(assessment) {
   return (assessment.safety_review || [])
     .filter((item) => String(item?.topic || "").startsWith("medication_safety:"))
@@ -89,6 +122,7 @@ export function renderClinicalReport(assessment) {
     }
 
     let body = clean(section.text);
+    if (key === "plan_terapeutico") body = planWithoutMedicationRegimens(body, assessment);
 
     // Vigente = exclusivamente medicación que el paciente tomaba al llegar.
     // Revisado = régimen completo que queda indicado al terminar la consulta.

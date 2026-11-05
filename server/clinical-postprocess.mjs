@@ -60,7 +60,7 @@ const MEDICATION_NOUN_PATTERN = /\b(?:medicacion|medicación|tratamiento|pastill
 const HABITUAL_CONFIRMATION_PATTERN = /\b(?:toma|tomando|tratamiento|medicacion|medicación|pauta)\b/i;
 const AFFIRMATIVE_RESPONSE_PATTERN = /^\s*(?:s[ií]|correcto|exacto|eso\s+es|as[ií]\s+es|de\s+acuerdo|vale)(?:\b|[.,;:])/i;
 const EXPLICIT_MEDICATION_REGIMEN_PATTERN = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\s*:?\s*\d+(?:[.,]\d+)?\s*[-–]\s*\d+(?:[.,]\d+)?\s*[-–]\s*\d+(?:[.,]\d+)?\b/i;
-const COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN = /\b(?:(?:sustituir|sustituimos|sustituyo|cambiar|cambiamos|cambio)\s+(?:(?:por\s+completo|completamente)\s+)?(?:la\s+|el\s+|su\s+|toda\s+la\s+|todo\s+el\s+)?(?:pauta|tratamiento|medicacion)(?:\s+(?:previa|anterior|vigente|actual|que\s+(?:toma|esta\s+tomando|llevaba)))?(?=\s+(?:por|y|para|porque)\b|[,.]|$)|(?:retirar|retiramos|retiro|suspender|suspendemos|suspendo)\s+(?:por\s+completo\s+|completamente\s+|toda\s+la\s+|todo\s+el\s+)(?:pauta|tratamiento|medicacion)(?:\s+(?:previa|anterior|vigente|actual))?)\b/i;
+const COMPLETE_PRIOR_REGIMEN_REPLACEMENT_PATTERN = /\b(?:(?:sustituir|sustituimos|sustituyo|cambiar|cambiamos|cambio)\s+(?:(?:por\s+completo|completamente)\s+)?(?:la\s+|el\s+|su\s+|toda\s+la\s+|todo\s+el\s+)?(?:pauta|tratamiento|medicacion)(?:\s+(?:previo|previa|anterior|vigente|actual|que\s+(?:toma|esta\s+tomando|llevaba)))?(?=\s+(?:por|y|para|porque)\b|[,.]|$)|(?:retirar|retiramos|retiro|suspender|suspendemos|suspendo)\s+(?:por\s+completo\s+|completamente\s+|toda\s+la\s+|todo\s+el\s+)(?:pauta|tratamiento|medicacion)(?:\s+(?:previo|previa|anterior|vigente|actual))?)\b/i;
 
 function speakerLines(transcript) {
   return String(transcript || "")
@@ -218,9 +218,14 @@ function doseAndScheduleFromMention(value, medicationName) {
   const segment = medicationTextSegment(value, medicationName);
   const dose = segment.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\b/i);
   const prn = /\b(?:a\s+demanda|de\s+rescate|si\s+precisa|cuando\s+lo\s+necesite)\b/i.test(segment);
+  const scheduleSource = segment
+    .replace(dose?.[0] || "", " ")
+    .replace(/^[\s:;,.-]+/, "")
+    .replace(/[\s.,;:]+$/, "")
+    .trim();
   return {
     dose: dose ? `${dose[1]} ${dose[2]}` : "",
-    schedule: normalizeMedicationSchedule(segment, prn),
+    schedule: normalizeMedicationSchedule(scheduleSource, prn),
     prn,
   };
 }
@@ -1237,23 +1242,12 @@ function repairClinicalSectionRouting(assessment, transcript, warnings) {
       else keep.push(sentence);
     }
     if (moveMse.length) { appendReportText(mse,moveMse.join(" "),sourceIds); warnings.push("clinical_observation_rerouted_from_current_illness"); }
-    if (movePlan.length) { appendReportText(plan,movePlan.join(" "),sourceIds); warnings.push("treatment_plan_rerouted_from_current_illness"); }
+    const planAlreadyCoversDecision = /\b(?:sustituir|observaci[oó]n|tolerancia|respuesta|evoluci[oó]n|seguimiento|ingreso|alta|derivaci[oó]n)\b/i.test(plan?.text || "");
+    if (movePlan.length && !planAlreadyCoversDecision) { appendReportText(plan,movePlan.join(" "),sourceIds); warnings.push("treatment_plan_rerouted_from_current_illness"); }
     illness.text=keep.join(" ");
     if (!illness.text) { illness.evidence_status="not_provided"; illness.source_ids=[]; }
   }
   for (const section of Object.values(sections)) if (section?.text) section.text=splitReportSentences(section.text).filter((s)=>!greeting.test(s)).join(" ");
-  if (plan?.text) {
-    const names=[...(assessment.medications?.habitual||[]),...(assessment.medications?.current||[])].flatMap(medicationCandidateNames);
-    let removed=false;
-    plan.text=splitReportSentences(plan.text).filter((sentence)=>{
-      const normalized=normalize(sentence);
-      const hasName=names.some((name)=>normalized.includes(name))||medicationNamesInText(sentence).length>0;
-      const hasDose=/\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b|\b\d+\s*[-–]\s*\d+\s*[-–]\s*\d+\b/i.test(sentence);
-      if(hasName&&hasDose){removed=true;return false;} return true;
-    }).join(" ");
-    if(removed&&!plan.text){plan.text="Ajuste farmacológico según la pauta consignada en TRATAMIENTO REVISADO.";plan.evidence_status="supported";}
-    if(removed)warnings.push("duplicate_medication_regimen_removed_from_plan");
-  }
 }
 
 export function applyClinicalPostprocessing(inputAssessment, transcript) {
