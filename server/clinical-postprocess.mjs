@@ -135,7 +135,47 @@ function recoverExplicitPatientHabitualMedications(assessment, transcript, warni
       });
       warnings.push(`medication_habitual_recovered_from_explicit_patient_statement:${canonical}`);
     }
+  const doseMedicationPattern = /\b([a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2})\s+(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|µg|g|ml|ui|miligramos?)\b/giu;
+    const contextWords = new Set([
+      "tomo", "toma", "tomando", "estoy", "estaba", "tratamiento", "medicacion",
+      "farmaco", "pauta", "con", "de", "del", "por", "para", "la", "el", "los",
+      "las", "un", "una", "al", "en", "cada", "dia", "y", "e", "manana", "noche",
+      "mediodia", "dosis", "oral", "actualmente", "habitual", "antes",
+    ]);
+    for (const match of text.matchAll(doseMedicationPattern)) {
+      const words = match[1].split(/\s+/);
+      while (words.length && contextWords.has(normalize(words[0]))) words.shift();
+      while (words.length && contextWords.has(normalize(words.at(-1)))) words.pop();
+      const candidate = words.join(" ").trim();
+      if (!candidate || normalize(candidate).length < 4) continue;
+      const candidateNames = medicationCandidateNames({ raw_name: candidate, display_name: candidate });
+      if (habitual.some((med) => medicationCandidateNames(med).some((name) => candidateNames.includes(name)))) continue;
+      const matchingCurrent = (assessment.medications?.current || []).find((med) =>
+        medicationCandidateNames(med).some((name) => candidateNames.includes(name))
+      );
+
+      const afterDose = text.slice(match.index + match[0].length, match.index + match[0].length + 100);
+      const schedules = afterDose.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|para\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia)\b/gi);
+      const canonicalName = candidate.charAt(0).toLocaleUpperCase("es") + candidate.slice(1);
+      habitual.push({
+        raw_name: canonicalName,
+        display_name: clean(matchingCurrent?.display_name) || canonicalName,
+        active_ingredient_known: Boolean(matchingCurrent?.active_ingredient_known),
+        role: matchingCurrent?.role || "unknown",
+        dose: match[2] + " " + (/^mili/i.test(match[3]) ? "mg" : match[3]),
+        schedule: schedules?.length ? [...new Set(schedules)].join(" y ") : "",
+        route: clean(matchingCurrent?.route),
+        prn: /\ba\s+demanda\b/i.test(afterDose),
+        adherence_status: "unknown",
+        adherence_text: "",
+        status: "active",
+        source_ids: patientSourceId ? [patientSourceId] : [],
+      });
+      warnings.push("medication_habitual_recovered_from_explicit_patient_dose_statement:" + canonicalName);
+    }
   }
+
+
   assessment.medications.habitual = habitual;
 }
 
