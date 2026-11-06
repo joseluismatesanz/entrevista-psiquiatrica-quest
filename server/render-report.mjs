@@ -13,7 +13,7 @@ export const SECTION_ORDER = [
   ["exploracion_psicopatologica", "EXPLORACIÓN PSICOPATOLÓGICA"],
   ["orientacion_diagnostica", "ORIENTACIÓN DIAGNÓSTICA"],
   ["plan_terapeutico", "PLAN TERAPÉUTICO"],
-  ["tratamiento_actual", "TRATAMIENTO ACTUAL"],
+  ["tratamiento_actual", "TRATAMIENTO REVISADO"],
 ];
 
 function clean(value) {
@@ -111,9 +111,9 @@ export function renderClinicalReport(assessment) {
     }
     if (key === "tratamiento_actual") {
       const list = assessment.medications?.current;
-      if (Array.isArray(list) && list.length > 0) {
+      if (Array.isArray(list)) {
         body = medicationBlock(list, ["active", "administered_once"]);
-        if (!body) body = "No consta tratamiento actual activo.";
+        if (!body) body = "No consta tratamiento revisado.";
       }
     }
 
