@@ -347,7 +347,7 @@
     $('copyReport').disabled = true;
   }
 
-  async function analyzeWithBackend() {
+  async function analyzeWithBackend({ showOrganization = false } = {}) {
     const transcript = $('caseText').value.trim();
     if (!transcript) {
       $('sessionMessage').textContent = 'Pega o graba primero una entrevista ficticia o anonimizada.';
@@ -399,8 +399,8 @@
       state.result = payload;
       window.__CLINICAL_REPORT_AVAILABLE = true;
       renderReview(payload);
-      showScreen('report');
-      document.body.classList.add('clinical-report-visible');
+      showScreen(showOrganization ? 'review' : 'report');
+      if (!showOrganization) document.body.classList.add('clinical-report-visible');
       analysisSucceeded = true;
       window.dispatchEvent(new CustomEvent('clinical-report-ready'));
       return payload;
@@ -434,7 +434,7 @@
     state.result = null;
     window.__CLINICAL_REPORT_AVAILABLE = false;
     document.body.classList.remove('transcription-actions-only', 'clinical-report-visible');
-    $('workflowActions')?.classList.remove('hidden');
+    $('workflowActions')?.classList.add('hidden');
     clearAudioMappingState();
     $('caseText').value = '';
     $('sourcesList').innerHTML = '';
@@ -455,16 +455,18 @@
     clearAudioMappingState();
     $('caseText').value = DEMO_TEXT;
     $('sessionMessage').textContent = 'Caso ficticio breve cargado.';
+    syncWorkflowActions();
   });
   for (const id of ['loadCase1', 'loadCase2']) {
     $(id)?.addEventListener('click', () => clearAudioMappingState());
   }
-  $('analyzeCase')?.addEventListener('click', analyzeWithBackend);
-  window.runClinicalReportGeneration = analyzeWithBackend;
+  $('analyzeCase')?.addEventListener('click', () => analyzeWithBackend({ showOrganization: true }));
+  window.runClinicalReportGeneration = () => analyzeWithBackend({ showOrganization: false });
   function syncWorkflowActions() {
     const hasTranscript = Boolean($('caseText').value.trim());
-    $('workflowActions')?.classList.remove('hidden');
-    $('analyzeCase').disabled = !hasTranscript;
+    const transcriptReady = hasTranscript && window.__LONG_INTERVIEW_INCOMPLETE !== true;
+    $('workflowActions')?.classList.toggle('hidden', !transcriptReady);
+    $('analyzeCase').disabled = !transcriptReady;
   }
   $('caseText')?.addEventListener('input', syncWorkflowActions);
   window.addEventListener('clinical-transcription-ready', syncWorkflowActions);
