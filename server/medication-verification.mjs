@@ -1,4 +1,4 @@
-import { resolveHighConfidenceMedicationCandidate } from "./medication-name-aliases.mjs";
+import { MEDICATION_NAME_ALIASES, PSYCHIATRIC_MEDICATION_VOCABULARY, resolveHighConfidenceMedicationCandidate } from "./medication-name-aliases.mjs";
 
 const CIMA_BASE_URL = "https://cima.aemps.es/cima/rest";
 const DEFAULT_TIMEOUT_MS = 4500;
@@ -357,6 +357,146 @@ export async function verifyAssessmentMedications(inputAssessment, options = {})
       medication_active_ingredient_master_fallback: true,
       medication_verification_parallelized: true,
       medication_only_unverified_pass: Boolean(options.onlyUnverified),
+    },
+  };
+}
+
+
+function escapeMedicationPattern(value) {
+  return clean(value).split(/\s+/).map((part) => part.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&")).join("\\s+");
+}
+function medicationMentionPattern(value) {
+  const escaped = escapeMedicationPattern(value);
+  return escaped ? new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu") : null;
+}
+
+function appendReportMedicationReview(assessment, evidence, topic) {
+  assessment.safety_review ||= [];
+  if (assessment.safety_review.some((item) => item.topic === topic && item.evidence === evidence)) return;
+  assessment.safety_review.push({
+    topic,
+    evidence,
+    source_ids: [],
+    needs_clinician_review: true,
+  });
+}
+
+export async function verifyReportMedicationMentions(inputAssessment, options = {}) {
+  const assessment = structuredClone(inputAssessment);
+  const warningSet = new Set();
+  const candidates = new Map();
+  const knownVocabulary = [
+    ...PSYCHIATRIC_MEDICATION_VOCABULARY,
+    ...MEDICATION_NAME_ALIASES.map((alias) => alias.source),
+  ];
+
+  for (const name of knownVocabulary) {
+    const cleaned = clean(name);
+    if (cleaned) candidates.set(normalize(cleaned), cleaned);
+  }
+
+  const medicationContextPattern = /\b(?:medicacion|medicación|tratamiento)\s+(?:con|de)\s+([a-záéíóúüñ][a-záéíóúüñ-]{3,})|(?:toma|tomar|tomando|iniciar|inicia|prescribir|prescribe|pautar|pauta|indicar|indica|mantener|suspender|suspende|retirar|retira|cambiar\s+a|cambio\s+a)\s+(?:(?:el|la|un|una)\s+)?([a-záéíóúüñ][a-záéíóúüñ-]{3,})/giu;
+  const nonMedicationWords = new Set(["medicacion", "tratamiento", "pauta", "ninguna", "ningun", "ningún", "actualmente", "correctamente", "adecuadamente", "ninguno"]);
+  for (const section of Object.values(assessment.sections || {})) {
+    const text = clean(section?.text);
+    if (!text) continue;
+    for (const match of text.matchAll(medicationContextPattern)) {
+      const candidate = clean(match[1] || match[2]);
+      if (candidate && !nonMedicationWords.has(normalize(candidate))) {
+        candidates.set(normalize(candidate), candidate);
+      }
+    }
+  }
+
+  for (const group of ["habitual", "current"]) {
+    for (const med of assessment.medications?.[group] || []) {
+      for (const name of [med?.raw_name, String(med?.display_name || "").includes("(") ? "" : med?.display_name, med?.medication_verification?.queriedName]) {
+        const cleaned = clean(name);
+        if (cleaned) candidates.set(normalize(cleaned), cleaned);
+      }
+    }
+  }
+
+  const sectionMatches = [];
+  for (const [sectionKey, section] of Object.entries(assessment.sections || {})) {
+    if (!section?.text) continue;
+    for (const candidate of candidates.values()) {
+      const pattern = medicationMentionPattern(candidate);
+      if (!pattern) continue;
+      const matches = [...section.text.matchAll(pattern)].map((match) => match[0]);
+      for (const matchedText of matches) {
+        sectionMatches.push({ sectionKey, candidate, matchedText });
+      }
+    }
+  }
+
+  const uniqueNames = new Map();
+  for (const match of sectionMatches) {
+    const key = normalize(match.candidate);
+    if (!uniqueNames.has(key)) uniqueNames.set(key, match.candidate);
+  }
+
+  const structuredVerification = new Map();
+  for (const group of ["habitual", "current"]) {
+    for (const med of assessment.medications?.[group] || []) {
+      const verification = med?.medication_verification;
+      if (!verification) continue;
+      for (const name of [med?.raw_name, verification?.queriedName, verification?.rawName]) {
+        const key = normalize(name);
+        if (key) structuredVerification.set(key, verification);
+      }
+    }
+  }
+
+  const pairs = await Promise.all([...uniqueNames.entries()].map(async ([key, name]) => {
+    const existing = structuredVerification.get(key);
+    return [key, existing || await verifyMedicationName(name, options)];
+  }));
+  const verifications = new Map(pairs);
+  const replacements = new Map();
+  let confirmedCount = 0;
+  let pendingCount = 0;
+
+  for (const [key, name] of uniqueNames) {
+    const verification = verifications.get(key);
+    const mention = sectionMatches.find((match) => normalize(match.candidate) === key);
+    const mentionText = mention?.matchedText || name;
+    const sectionLabel = mention?.sectionKey || "apartado no identificado";
+    if (verification?.status === "confirmed") {
+      confirmedCount += 1;
+      const displayName = canonicalDisplayName(verification, mentionText);
+      replacements.set(key, { name, displayName, status: "confirmed" });
+    } else {
+      pendingCount += 1;
+      const unavailable = verification?.status === "unavailable";
+      const suffix = unavailable ? " (verificación CIMA no disponible)" : " (no encontrada correspondencia en CIMA)";
+      replacements.set(key, { name, displayName: `${mentionText}${suffix}`, status: verification?.status || "unavailable" });
+      const evidence = unavailable
+        ? `No se pudo verificar en CIMA la mención «${mentionText}» del apartado «${sectionLabel}». Confirmar manualmente antes de validar el informe.`
+        : `No se encontró correspondencia en CIMA para la mención «${mentionText}» del apartado «${sectionLabel}». Confirmar manualmente antes de validar el informe.`;
+      appendReportMedicationReview(assessment, evidence, unavailable ? "medicacion_en_informe_no_verificada" : "medicacion_en_informe_no_encontrada");
+      warningSet.add(unavailable ? `report_medication_verification_unavailable:${mentionText}` : `report_medication_not_found_in_cima:${mentionText}`);
+    }
+  }
+
+  for (const section of Object.values(assessment.sections || {})) {
+    if (!section?.text) continue;
+    const ordered = [...replacements.entries()].sort((left, right) => right[1].name.length - left[1].name.length);
+    for (const [key, replacement] of ordered) {
+      const pattern = medicationMentionPattern(replacement.name);
+      if (!pattern) continue;
+      section.text = section.text.replace(pattern, () => replacement.displayName);
+    }
+  }
+
+  return {
+    assessment,
+    warnings: [...warningSet],
+    meta: {
+      medication_report_mentions_checked: uniqueNames.size,
+      medication_report_mentions_confirmed: confirmedCount,
+      medication_report_mentions_pending: pendingCount,
+      medication_report_mention_sources: ["AEMPS CIMA"],
     },
   };
 }
