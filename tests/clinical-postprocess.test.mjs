@@ -918,6 +918,30 @@ test("V0.6 diagnóstico: conserva el diagnóstico expresamente indicado por el p
   assert.deepEqual(result.assessment.missing_or_not_explored, []);
 });
 
+test("V0.6 tratamiento: reconoce etiquetas mixtas y numeradas para separar pautas", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Sertralina", "Sertralina", "active", "100 mg", "por la mañana"),
+    med("Venlafaxina", "Venlafaxina", "active", "75 mg", "por la mañana"),
+  ];
+  const transcript = [
+    "Psiquiatra (Voz 1): ¿Qué tratamiento toma habitualmente antes de esta consulta?",
+    "Paciente (Voz 2): Tomo sertralina 50 mg por la mañana.",
+    "Psiquiatra (Voz 1): Desde hoy retiramos la sertralina y comenzamos venlafaxina 75 mg por la mañana.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => item.raw_name + ":" + item.dose),
+    ["Sertralina:50 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => item.raw_name + ":" + item.dose),
+    ["Venlafaxina:75 mg"],
+  );
+});
+
 test("Regresión real: separa pauta previa/final y recupera anorexia, motivo y enfermedad actual", () => {
   const fixture = assessmentFixture();
   fixture.sections.motivo_consulta = { text: "", evidence_status: "not_provided", source_ids: [] };
