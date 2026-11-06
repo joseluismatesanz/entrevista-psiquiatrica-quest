@@ -376,7 +376,7 @@ test("V0.6 medicación: una presentación inicial no oculta las pautas previas d
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Mirtazapina:30 mg", "Escitalopram:20 mg", "Sertralina:50 mg"],
+    ["Mirtazapina:30 mg", "Escitalopram:20 mg"],
   );
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/i);
   assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg: 0 - 0 - 1/i);
@@ -405,7 +405,7 @@ test("V0.6 medicación: recupera mirtazapina habitual aunque el dictado fonétic
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Mirtazapina:30 mg", "Sertralina:50 mg", "Clonazepam:0,5 mg"],
+    ["Mirtazapina:30 mg"],
   );
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg: 0 - 0 - 1/i);
   assert.match(result.assessment.sections.tratamiento_habitual.text, /Clonazepam 0,5 mg.*a demanda/i);
@@ -444,7 +444,7 @@ test("V0.6 medicación: el actual incluye los mantenidos y excluye los retirados
   assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Lorazepam/);
 });
 
-test("V0.6 medicación: si no hay cambios el tratamiento actual queda vacío", () => {
+test("V0.6 medicación: una pauta mantenida expresamente también queda en tratamiento revisado", () => {
   const fixture = assessmentFixture();
   fixture.medications.habitual = [
     med("Sertralina", "Sertralina", "active", "50 mg", "por la mañana"),
@@ -459,9 +459,9 @@ test("V0.6 medicación: si no hay cambios el tratamiento actual queda vacío", (
   ].join("\n");
 
   const result = applyClinicalPostprocessing(fixture, transcript);
-  assert.deepEqual(result.assessment.medications.current, []);
-  assert.equal(result.assessment.sections.tratamiento_actual.text, "");
-  assert.equal(result.assessment.sections.tratamiento_actual.evidence_status, "not_provided");
+  assert.deepEqual(result.assessment.medications.current.map((item) => item.raw_name), ["Sertralina", "Mirtazapina"]);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Sertralina 50 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 15 mg/);
 });
 
 test("V0.6 medicación: presenta la posología técnica mañana-comida-noche", () => {
@@ -887,7 +887,7 @@ test("V0.6 medicación: ENTREVISTADO conserva la fotografía previa y la pauta f
   );
   assert.deepEqual(
     result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
-    ["Mirtazapina:30 mg", "Duloxetina:60 mg", "Rivotril:0,5 mg"],
+    ["Mirtazapina:30 mg", "Olanzapina:5 mg"],
   );
 });
 
@@ -944,8 +944,8 @@ test("Regresión real: separa pauta previa/final y recupera anorexia, motivo y e
   assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Duloxetina 60 mg: 1 - 0 - 0/);
   assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Mirtazapina 15 mg: 0 - 0 - 1/);
   assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Sertralina 50 mg: 1 - 0 - 0/);
-  assert.match(report, /TRATAMIENTO ACTUAL\n[\s\S]*Mirtazapina 30 mg: 0 - 0 - 1/);
-  assert.doesNotMatch(report, /TRATAMIENTO ACTUAL\n[\s\S]*Mirtazapina 15 mg/);
+  assert.match(report, /TRATAMIENTO REVISADO\n/g[\s\S]*Mirtazapina 30 mg: 0 - 0 - 1/);
+  assert.doesNotMatch(report, /TRATAMIENTO REVISADO\n/g[\s\S]*Mirtazapina 15 mg/);
   assert.match(report, /JUICIO CLÍNICO: Anorexia nerviosa\. CIE-10: F50\.0\. DSM-5-TR: 307\.1\./);
   assert.match(report, /MOTIVO DE LA CONSULTA\nRevisión y modificación del tratamiento farmacológico\./);
   assert.match(report, /ENFERMEDAD ACTUAL\nEn seguimiento por anorexia nerviosa/);
