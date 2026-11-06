@@ -500,3 +500,195 @@ export async function verifyReportMedicationMentions(inputAssessment, options = 
     },
   };
 }
+
+
+function stripHtmlText(value) {
+  return String(value || "")
+    .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+    .replace(/<\s*\/(?:p|li|div|tr|h[1-6])\s*>/gi, "\n")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&aacute;/gi, "á")
+    .replace(/&eacute;/gi, "é")
+    .replace(/&iacute;/gi, "í")
+    .replace(/&oacute;/gi, "ó")
+    .replace(/&uacute;/gi, "ú")
+    .replace(/&ntilde;/gi, "ñ")
+    .replace(/&uuml;/gi, "ü")
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCodePoint(Number(code)))
+    .replace(/[ \t\r\f\v]+/g, " ")
+    .replace(/\n\s*/g, "\n")
+    .trim();
+}
+
+function section45Text(payload) {
+  const sections = Array.isArray(payload)
+    ? payload
+    : listFromPayload(payload?.secciones ? payload.secciones : payload);
+  const section = sections.find((item) => String(item?.seccion ?? item?.section ?? item?.id ?? "").trim() === "4.5")
+    || (payload && typeof payload === "object" && String(payload.seccion ?? payload.section ?? "") === "4.5" ? payload : null);
+  return stripHtmlText(section?.contenido ?? section?.content ?? "");
+}
+
+function interactionDrugNames(med) {
+  const verification = med?.medication_verification || {};
+  const values = [
+    ...(Array.isArray(verification.activeIngredients) ? verification.activeIngredients : []),
+    ...(Array.isArray(med?.active_ingredients) ? med.active_ingredients : []),
+    verification.queriedName,
+    med?.display_name,
+    med?.raw_name,
+  ];
+  const candidates = new Set();
+  for (const value of values) {
+    const full = normalize(value).replace(/\b(?:hidrocloruro|clorhidrato|succinato|maleato|fumarato|mesilato|besilato|tartrato|citrato|sulfato|hemifumarato)\b/g, " ").replace(/\s+/g, " ").trim();
+    if (full.length >= 5) candidates.add(full);
+    const first = full.split(/\s+/)[0];
+    if (first?.length >= 6) candidates.add(first);
+  }
+  return [...candidates].sort((a, b) => b.length - a.length);
+}
+
+function hasExactMedicineMention(text, candidates) {
+  const normalizedText = normalize(text);
+  return candidates.some((candidate) => {
+    const escaped = escapeMedicationPattern(candidate);
+    return escaped && new RegExp("(?<![a-z0-9])" + escaped + "(?![a-z0-9])", "i").test(normalizedText);
+  });
+}
+
+function interactionSignal(text) {
+  const normalized = normalize(text);
+  if (/\b(?:contraindica|contraindicado|no debe administrarse|no debe utilizarse|evitar la asociacion|evitar el uso concomitante)\b/.test(normalized)) {
+    return "Contraindicación o asociación que la ficha técnica recomienda evitar";
+  }
+  if (/\b(?:precaucion|monitorizar|vigilar|controlar|puede aumentar|puede reducir|riesgo de|se recomienda controlar)\b/.test(normalized)) {
+    return "Interacción descrita con precaución o monitorización";
+  }
+  return "Interacción mencionada en la ficha técnica";
+}
+
+async function fetchInteractionSection(nregistro, fetchFn, timeoutMs) {
+  const url = `${CIMA_BASE_URL}/docSegmentado/contenido/1?nregistro=${encodeURIComponent(nregistro)}&seccion=4.5`;
+  const payload = await fetchJson(url, fetchFn, timeoutMs);
+  const text = section45Text(payload);
+  if (!text) throw new Error("CIMA no devolvió el contenido de la sección 4.5");
+  return {
+    text,
+    url: `https://cima.aemps.es/cima/dochtml/ft/${encodeURIComponent(nregistro)}/4.5/FichaTecnica.html`,
+  };
+}
+
+export async function checkCurrentMedicationInteractions(inputAssessment, options = {}) {
+  const assessment = structuredClone(inputAssessment);
+  const current = (assessment.medications?.current || []).filter((med) => med?.status === "active");
+  const review = { source: "AEMPS CIMA, ficha técnica sección 4.5", status: "not_applicable", checked_pairs: 0, findings: [], note: "" };
+
+  if (current.length < 2) {
+    review.status = "single_or_no_medication";
+    review.note = current.length
+      ? "No hay una combinación de dos o más medicamentos activos en el tratamiento revisado para comparar."
+      : "No consta medicación activa en el tratamiento revisado.";
+    assessment.medication_interaction_review = review;
+    return { assessment, warnings: [], meta: { medication_interaction_check_source: review.source, medication_interaction_check_status: review.status } };
+  }
+
+  const fetchFn = options.fetchFn || globalThis.fetch;
+  const timeoutMs = options.timeoutMs || 6000;
+  const medicationData = [];
+  const unavailable = [];
+
+  for (const med of current) {
+    const verification = med?.medication_verification || {};
+    const candidates = interactionDrugNames(med);
+    const registry = clean(verification.nregistro);
+    if (verification.status !== "confirmed" || !candidates.length || !registry) {
+      unavailable.push(clean(med.display_name || med.raw_name) || "medicamento no identificado");
+      continue;
+    }
+    medicationData.push({
+      label: clean(med.display_name || med.raw_name),
+      registry,
+      candidates,
+      ingredients: Array.isArray(verification.activeIngredients) ? verification.activeIngredients : [],
+    });
+  }
+
+  if (unavailable.length) {
+    review.status = "incomplete";
+    review.note = `Comprobación incompleta: no se pudo vincular con CIMA ${[...new Set(unavailable)].join(", ")}. No se puede concluir que no haya interacciones.`;
+    assessment.medication_interaction_review = review;
+    return {
+      assessment,
+      warnings: ["medication_interaction_check_incomplete"],
+      meta: { medication_interaction_check_source: review.source, medication_interaction_check_status: review.status },
+    };
+  }
+
+  const uniqueRegistries = [...new Set(medicationData.map((med) => med.registry))];
+  const fetched = await Promise.all(uniqueRegistries.map(async (registry) => {
+    try {
+      return [registry, await fetchInteractionSection(registry, fetchFn, timeoutMs)];
+    } catch (error) {
+      return [registry, { error: String(error?.message || "No se pudo consultar CIMA") }];
+    }
+  }));
+  const sections = new Map(fetched);
+
+  const pairKeys = new Set();
+  for (let leftIndex = 0; leftIndex < medicationData.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < medicationData.length; rightIndex += 1) {
+      const left = medicationData[leftIndex];
+      const right = medicationData[rightIndex];
+      if (left.registry === right.registry) continue;
+      review.checked_pairs += 1;
+      const key = [left.label, right.label].sort().join(" + ");
+      if (pairKeys.has(key)) continue;
+      pairKeys.add(key);
+
+      let found = null;
+      for (const [source, target] of [[left, right], [right, left]]) {
+        const section = sections.get(source.registry);
+        if (!section || section.error) continue;
+        const evidence = section.text
+          .split(/\n+/)
+          .map((paragraph) => paragraph.trim())
+          .find((paragraph) => hasExactMedicineMention(paragraph, target.candidates));
+        if (evidence) {
+          found = {
+            medicines: [left.label, right.label],
+            type: interactionSignal(evidence),
+            detail: evidence,
+            source: section.url,
+          };
+          break;
+        }
+      }
+      if (found) review.findings.push(found);
+    }
+  }
+
+  const failed = fetched.filter(([, section]) => section.error);
+  if (failed.length) {
+    review.status = "incomplete";
+    review.note = `No se pudo consultar la sección 4.5 de ${failed.length} ficha(s) técnica(s) en CIMA. No se puede concluir que no haya interacciones.`;
+  } else if (review.findings.length) {
+    review.status = "interaction_found";
+    review.note = "CIMA describe las siguientes interacciones entre medicamentos del tratamiento revisado.";
+  } else {
+    review.status = "no_direct_interaction_found";
+    review.note = "No se encontró una mención directa entre estos principios activos en las secciones 4.5 consultadas. Esto no excluye interacciones por clases, factores del paciente u otras fuentes.";
+  }
+
+  assessment.medication_interaction_review = review;
+  return {
+    assessment,
+    warnings: review.status === "interaction_found" ? ["medication_interaction_found"] : failed.length ? ["medication_interaction_check_incomplete"] : [],
+    meta: {
+      medication_interaction_check_source: review.source,
+      medication_interaction_check_status: review.status,
+      medication_interaction_pairs_checked: review.checked_pairs,
+    },
+  };
+}
