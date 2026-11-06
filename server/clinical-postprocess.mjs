@@ -516,6 +516,15 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     line.speaker === "PSIQUIATRA"
     && /\b(?:mantenga|mantener|mantenemos|continuar|continua)\b.*\bresto\s+del\s+tratamiento\b/i.test(normalize(line.text))
   );
+  const hasClinicianFutureEvidence = (med) => hasClinicianMaintenanceEvidence(med)
+    || hasGenericMaintenanceEvidence
+    || lines.some((line) => {
+      if (line.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
+      const planIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
+      return line.index >= planIndex
+        || CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
+        || CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text));
+    });
 
   const explicitSubstitutionPriors = [
     ...substitutionPriorMedicationPhrases(transcript),
@@ -693,33 +702,30 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
 
   const hasPharmacologicalUpdate = withoutDiscontinued.some((currentMed) => {
     const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
-    return !previous || regimenChanged(currentMed, previous) || hasExplicitTreatmentChange(currentMed);
+    return !previous || regimenChanged(currentMed, previous) || hasExplicitTreatmentChange(currentMed)
+      || hasClinicianMaintenanceEvidence(currentMed) || hasGenericMaintenanceEvidence;
   }) || retainedHabitual.some((habitualMed) => hasExplicitDiscontinuation(habitualMed));
 
-  // Si durante la consulta hay una actualización, ACTUAL representa la pauta
-  // final completa. Todo fármaco habitual no retirado continúa en la pauta
-  // final, aunque el profesional solo verbalice el elemento modificado.
+  // Solo se incluyen en TRATAMIENTO REVISADO pautas futuras indicadas por el psiquiatra.
+  // La medicación habitual no se copia automáticamente cuando hay cualquier cambio.
   if (hasPharmacologicalUpdate) {
     for (const habitualMed of retainedHabitual) {
-      if (hasExplicitDiscontinuation(habitualMed)) continue;
+      if (hasExplicitDiscontinuation(habitualMed) || !hasClinicianFutureEvidence(habitualMed)) continue;
       if (withoutDiscontinued.some((item) => overlaps(item, habitualMed))) continue;
       withoutDiscontinued.push({ ...habitualMed, status: "active" });
       const name = clean(habitualMed.display_name) || clean(habitualMed.raw_name) || "medicamento";
-      warnings.push(`medication_explicitly_maintained_added_to_current:${name}`);
+      warnings.push(`medication_explicitly_maintained_added_to_revised:${name}`);
     }
   }
 
-  // Sin actualización farmacológica, ACTUAL queda vacío. Cuando sí la hay,
-  // conserva nuevas/modificadas y las mantenidas expresamente; elimina solo
-  // duplicados que el modelo haya copiado sin una indicación clínica final.
   assessment.medications.current = withoutDiscontinued.filter((currentMed) => {
-    const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
     if (!hasPharmacologicalUpdate) return false;
-    if (previous) return true;
-    if (!previous || regimenChanged(currentMed, previous)) return true;
-    const name = clean(currentMed.display_name) || clean(currentMed.raw_name) || "medicamento";
-    warnings.push(`medication_unchanged_pruned_from_current:${name}`);
-    return false;
+    if (!hasClinicianFutureEvidence(currentMed)) {
+      const name = clean(currentMed.display_name) || clean(currentMed.raw_name) || "medicamento";
+      warnings.push(`medication_without_clinician_future_plan_removed_from_revised:${name}`);
+      return false;
+    }
+    return true;
   });
 
   // Una pauta iniciada en esta consulta todavía no tiene adherencia observable.
