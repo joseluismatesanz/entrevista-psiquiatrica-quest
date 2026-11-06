@@ -944,8 +944,8 @@ test("Regresión real: separa pauta previa/final y recupera anorexia, motivo y e
   assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Duloxetina 60 mg: 1 - 0 - 0/);
   assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Mirtazapina 15 mg: 0 - 0 - 1/);
   assert.match(report, /TRATAMIENTO HABITUAL\n[\s\S]*Sertralina 50 mg: 1 - 0 - 0/);
-  assert.match(report, /TRATAMIENTO REVISADO\n/g[\s\S]*Mirtazapina 30 mg: 0 - 0 - 1/);
-  assert.doesNotMatch(report, /TRATAMIENTO REVISADO\n/g[\s\S]*Mirtazapina 15 mg/);
+  assert.match(report, /TRATAMIENTO REVISADO\n[\s\S]*Mirtazapina 30 mg: 0 - 0 - 1/);
+  assert.doesNotMatch(report, /TRATAMIENTO REVISADO\n[\s\S]*Mirtazapina 15 mg/);
   assert.match(report, /JUICIO CLÍNICO: Anorexia nerviosa\. CIE-10: F50\.0\. DSM-5-TR: 307\.1\./);
   assert.match(report, /MOTIVO DE LA CONSULTA\nRevisión y modificación del tratamiento farmacológico\./);
   assert.match(report, /ENFERMEDAD ACTUAL\nEn seguimiento por anorexia nerviosa/);
