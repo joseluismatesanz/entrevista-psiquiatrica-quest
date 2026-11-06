@@ -19,7 +19,7 @@ import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
 import { groundReportContentToTranscript } from "./report-content-grounding.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
-import { verifyAssessmentMedications } from "./medication-verification.mjs";
+import { verifyAssessmentMedications, verifyReportMedicationMentions } from "./medication-verification.mjs";
 import { clinicalModelRequestOptions } from "./model-request-policy.mjs";
 
 function extractRefusal(response) {
@@ -329,6 +329,17 @@ export async function analyzeTranscript(transcript, options = {}) {
   assessment = reportGroundResult.assessment;
   warnings.push(...reportGroundResult.warnings);
 
+  let medicationReportMentionMeta = {};
+  if (shouldVerifyMedications) {
+    const reportMedicationResult = await verifyReportMedicationMentions(
+      assessment,
+      options.medicationVerificationOptions || {},
+    );
+    assessment = reportMedicationResult.assessment;
+    warnings.push(...reportMedicationResult.warnings);
+    medicationReportMentionMeta = reportMedicationResult.meta || {};
+  }
+
   const violations = collectClinicalInvariantViolations(assessment);
   const deterministicAndMedicationMs = Date.now() - deterministicStartedAt;
   const deterministicOnlyMs = Math.max(0, deterministicAndMedicationMs - medicationMs);
@@ -366,6 +377,7 @@ export async function analyzeTranscript(transcript, options = {}) {
         total_analysis: Date.now() - totalStartedAt,
       },
       ...medicationMeta,
+      ...medicationReportMentionMeta,
       ...postprocessResult.meta,
     },
   };
