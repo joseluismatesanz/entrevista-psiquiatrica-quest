@@ -126,7 +126,6 @@ export function renderClinicalReport(assessment) {
       } else if (interactionReview?.status === "no_direct_interaction_found") {
         body += `\n\nREVISIÓN DE INTERACCIONES CIMA: ${interactionReview.note}`;
       }
-      }
     }
 
     if (!body) {
