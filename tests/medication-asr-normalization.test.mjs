@@ -66,6 +66,12 @@ test("ASR farmacológico: normaliza segmentos conservando identidad y timestamps
   assert.ok(result.applied_aliases.includes("mirtacepina_to_mirtazapina"));
 });
 
+test("ASR farmacológico: corrige belafaxina a venlafaxina en contexto de tratamiento", () => {
+  const result = normalizeMedicationAsrText("Belafaxina 75 mg: 1 - 0 - 0.");
+  assert.equal(result.text, "Venlafaxina 75 mg: 1 - 0 - 0.");
+  assert.deepEqual(result.applied_aliases, ["belafaxina_to_venlafaxina"]);
+});
+
 test("ASR farmacológico: recupera variantes fonéticas frecuentes antes de consultar CIMA", () => {
   const result = normalizeMedicationAsrText(
     "Sustituir por ven la fascina y de praxis; añadir cronacepan si precisa.",
