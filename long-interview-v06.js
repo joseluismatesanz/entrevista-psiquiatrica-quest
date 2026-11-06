@@ -182,6 +182,7 @@
     state.recorderParts = [];
     state.mimeType = '';
     state.startedAt = 0;
+    window.__SALUD_MENTAL_INTERVIEW_STARTED_AT = null;
     state.blockIndex = 0;
     state.processedBlocks = [];
     state.pendingBlocks = 0;
@@ -709,7 +710,7 @@
     state.analysisPrefetchStarted = true;
     const pending = fetch(`${baseUrl}/api/analyze`, {
       method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript }),
+      body: JSON.stringify({ transcript, interviewStartedAt: state.startedAt || Date.now() }),
     }).then(async (response) => ({
       status: response.status,
       statusText: response.statusText,
@@ -831,6 +832,7 @@
       state.active = true;
       window.__LONG_INTERVIEW_INCOMPLETE = true;
       state.startedAt = Date.now();
+      window.__SALUD_MENTAL_INTERVIEW_STARTED_AT = state.startedAt;
       setRecordingFocus('recording');
       setButton('recording');
       startBlockRecorder();
