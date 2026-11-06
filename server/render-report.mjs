@@ -74,7 +74,13 @@ function medicationBlock(list, allowedStatuses) {
   const allowed = new Set(allowedStatuses);
   return list
     .filter((med) => allowed.has(med?.status))
-    .map(medicationLine)
+    .map((med) => {
+      const line = medicationLine(med);
+      const review = med?.cima_dose_review;
+      if (!line || !review?.note) return line;
+      const prefix = review.status === "off_label_dose" ? "OFF-LABEL — " : "CIMA — ";
+      return `${line}\n${prefix}${review.note} (Ficha técnica: CIMA, secciones 4.1 y 4.2).`;
+    })
     .filter(Boolean)
     .join("\n");
 }
