@@ -61,9 +61,14 @@ function speakerLines(transcript) {
   return String(transcript || "")
     .split(/\n+/)
     .map((line, index) => {
-      const match = line.match(/^\s*([A-ZÁÉÍÓÚÜÑ_/ ]+)\s*:\s*(.*)$/u);
+      const match = line.match(/^\s*([A-ZÁÉÍÓÚÜÑa-záéíóúüñ0-9_/() ]+)\s*:\s*(.*)$/u);
       if (!match) return null;
-      return { index, speaker: match[1].toUpperCase(), text: match[2].trim() };
+      const speaker = match[1]
+        .toLocaleUpperCase("es")
+        .replace(/\s*\(?\s*(?:VOZ\s*)?\d+\s*\)?\s*$/u, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return { index, speaker, text: match[2].trim() };
     })
     .filter(Boolean);
 }
