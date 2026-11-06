@@ -1247,6 +1247,52 @@ function pruneGenericUnspecifiedConcernFromMotive(assessment, warnings) {
   warnings.push("generic_unspecified_family_concern_pruned_from_motive");
 }
 
+
+
+function medicationRegimensMatch(left, right) {
+  const leftNames = medicationCandidateNames(left);
+  const rightNames = new Set(medicationCandidateNames(right));
+  const sameName = leftNames.some((name) => name.length >= 4 && rightNames.has(name));
+  const regimen = (med) => JSON.stringify([
+    normalize(med?.dose),
+    normalize(med?.schedule).replace(/\\s*-\\s*/g, "-"),
+    normalize(med?.route),
+    Boolean(med?.prn),
+    clean(med?.status),
+  ]);
+  return sameName && regimen(left) === regimen(right);
+}
+
+function deduplicateMedicationGroup(assessment, group, warnings) {
+  const list = Array.isArray(assessment.medications?.[group]) ? assessment.medications[group] : [];
+  const unique = [];
+  for (const med of list) {
+    const existing = unique.find((item) => medicationRegimensMatch(item, med));
+    if (!existing) {
+      unique.push(med);
+      continue;
+    }
+    existing.source_ids = [...new Set([...(existing.source_ids || []), ...(med.source_ids || [])])];
+    if ((!clean(existing.adherence_text) || existing.adherence_status === "unknown") && clean(med.adherence_text)) {
+      existing.adherence_text = med.adherence_text;
+      existing.adherence_status = med.adherence_status;
+    }
+    if (!clean(existing.display_name) && clean(med.display_name)) existing.display_name = med.display_name;
+    warnings.push(`duplicate_medication_regimen_merged:${group}:${clean(med.raw_name || med.display_name)}`);
+  }
+
+  for (let index = 0; index < unique.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < unique.length; otherIndex += 1) {
+      const left = medicationCandidateNames(unique[index]);
+      const right = new Set(medicationCandidateNames(unique[otherIndex]));
+      if (!left.some((name) => name.length >= 4 && right.has(name))) continue;
+      warnings.push(`medication_same_name_regimen_conflict_preserved:${group}:${clean(unique[index].raw_name || unique[index].display_name)}`);
+    }
+  }
+  assessment.medications ||= {};
+  assessment.medications[group] = unique;
+}
+
 export function applyClinicalPostprocessing(inputAssessment, transcript) {
   const assessment = structuredClone(inputAssessment);
   const warnings = [];
@@ -1271,6 +1317,9 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
       warnings.push(`medication_temporality_corrected_to_historical:${rawName}`);
     }
   }
+
+  deduplicateMedicationGroup(assessment, "habitual", warnings);
+  deduplicateMedicationGroup(assessment, "current", warnings);
 
   // Guarda final: tras CIMA, correcciones de temporalidad y enriquecimiento de
   // adherencia, solo puede quedar como habitual una pauta inequívocamente previa.
