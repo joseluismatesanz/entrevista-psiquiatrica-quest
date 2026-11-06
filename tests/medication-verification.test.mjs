@@ -82,6 +82,24 @@ test("V0.6 medicamentos: mirtazapina bien transcrita sigue verificándose litera
   assert.equal(result.assessment.safety_review.length, 0);
 });
 
+test("V0.6 medicamentos: Belafaxina solo se corrige cuando CIMA confirma Venlafaxina", async () => {
+  const seen = [];
+  const baseFetch = activeIngredientFetch({
+    query: "Venlafaxina",
+    nregistro: "70000",
+    officialName: "VENLAFAXINA 75 MG COMPRIMIDOS",
+    ingredient: "VENLAFAXINA",
+  });
+  const result = await verifyAssessmentMedications(baseAssessment("Belafaxina"), {
+    fetchFn: async (url) => { seen.push(url); return baseFetch(url); },
+  });
+  const med = result.assessment.medications.habitual[0];
+  assert.equal(med.display_name, "Venlafaxina");
+  assert.equal(med.medication_verification.status, "confirmed");
+  assert.equal(med.medication_verification.queriedName, "Venlafaxina");
+  assert.ok(seen.some((url) => url.includes("practiv1=Venlafaxina")));
+});
+
 test("V0.6 medicamentos: la pasada final consulta solo entidades todavía no verificadas", async () => {
   const fixture = baseAssessment("Sertralina");
   fixture.medications.habitual[0].medication_verification = { status: "confirmed" };
