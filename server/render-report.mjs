@@ -115,6 +115,18 @@ export function renderClinicalReport(assessment) {
         body = medicationBlock(list, ["active", "administered_once"]);
         if (!body) body = "No consta tratamiento revisado.";
       }
+      const interactionReview = assessment.medication_interaction_review;
+      if (interactionReview?.status === "interaction_found" && interactionReview.findings?.length) {
+        const findings = interactionReview.findings.map((finding) =>
+          `ALERTA DE INTERACCIÓN CIMA — ${finding.medicines.join(" + ")}. ${finding.type}: ${finding.detail} (Ficha técnica, sección 4.5).`
+        );
+        body += `\n\n${findings.join("\n")}\nFuente: CIMA, sección 4.5.`;
+      } else if (interactionReview?.status === "incomplete") {
+        body += `\n\nREVISIÓN DE INTERACCIONES CIMA INCOMPLETA: ${interactionReview.note}`;
+      } else if (interactionReview?.status === "no_direct_interaction_found") {
+        body += `\n\nREVISIÓN DE INTERACCIONES CIMA: ${interactionReview.note}`;
+      }
+      }
     }
 
     if (!body) {
