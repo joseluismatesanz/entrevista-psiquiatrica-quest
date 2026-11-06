@@ -64,7 +64,7 @@ test("renderer: habitual solo activo; actual activo + dosis puntual; históricos
   assert.match(habitual, /Sertralina 50 mg: 1 - 0 - 0/);
   assert.doesNotMatch(habitual, /Hierro/);
 
-  const current = report.split("TRATAMIENTO ACTUAL\n")[1];
+  const current = report.split("TRATAMIENTO REVISADO\n")[1];
   assert.match(current, /Olanzapina 10 mg: 0 - 0 - 1/);
   assert.match(current, /Olanzapina 10 mg \(intramuscular\)/);
   assert.doesNotMatch(current, /Risperidona/);
@@ -88,7 +88,7 @@ test("renderer: no muestra marcadores internos de adherencia desconocida", () =>
   ];
 
   const report = renderClinicalReport(input);
-  const current = report.split("TRATAMIENTO ACTUAL\n")[1];
+  const current = report.split("TRATAMIENTO REVISADO\n")[1];
 
   assert.match(current, /Sertralina 50 mg: 1 - 0 - 0/);
   assert.match(current, /Clonazepam 0,5 mg: de rescate si aparece ansiedad/);
@@ -107,7 +107,7 @@ test("renderer: muestra cuando una medicación no tiene correspondencia en CIMA"
   ];
 
   const report = renderClinicalReport(input);
-  const current = report.split("TRATAMIENTO ACTUAL\n")[1];
+  const current = report.split("TRATAMIENTO REVISADO\n")[1];
 
   assert.equal(current, "clatipina (no encontrada correspondencia en CIMA) 15 mg: 0 - 0 - 1");
   assert.match(current, /CIMA|correspondencia|no encontrada/i);
