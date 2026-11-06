@@ -19,7 +19,7 @@ import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
 import { groundReportContentToTranscript } from "./report-content-grounding.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
-import { verifyAssessmentMedications, verifyReportMedicationMentions } from "./medication-verification.mjs";
+import { verifyAssessmentMedications, verifyReportMedicationMentions, checkCurrentMedicationInteractions } from "./medication-verification.mjs";
 import { clinicalModelRequestOptions } from "./model-request-policy.mjs";
 
 function extractRefusal(response) {
@@ -312,6 +312,18 @@ export async function analyzeTranscript(transcript, options = {}) {
     assessment = finalized.assessment;
     warnings.push(...finalized.warnings);
   }
+  let medicationInteractionMeta = {};
+  let medicationInteractionMs = 0;
+  if (shouldVerifyMedications && !options.client) {
+    const interactionStartedAt = Date.now();
+    const interactionChecker = options.medicationInteractionChecker || checkCurrentMedicationInteractions;
+    const interactionResult = await interactionChecker(assessment, options.medicationVerificationOptions || {});
+    medicationInteractionMs = Date.now() - interactionStartedAt;
+    assessment = interactionResult.assessment;
+    warnings.push(...(interactionResult.warnings || []));
+    medicationInteractionMeta = interactionResult.meta || {};
+  }
+
 
   const interventionGroundResult = groundInterventionToTranscript(assessment, transcript);
   assessment = interventionGroundResult.assessment;
@@ -342,7 +354,7 @@ export async function analyzeTranscript(transcript, options = {}) {
 
   const violations = collectClinicalInvariantViolations(assessment);
   const deterministicAndMedicationMs = Date.now() - deterministicStartedAt;
-  const deterministicOnlyMs = Math.max(0, deterministicAndMedicationMs - medicationMs);
+  const deterministicOnlyMs = Math.max(0, deterministicAndMedicationMs - medicationMs - medicationInteractionMs);
 
   return {
     assessment,
@@ -373,10 +385,12 @@ export async function analyzeTranscript(transcript, options = {}) {
         structured_clinical_model: modelMs,
         ...branchPerformance,
         medication_verification: medicationMs,
+        medication_interaction_check: medicationInteractionMs,
         deterministic_postprocessing: deterministicOnlyMs,
         total_analysis: Date.now() - totalStartedAt,
       },
       ...medicationMeta,
+      ...medicationInteractionMeta,
       ...medicationReportMentionMeta,
       ...postprocessResult.meta,
     },
