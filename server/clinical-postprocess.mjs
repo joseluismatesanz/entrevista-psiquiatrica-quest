@@ -710,26 +710,43 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     if (line.index < planIndex
       && !CLINICIAN_PRESCRIPTION_PATTERN.test(text)
       && !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(text)) continue;
-    const mentions = PSYCHIATRIC_MEDICATION_VOCABULARY
-      .map((canonical) => ({ canonical, index: text.indexOf(normalize(canonical)) }))
-      .filter((item) => item.index >= 0)
-      .sort((left, right) => left.index - right.index);
+    const mentions = [];
+    for (const canonical of PSYCHIATRIC_MEDICATION_VOCABULARY) {
+      const needle = normalize(canonical);
+      let index = text.indexOf(needle);
+      while (index >= 0) {
+        const before = text[index - 1] || "";
+        const after = text[index + needle.length] || "";
+        if (!/[\p{L}\p{N}]/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) break;
+        index = text.indexOf(needle, index + 1);
+      }
+      if (index >= 0) mentions.push({ canonical, index });
+    }
+    mentions.sort((left, right) => left.index - right.index);
     for (let index = 0; index < mentions.length; index += 1) {
       const { canonical, index: medicationIndex } = mentions[index];
       const rawName = canonical.charAt(0).toLocaleUpperCase("es") + canonical.slice(1);
-      if (withoutDiscontinued.some((existing) => overlaps(existing, { raw_name: rawName, display_name: rawName }))) continue;
       const candidate = { raw_name: rawName, display_name: rawName, status: "active" };
+      const matchingCurrent = withoutDiscontinued.some((existing) =>
+        overlaps(existing, candidate)
+        || normalize(normalizeMedicationAsrText(existing.raw_name || existing.display_name).text) === normalize(canonical)
+      );
+      if (matchingCurrent) continue;
       if (!hasClinicianFutureEvidence(candidate) || hasExplicitDiscontinuation(candidate)) continue;
       const endIndex = mentions[index + 1]?.index ?? medicationIndex + 100;
       const nearby = text.slice(medicationIndex + normalize(canonical).length, endIndex);
       const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|µg|g|ml|ui|miligramos?)\b/i);
       const schedule = nearby.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia|de\s+rescate|si\s+precisa)\b/gi);
+      const previous = retainedHabitual.find((existing) =>
+        overlaps(existing, candidate)
+        || normalize(normalizeMedicationAsrText(existing.raw_name || existing.display_name).text) === normalize(canonical)
+      );
       withoutDiscontinued.push({
         ...candidate,
         active_ingredient_known: true,
         role: "psychiatric",
-        dose: dose ? `${dose[1]} ${/^mili/i.test(dose[2]) ? "mg" : dose[2]}` : "",
-        schedule: schedule?.length ? [...new Set(schedule)].join(" y ") : "",
+        dose: dose ? `${dose[1]} ${/^mili/i.test(dose[2]) ? "mg" : dose[2]}` : clean(previous?.dose),
+        schedule: schedule?.length ? [...new Set(schedule)].join(" y ") : clean(previous?.schedule),
         route: "",
         prn: /\b(?:a\s+demanda|de\s+rescate|si\s+precisa)\b/i.test(nearby),
         adherence_status: "unknown",
@@ -967,7 +984,7 @@ function canonicalizeVerifiedMedicationNamesInSections(assessment, warnings) {
           .split(/\s+/)
           .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
           .join("\\s+");
-        const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu");
+        const pattern = new RegExp(`(?<![\p{L}\p{N}])${escaped}(?![\p{L}\p{N}])`, "giu");
         const updated = section.text.replace(pattern, displayName);
         if (updated !== section.text) {
           section.text = updated;
