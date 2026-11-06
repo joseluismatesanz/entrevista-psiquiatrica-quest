@@ -95,7 +95,7 @@ test("renderer: no muestra marcadores internos de adherencia desconocida", () =>
   assert.doesNotMatch(current, /unknown|not[_ ]?applicable|Adherencia/i);
 });
 
-test("renderer: no muestra mensajes internos de verificación de CIMA", () => {
+test("renderer: muestra cuando una medicación no tiene correspondencia en CIMA", () => {
   const input = assessment();
   input.medications.current = [
     medication("clatipina", "active", {
