@@ -271,3 +271,66 @@ test("V0.6 medicamentos: mirtazapina usa la maestra de principios activos de CIM
   assert.ok(seen.some((url) => url.includes("maestras?maestra=1")));
   assert.equal(result.meta.medication_active_ingredient_master_fallback, true);
 });
+
+
+test("V0.6 medicamentos: las menciones del informe fuera de los apartados de tratamiento también se contrastan con CIMA", async () => {
+  const { verifyReportMedicationMentions } = await import("../server/medication-verification.mjs");
+  const assessment = {
+    medications: { habitual: [], current: [] },
+    sections: {
+      enfermedad_actual: { text: "Refiere mejoría con sertralina y quetiapina.", evidence_status: "supported", source_ids: [] },
+      plan_terapeutico: { text: "Mantener sertralina.", evidence_status: "supported", source_ids: [] },
+    },
+    safety_review: [],
+  };
+  const seen = [];
+  const fetchFn = async (url) => {
+    seen.push(url);
+    if (url.toLowerCase().includes("practiv1=sertralina") || url.toLowerCase().includes("practiv1=quetiapina")) {
+      const name = url.toLowerCase().includes("sertralina") ? "SERTRALINA" : "QUETIAPINA";
+      const reg = url.toLowerCase().includes("sertralina") ? "65997" : "70001";
+      return response({ resultados: [{ nregistro: reg, nombre: `${name} 25 MG COMPRIMIDOS EFG`, pactivos: name }] });
+    }
+    return response({ resultados: [] });
+  };
+
+  const result = await verifyReportMedicationMentions(assessment, { fetchFn });
+  assert.equal(result.meta.medication_report_mentions_checked, 2);
+  assert.equal(result.meta.medication_report_mentions_confirmed, 2);
+  assert.equal(result.meta.medication_report_mentions_pending, 0);
+  assert.match(result.assessment.sections.enfermedad_actual.text, /Sertralina y Quetiapina/);
+  assert.ok(seen.some((url) => url.toLowerCase().includes("practiv1=sertralina")));
+  assert.ok(seen.some((url) => url.toLowerCase().includes("practiv1=quetiapina")));
+});
+
+test("V0.6 medicamentos: una mención del informe sin correspondencia CIMA queda señalada para revisión", async () => {
+  const { verifyReportMedicationMentions } = await import("../server/medication-verification.mjs");
+  const assessment = {
+    medications: { habitual: [], current: [] },
+    sections: {
+      enfermedad_actual: { text: "Dice que toma inventina.", evidence_status: "supported", source_ids: [] },
+    },
+    safety_review: [],
+  };
+  const fetchFn = async (url) => {
+    if (url.toLowerCase().includes("practiv1=inventina")) return response({ resultados: [] });
+    if (url.toLowerCase().includes("maestras?maestra=1") && url.toLowerCase().includes("nombre=inventina")) return response([]);
+    if (url.toLowerCase().includes("nombre=inventina")) return response({ resultados: [] });
+    return response({ resultados: [] });
+  };
+
+  const result = await verifyReportMedicationMentions(assessment, { fetchFn });
+  assert.equal(result.meta.medication_report_mentions_pending, 1);
+  assert.match(result.assessment.sections.enfermedad_actual.text, /inventina \(no encontrada correspondencia en CIMA\)/i);
+  assert.equal(result.assessment.safety_review[0].topic, "medicacion_en_informe_no_encontrada");
+});
+
+
+test("V0.6 medicamentos: el informe final conserva la marca CIMA cuando no hay coincidencia", async () => {
+  const { renderClinicalReport } = await import("../server/render-report.mjs");
+  const result = await verifyAssessmentMedications(baseAssessment("Inventina"), {
+    fetchFn: async () => response({ resultados: [] }),
+  });
+  const report = renderClinicalReport(result.assessment);
+  assert.match(report, /Inventina \(no encontrada correspondencia en CIMA\)/i);
+});
