@@ -354,7 +354,7 @@ function lineMentionsMedication(line, med) {
 
 function medicationPlanCutoffIndex(lines, med, planAnchorIndex) {
   const firstExplicitPrescription = lines.find((line) => {
-    if (line.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
+    if (line.speaker !== "PSIQUIATRA" || !(lineMentionsMedication(line, med) || [med.raw_name, med.display_name].some((name) => normalize(name) && normalize(line.text).includes(normalize(name))))) return false;
     const text = normalize(line.text);
     const previous = previousSpeakerLine(lines, line);
     const isHabitualAnswer = previous?.speaker === "PSIQUIATRA"
@@ -488,7 +488,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   });
 
   const hasClinicianMaintenanceEvidence = (med) => lines.some((line) => {
-    if (line.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
+    if (line.speaker !== "PSIQUIATRA" || !(lineMentionsMedication(line, med) || [med.raw_name, med.display_name].some((name) => normalize(name) && normalize(line.text).includes(normalize(name))))) return false;
     const text = normalize(line.text);
     if (!CLINICIAN_MAINTENANCE_PATTERN.test(text)) return false;
 
@@ -514,12 +514,12 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   });
   const hasGenericMaintenanceEvidence = lines.some((line) =>
     line.speaker === "PSIQUIATRA"
-    && /\b(?:mantenga|mantener|mantenemos|continuar|continua)\b.*\bresto\s+del\s+tratamiento\b/i.test(normalize(line.text))
+    && /\b(?:(?:mantenga|mantener|mantengo|mantiene|mantienen|mantenemos|mantendremos|continuar|continua|continuaremos|seguimos)\b.{0,90}\b(?:resto(?:\s+del\s+tratamiento)?|mismo\s+tratamiento|misma\s+pauta|tratamiento\s+sin\s+cambios)\b)\b/i.test(normalize(line.text))
   );
   const hasClinicianFutureEvidence = (med) => hasClinicianMaintenanceEvidence(med)
     || (hasGenericMaintenanceEvidence && (assessment.medications?.habitual || []).some((prior) => medicationCandidateNames(prior).some((name) => medicationCandidateNames(med).includes(name))))
     || lines.some((line) => {
-      if (line.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
+      if (line.speaker !== "PSIQUIATRA" || !(lineMentionsMedication(line, med) || [med.raw_name, med.display_name].some((name) => normalize(name) && normalize(line.text).includes(normalize(name))))) return false;
       const planIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
       return line.index >= planIndex
         || CLINICIAN_PRESCRIPTION_PATTERN.test(normalize(line.text))
@@ -699,6 +699,46 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     warnings.push(`medication_explicitly_discontinued_removed_from_current:${name}`);
     return false;
   });
+
+  // Recupera altas/modificaciones nombradas explícitamente por el psiquiatra
+  // cuando el extractor estructurado no haya creado la entidad.
+  const psychiatristSourceId = (assessment.sources || []).find((source) => source.kind === "psychiatrist")?.id;
+  for (const line of lines) {
+    if (line.speaker !== "PSIQUIATRA") continue;
+    const text = normalize(normalizeMedicationAsrText(line.text).text);
+    const planIndex = medicationPlanCutoffIndex(lines, { raw_name: "", display_name: "" }, planAnchorIndex);
+    if (line.index < planIndex
+      && !CLINICIAN_PRESCRIPTION_PATTERN.test(text)
+      && !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(text)) continue;
+    const mentions = PSYCHIATRIC_MEDICATION_VOCABULARY
+      .map((canonical) => ({ canonical, index: text.indexOf(normalize(canonical)) }))
+      .filter((item) => item.index >= 0)
+      .sort((left, right) => left.index - right.index);
+    for (let index = 0; index < mentions.length; index += 1) {
+      const { canonical, index: medicationIndex } = mentions[index];
+      const rawName = canonical.charAt(0).toLocaleUpperCase("es") + canonical.slice(1);
+      if (withoutDiscontinued.some((existing) => overlaps(existing, { raw_name: rawName, display_name: rawName }))) continue;
+      const candidate = { raw_name: rawName, display_name: rawName, status: "active" };
+      if (!hasClinicianFutureEvidence(candidate) || hasExplicitDiscontinuation(candidate)) continue;
+      const endIndex = mentions[index + 1]?.index ?? medicationIndex + 100;
+      const nearby = text.slice(medicationIndex + normalize(canonical).length, endIndex);
+      const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|µg|g|ml|ui|miligramos?)\b/i);
+      const schedule = nearby.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia|de\s+rescate|si\s+precisa)\b/gi);
+      withoutDiscontinued.push({
+        ...candidate,
+        active_ingredient_known: true,
+        role: "psychiatric",
+        dose: dose ? `${dose[1]} ${/^mili/i.test(dose[2]) ? "mg" : dose[2]}` : "",
+        schedule: schedule?.length ? [...new Set(schedule)].join(" y ") : "",
+        route: "",
+        prn: /\b(?:a\s+demanda|de\s+rescate|si\s+precisa)\b/i.test(nearby),
+        adherence_status: "unknown",
+        adherence_text: "",
+        source_ids: psychiatristSourceId ? [psychiatristSourceId] : [],
+      });
+      warnings.push(`medication_future_prescription_recovered_from_clinician:${rawName}`);
+    }
+  }
 
   const hasPharmacologicalUpdate = withoutDiscontinued.some((currentMed) => {
     const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
