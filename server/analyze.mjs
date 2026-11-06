@@ -19,7 +19,7 @@ import { groundPsqGuardiaToTranscript } from "./psq-guard.mjs";
 import { groundReportContentToTranscript } from "./report-content-grounding.mjs";
 import { renderClinicalReport } from "./render-report.mjs";
 import { resolveModelAuth } from "./model-auth.mjs";
-import { verifyAssessmentMedications, verifyReportMedicationMentions, checkCurrentMedicationInteractions } from "./medication-verification.mjs";
+import { verifyAssessmentMedications, verifyReportMedicationMentions, checkCurrentMedicationInteractions, reviewMedicationDosesAgainstCima } from "./medication-verification.mjs";
 import { clinicalModelRequestOptions } from "./model-request-policy.mjs";
 
 function extractRefusal(response) {
@@ -312,6 +312,18 @@ export async function analyzeTranscript(transcript, options = {}) {
     assessment = finalized.assessment;
     warnings.push(...finalized.warnings);
   }
+  let medicationDoseReviewMeta = {};
+  let medicationDoseReviewMs = 0;
+  if (shouldVerifyMedications && !options.client) {
+    const doseReviewStartedAt = Date.now();
+    const doseReviewer = options.medicationDoseReviewer || reviewMedicationDosesAgainstCima;
+    const doseResult = await doseReviewer(assessment, options.medicationVerificationOptions || {});
+    medicationDoseReviewMs = Date.now() - doseReviewStartedAt;
+    assessment = doseResult.assessment;
+    warnings.push(...(doseResult.warnings || []));
+    medicationDoseReviewMeta = doseResult.meta || {};
+  }
+
   let medicationInteractionMeta = {};
   let medicationInteractionMs = 0;
   if (shouldVerifyMedications && !options.client) {
@@ -386,11 +398,13 @@ export async function analyzeTranscript(transcript, options = {}) {
         ...branchPerformance,
         medication_verification: medicationMs,
         medication_interaction_check: medicationInteractionMs,
+        medication_dose_review: medicationDoseReviewMs,
         deterministic_postprocessing: deterministicOnlyMs,
         total_analysis: Date.now() - totalStartedAt,
       },
       ...medicationMeta,
       ...medicationInteractionMeta,
+      ...medicationDoseReviewMeta,
       ...medicationReportMentionMeta,
       ...postprocessResult.meta,
     },
