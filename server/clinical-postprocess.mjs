@@ -517,7 +517,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     && /\b(?:mantenga|mantener|mantenemos|continuar|continua)\b.*\bresto\s+del\s+tratamiento\b/i.test(normalize(line.text))
   );
   const hasClinicianFutureEvidence = (med) => hasClinicianMaintenanceEvidence(med)
-    || hasGenericMaintenanceEvidence
+    || (hasGenericMaintenanceEvidence && (assessment.medications?.habitual || []).some((prior) => medicationCandidateNames(prior).some((name) => medicationCandidateNames(med).includes(name))))
     || lines.some((line) => {
       if (line.speaker !== "PSIQUIATRA" || !lineMentionsMedication(line, med)) return false;
       const planIndex = medicationPlanCutoffIndex(lines, med, planAnchorIndex);
@@ -704,7 +704,8 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     const previous = retainedHabitual.find((habitualMed) => overlaps(currentMed, habitualMed));
     return !previous || regimenChanged(currentMed, previous) || hasExplicitTreatmentChange(currentMed)
       || hasClinicianMaintenanceEvidence(currentMed) || hasGenericMaintenanceEvidence;
-  }) || retainedHabitual.some((habitualMed) => hasExplicitDiscontinuation(habitualMed));
+  }) || retainedHabitual.some((habitualMed) => hasExplicitDiscontinuation(habitualMed))
+    || (hasGenericMaintenanceEvidence && retainedHabitual.some((habitualMed) => !hasExplicitDiscontinuation(habitualMed)));
 
   // Solo se incluyen en TRATAMIENTO REVISADO pautas futuras indicadas por el psiquiatra.
   // La medicación habitual no se copia automáticamente cuando hay cualquier cambio.
