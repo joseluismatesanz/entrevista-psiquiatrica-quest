@@ -951,3 +951,36 @@ test("Regresión real: separa pauta previa/final y recupera anorexia, motivo y e
   assert.match(report, /ENFERMEDAD ACTUAL\nEn seguimiento por anorexia nerviosa/);
   assert.match(report, /HÁBITOS TÓXICOS\nNo fumo, no bebo alcohol y no consumo otras sustancias\./i);
 });
+
+test("V0.6 medicación: recupera toda la pauta previa con dosis y forma la pauta final tras retirar, modificar, añadir y mantener", () => {
+  const fixture = assessmentFixture();
+  fixture.medications.habitual = [];
+  fixture.medications.current = [
+    med("Duloxetina", "Duloxetina", "active", "60 mg", "por la mañana"),
+    med("Mirtazapina", "Mirtazapina", "active", "30 mg", "por la noche"),
+  ];
+
+  const transcript = [
+    "PSIQUIATRA: ¿Qué tratamiento toma habitualmente antes de la consulta?",
+    "PACIENTE: Tomo melatonina 1,9 mg por la noche, fluoxetina 20 mg por la mañana y al mediodía, lorazepam 2 mg por la noche y mirtazapina 15 mg por la noche.",
+    "PSIQUIATRA: A partir de hoy sustituimos fluoxetina por duloxetina 60 mg por la mañana. Retiramos lorazepam. Mantenemos melatonina sin cambios. Aumentamos mirtazapina a 30 mg por la noche.",
+  ].join("\n");
+
+  const result = applyClinicalPostprocessing(fixture, transcript);
+  assert.deepEqual(
+    result.assessment.medications.habitual.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Fluoxetina:20 mg", "Lorazepam:2 mg", "Mirtazapina:15 mg", "Melatonina:1,9 mg"],
+  );
+  assert.deepEqual(
+    result.assessment.medications.current.map((item) => `${item.raw_name}:${item.dose}`),
+    ["Duloxetina:60 mg", "Mirtazapina:30 mg", "Melatonina:1,9 mg"],
+  );
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Fluoxetina 20 mg/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Lorazepam 2 mg/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Mirtazapina 15 mg/);
+  assert.match(result.assessment.sections.tratamiento_habitual.text, /Melatonina 1,9 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Duloxetina 60 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Mirtazapina 30 mg/);
+  assert.match(result.assessment.sections.tratamiento_actual.text, /Melatonina 1,9 mg/);
+  assert.doesNotMatch(result.assessment.sections.tratamiento_actual.text, /Fluoxetina|Lorazepam/);
+});
