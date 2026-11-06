@@ -109,8 +109,8 @@ test("renderer: muestra cuando una medicación no tiene correspondencia en CIMA"
   const report = renderClinicalReport(input);
   const current = report.split("TRATAMIENTO ACTUAL\n")[1];
 
-  assert.equal(current, "clatipina 15 mg: 0 - 0 - 1");
-  assert.doesNotMatch(current, /CIMA|correspondencia|no encontrada/i);
+  assert.equal(current, "clatipina (no encontrada correspondencia en CIMA) 15 mg: 0 - 0 - 1");
+  assert.match(current, /CIMA|correspondencia|no encontrada/i);
 });
 
 test("renderer: conserva la negación explícita cuando no hay medicación habitual estructurada", () => {
