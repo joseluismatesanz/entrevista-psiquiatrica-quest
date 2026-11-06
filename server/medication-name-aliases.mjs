@@ -119,6 +119,12 @@ export const MEDICATION_NAME_ALIASES = [
     pattern: /\bven\s+la\s+fascina\b/giu,
   },
   {
+    id: "belafaxina_to_venlafaxina",
+    source: "belafaxina",
+    canonical: "venlafaxina",
+    pattern: /\bbelafaxina\b/giu,
+  },
+  {
     id: "venlafacina_to_venlafaxina",
     source: "venlafacina",
     canonical: "venlafaxina",
