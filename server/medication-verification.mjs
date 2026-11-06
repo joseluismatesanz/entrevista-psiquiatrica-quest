@@ -581,6 +581,158 @@ async function fetchInteractionSection(nregistro, fetchFn, timeoutMs) {
   };
 }
 
+
+function sectionTextById(payload, id) {
+  const sections = Array.isArray(payload)
+    ? payload
+    : listFromPayload(payload?.secciones ? payload.secciones : payload);
+  const section = sections.find((item) => String(item?.seccion ?? item?.section ?? item?.id ?? "").trim() === String(id))
+    || (payload && typeof payload === "object" && String(payload.seccion ?? payload.section ?? "") === String(id) ? payload : null);
+  return stripHtmlText(section?.contenido ?? section?.content ?? "");
+}
+
+async function fetchCimaFichaSection(nregistro, sectionId, fetchFn, timeoutMs) {
+  const payload = await fetchJson(
+    `${CIMA_BASE_URL}/docSegmentado/contenido/1?nregistro=${encodeURIComponent(nregistro)}&seccion=${encodeURIComponent(sectionId)}`,
+    fetchFn,
+    timeoutMs,
+  );
+  const text = sectionTextById(payload, sectionId);
+  if (!text) throw new Error(`CIMA no devolvió la sección ${sectionId}`);
+  return {
+    text,
+    url: `https://cima.aemps.es/cima/dochtml/ft/${encodeURIComponent(nregistro)}/${encodeURIComponent(sectionId)}/FichaTecnica.html`,
+  };
+}
+
+function extractDoseBoundaries(section42) {
+  const text = section42.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/,/g, ".");
+  const range = text.match(/(?:entre|de)\s*(\d+(?:\.\d+)?)\s*(?:a|y|[-–])\s*(\d+(?:\.\d+)?)\s*mg(?:\s*\/?\s*d[ií]a|\s+diarios?)?/i);
+  const maximum = text.match(/maxim[oa]s?[^.]{0,140}?(\d+(?:\.\d+)?)\s*mg(?:\s*\/?\s*d[ií]a|\s+diarios?)?/i)
+    || text.match(/\bno\s+debe\s+superar[^.]{0,100}?(\d+(?:\.\d+)?)\s*mg(?:\s*\/?\s*d[ií]a)?/i);
+  return {
+    minimum: range ? Number(range[1]) : null,
+    maximum: range ? Number(range[2]) : maximum ? Number(maximum[1]) : null,
+    rangeFound: Boolean(range),
+    maxFound: Boolean(range || maximum),
+  };
+}
+
+function calculatedDailyDose(med) {
+  const doseMatch = clean(med?.dose).replace(/,/g, ".").match(/(\d+(?:\.\d+)?)\s*(mg|mcg|µg|ug|g)\b/i);
+  const schedule = clean(med?.schedule).replace(/,/g, ".");
+  const slots = schedule.match(/^\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*$/);
+  if (!doseMatch || !slots || med?.prn) return null;
+  let strength = Number(doseMatch[1]);
+  const unit = doseMatch[2].toLowerCase();
+  if (unit === "g") strength *= 1000;
+  else if (unit === "mcg" || unit === "µg" || unit === "ug") strength /= 1000;
+  const administrations = slots.slice(1).reduce((sum, value) => sum + Number(value), 0);
+  return Number((strength * administrations).toFixed(4));
+}
+
+export async function reviewMedicationDosesAgainstCima(inputAssessment, options = {}) {
+  const assessment = structuredClone(inputAssessment);
+  const fetchFn = options.fetchFn || globalThis.fetch;
+  const timeoutMs = options.timeoutMs || 6000;
+  const warnings = [];
+  const entries = [];
+  const diagnosis = clean(assessment.diagnostic_judgment?.primary_diagnosis);
+  let checked = 0;
+  let unavailable = 0;
+
+  for (const group of ["habitual", "current"]) {
+    for (const med of assessment.medications?.[group] || []) {
+      if (med?.status !== "active") continue;
+      const verification = med?.medication_verification || {};
+      const label = clean(med.display_name || med.raw_name) || "Medicamento no identificado";
+      const registry = clean(verification.nregistro);
+      const review = {
+        source: "AEMPS CIMA, ficha técnica secciones 4.1 y 4.2",
+        status: "not_assessable",
+        daily_dose_mg: calculatedDailyDose(med),
+        dose_boundary_mg: null,
+        indication_status: diagnosis ? "requires_clinician_review" : "not_assessable",
+        diagnosis: diagnosis || "",
+        note: "",
+        source_url: "",
+      };
+      med.cima_dose_review = review;
+      if (verification.status !== "confirmed" || !registry) {
+        review.status = "cima_product_unconfirmed";
+        review.note = "No se pudo vincular esta entidad con un medicamento registrado en CIMA; no se valora la dosis.";
+        unavailable += 1;
+        continue;
+      }
+      try {
+        const [section41, section42] = await Promise.all([
+          fetchCimaFichaSection(registry, "4.1", fetchFn, timeoutMs),
+          fetchCimaFichaSection(registry, "4.2", fetchFn, timeoutMs),
+        ]);
+        checked += 1;
+        review.source_url = section42.url;
+        const boundaries = extractDoseBoundaries(section42.text);
+        const dailyDose = review.daily_dose_mg;
+        review.dose_boundary_mg = {
+          minimum: boundaries.minimum,
+          maximum: boundaries.maximum,
+          source_section: "4.2",
+        };
+        // Keep section 4.1 available as the source of authorized indications;
+        // automated matching is intentionally not treated as a diagnosis.
+        const section41HasText = Boolean(section41.text.trim());
+        if (dailyDose !== null && boundaries.rangeFound) {
+          if (dailyDose < boundaries.minimum || dailyDose > boundaries.maximum) {
+            review.status = "off_label_dose";
+            review.note = `OFF-LABEL por dosis: ${dailyDose} mg/día frente al rango posológico CIMA de ${boundaries.minimum}–${boundaries.maximum} mg/día (sección 4.2). Verificar formulación, frecuencia y contexto clínico.`;
+          } else {
+            review.status = "within_cima_range";
+            review.note = `Dosis calculada: ${dailyDose} mg/día; dentro del rango de ${boundaries.minimum}–${boundaries.maximum} mg/día indicado en CIMA (sección 4.2). La indicación y la adecuación individual requieren revisión clínica.`;
+          }
+        } else if (dailyDose !== null && boundaries.maxFound && boundaries.maximum !== null) {
+          if (dailyDose > boundaries.maximum) {
+            review.status = "off_label_dose";
+            review.note = `OFF-LABEL por dosis: ${dailyDose} mg/día supera el maximo de ${boundaries.maximum} mg/día de CIMA (sección 4.2). Verificar formulación, frecuencia y contexto clínico.`;
+          } else {
+            review.status = "within_cima_maximum";
+            review.note = `Dosis calculada: ${dailyDose} mg/día; no supera el maximo de ${boundaries.maximum} mg/día localizado en CIMA (sección 4.2). No se ha inferido que la dosis o indicación estén aprobadas; validar clínicamente.`;
+          }
+        } else {
+          review.status = "not_assessable";
+          review.note = dailyDose === null
+            ? "CIMA consultada (secciones 4.1 y 4.2), pero no se puede calcular la dosis diaria con seguridad a partir de la dosis y pauta estructuradas."
+            : "CIMA consultada (secciones 4.1 y 4.2), pero no se pudo extraer automáticamente un límite posológico explícito comparable.";
+        }
+        if (!diagnosis || !section41HasText) {
+          review.indication_status = "not_assessable";
+          review.note += " No se puede confirmar la indicación autorizada porque el diagnóstico o los datos clínicos necesarios no constan.";
+        }
+      } catch (error) {
+        review.status = "cima_section_unavailable";
+        review.note = `No se pudo consultar la ficha técnica CIMA (secciones 4.1/4.2): ${String(error?.message || "error de consulta")}.`;
+        unavailable += 1;
+      }
+      entries.push({ group, label, status: review.status });
+      if (review.status === "off_label_dose") warnings.push(`medication_off_label_dose:${group}:${label}`);
+    }
+  }
+  assessment.medication_dose_review = {
+    source: "AEMPS CIMA, ficha técnica secciones 4.1 y 4.2",
+    checked_products: checked,
+    unavailable_products: unavailable,
+    entries,
+  };
+  return {
+    assessment,
+    warnings,
+    meta: {
+      medication_dose_review_source: assessment.medication_dose_review.source,
+      medication_dose_review_checked_products: checked,
+      medication_dose_review_unavailable_products: unavailable,
+    },
+  };
+}
+
 export async function checkCurrentMedicationInteractions(inputAssessment, options = {}) {
   const assessment = structuredClone(inputAssessment);
   const current = (assessment.medications?.current || []).filter((med) => med?.status === "active");
