@@ -560,11 +560,12 @@ function hasExactMedicineMention(text, candidates) {
 
 function interactionSignal(text) {
   const normalized = normalize(text);
-  if (/\b(?:contraindica|contraindicado|no debe administrarse|no debe utilizarse|evitar la asociacion|evitar el uso concomitante)\b/.test(normalized)) {
-    return "Contraindicación o asociación que la ficha técnica recomienda evitar";
+  const withoutNegatedContraindication = normalized.replace(/\bno\s+(?:esta|es|se considera)\s+contraindicad[oa]\b/g, "");
+  if (/\b(?:contraindicad[oa]|no debe administrarse|no debe utilizarse|evitar la asociacion|evitar el uso concomitante)\b/.test(withoutNegatedContraindication)) {
+    return "La ficha técnica indica contraindicar o evitar la asociación";
   }
   if (/\b(?:precaucion|monitorizar|vigilar|controlar|puede aumentar|puede reducir|riesgo de|se recomienda controlar)\b/.test(normalized)) {
-    return "Interacción descrita con precaución o monitorización";
+    return "La ficha técnica describe una interacción que requiere precaución o monitorización";
   }
   return "Interacción mencionada en la ficha técnica";
 }
