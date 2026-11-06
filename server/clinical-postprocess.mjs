@@ -45,7 +45,7 @@ const FAMILY_SPEAKER_LABELS = new Set([
 const PATIENT_SPEAKER_PATTERN = /^(?:PACIENTE|ENTREVISTAD[OA]|USUARI[OA])(?:\s+\d+)?$/i;
 const FAMILY_SELF_MEDICATION_PATTERN = /\b(?:yo\s+)?(?:ahora\s+mismo\s+)?(?:estoy\s+tomando|estaba\s+tomando|tomo|tomaba|he\s+tomado|me\s+tomo)\b/i;
 const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma)\b/i;
-const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
+const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:este\s+es\s+el\s+tratamiento\s+que\s+(?:vamos|voy)\s+a\s+cambiar\s+por\s+el\s+siguiente|tratamiento\s+(?:que\s+)?(?:vamos|voy)\s+a\s+cambiar\s+por\b|a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
 const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
 const CLINICIAN_MAINTENANCE_PATTERN = /\b(?:mantener|mantengo|mantenemos|mantenga|continuar|continua|contin\u00fao|seguimos\s+con|seguir\s+con|sin\s+cambios|misma\s+pauta|resto\s+del\s+tratamiento)\b/i;
 const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|inicia|iniciamos|introducir|introduzco|introduce|introducimos|anadir|anado|anade|anadimos|empezar|empezamos|comenzar|comenzamos|sustituir|sustituye|cambiar|cambio|cambia|cambiamos|aumentar|aumento|aumenta|aumentamos|incrementar|incremento|incrementa|incrementamos|subir|subo|sube|subimos|reducir|reduzco|reduce|reducimos|disminuir|disminuyo|disminuye|disminuimos|bajar|bajo|baja|bajamos|ajustar|ajusto|ajusta|ajustamos|titular|titulo|titula|titulamos)\b/i;
@@ -77,6 +77,37 @@ function isPatientSpeaker(label) {
   return PATIENT_SPEAKER_PATTERN.test(String(label || "").trim());
 }
 
+function isQuotedPatientMedicationLine(lines, line) {
+  if (!line || line.speaker !== "PSIQUIATRA") return false;
+  const text = normalize(line.text);
+  if (!FAMILY_SELF_MEDICATION_PATTERN.test(text)) return false;
+  const position = lines.indexOf(line);
+  const context = lines.slice(Math.max(0, position - 2), position)
+    .map((item) => normalize(item.text))
+    .join(" ");
+  return /\b(?:textualmente|tal\s+cual|usted\s+(?:dice|refiere|ha\s+dicho)|segun\s+(?:aparece\s+en\s+el\s+informe)|refiere\s+que)\b/i.test(context);
+}
+
+
+const SPOKEN_DOSE_NUMBERS = new Map([
+  ["cero", "0"], ["uno", "1"], ["una", "1"], ["dos", "2"], ["tres", "3"], ["cuatro", "4"],
+  ["cinco", "5"], ["seis", "6"], ["siete", "7"], ["ocho", "8"], ["nueve", "9"],
+  ["diez", "10"], ["once", "11"], ["doce", "12"], ["trece", "13"], ["catorce", "14"], ["quince", "15"],
+  ["dieciseis", "16"], ["diecisiete", "17"], ["dieciocho", "18"], ["diecinueve", "19"],
+  ["veinte", "20"], ["veintiuno", "21"], ["veintiun", "21"], ["veintidos", "22"], ["veintitres", "23"],
+  ["veinticuatro", "24"], ["veinticinco", "25"], ["veintiseis", "26"], ["veintisiete", "27"],
+  ["veintiocho", "28"], ["veintinueve", "29"], ["treinta", "30"], ["cuarenta", "40"],
+  ["cincuenta", "50"], ["sesenta", "60"], ["setenta", "70"], ["ochenta", "80"],
+  ["noventa", "90"], ["cien", "100"], ["ciento", "100"], ["ciento veinte", "120"],
+  ["ciento cincuenta", "150"], ["doscientos", "200"],
+]);
+
+function normalizeSpokenDoseNumbers(value) {
+  const normalized = String(value || "").replace(/[áéíóúü]/g, (letter) => ({ á: "a", é: "e", í: "i", ó: "o", ú: "u", ü: "u" })[letter]).toLowerCase();
+  const phrases = [...SPOKEN_DOSE_NUMBERS.keys()].sort((left, right) => right.length - left.length);
+  const pattern = new RegExp("\\b(" + phrases.join("|") + ")\\s+(?=(?:mg|mcg|µg|ug|g|ml|ui|miligramos?)\\b)", "gi");
+  return normalized.replace(pattern, (match) => `${SPOKEN_DOSE_NUMBERS.get(match.trim())} `);
+}
 function recoverExplicitPatientHabitualMedications(assessment, transcript, warnings) {
   const lines = speakerLines(transcript);
   if (!lines.length) return;
@@ -88,8 +119,9 @@ function recoverExplicitPatientHabitualMedications(assessment, transcript, warni
 
   for (const line of lines) {
     const previous = previousSpeakerLine(lines, line);
-    const answersHabitualQuestion = previous?.speaker === "PSIQUIATRA"
-      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text));
+    const answersHabitualQuestion = (previous?.speaker === "PSIQUIATRA"
+      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text)))
+      || isQuotedPatientMedicationLine(lines, line);
     const explicitClinicianHistory = line.speaker === "PSIQUIATRA"
       && /\b(?:tratamiento\s+habitual|hasta\s+(?:ahora|hoy)|venia\s+tomando|estaba\s+tomando|actualmente\s+toma|esta\s+tomando)\b/i.test(normalize(line.text))
       && !CLINICIAN_TREATMENT_CHANGE_PATTERN.test(normalize(line.text));
@@ -97,7 +129,7 @@ function recoverExplicitPatientHabitualMedications(assessment, transcript, warni
     // que enumera medicación. La pregunta inmediatamente anterior fija que esa
     // lista es la pauta previa aunque el rol acústico haya fallado.
     if ((!isPatientSpeaker(line.speaker) && !explicitClinicianHistory && !answersHabitualQuestion) || isFamilySelfMedicationLine(lines, line)) continue;
-    const text = normalize(normalizeMedicationAsrText(line.text).text);
+    const text = normalize(normalizeSpokenDoseNumbers(normalizeMedicationAsrText(line.text).text));
     const statesActiveTreatment = ACTIVE_MEDICATION_PATTERN.test(text)
       && !HISTORICAL_MEDICATION_PATTERN.test(text)
       && !NO_CURRENT_MEDICATION_PATTERN.test(text);
@@ -374,7 +406,7 @@ function medicationPlanCutoffIndex(lines, med, planAnchorIndex) {
   // Una presentación genérica al inicio (p. ej. «soy psiquiatra y voy a
   // valorar...») no puede convertir en pauta nueva la medicación que el
   // paciente enumera después. El corte debe ser específico de cada fármaco.
-  if (med) return firstExplicitPrescription?.index ?? Number.POSITIVE_INFINITY;
+  if (med) return firstExplicitPrescription?.index ?? planAnchorIndex;
   return Math.min(planAnchorIndex, firstExplicitPrescription?.index ?? Number.POSITIVE_INFINITY);
 }
 
@@ -466,8 +498,9 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
     if (isPatientSpeaker(line.speaker)) return !isFamilySelfMedicationLine(lines, line);
     if (line.speaker === "PSIQUIATRA") {
       const previous = previousSpeakerLine(lines, line);
-      return previous?.speaker === "PSIQUIATRA"
-        && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text));
+      return (previous?.speaker === "PSIQUIATRA"
+        && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text)))
+        || isQuotedPatientMedicationLine(lines, line);
     }
     if (FAMILY_SPEAKER_LABELS.has(line.speaker)) {
       const text = normalize(line.text);
@@ -710,7 +743,7 @@ function pruneFamilySelfMedicationOwnership(assessment, transcript, warnings) {
   const psychiatristSourceId = (assessment.sources || []).find((source) => source.kind === "psychiatrist")?.id;
   for (const line of lines) {
     if (line.speaker !== "PSIQUIATRA") continue;
-    const text = normalize(normalizeMedicationAsrText(line.text).text);
+    const text = normalize(normalizeSpokenDoseNumbers(normalizeMedicationAsrText(line.text).text));
     const planIndex = medicationPlanCutoffIndex(lines, { raw_name: "", display_name: "" }, planAnchorIndex);
     if (line.index < planIndex
       && !CLINICIAN_PRESCRIPTION_PATTERN.test(text)
@@ -858,8 +891,9 @@ function lineSupportsPreexistingMedication(lines, line, med, planAnchorIndex) {
 
   if (line.speaker === "PSIQUIATRA") {
     const previous = previousSpeakerLine(lines, line);
-    return previous?.speaker === "PSIQUIATRA"
-      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text))
+    return ((previous?.speaker === "PSIQUIATRA"
+      && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(previous.text)))
+      || isQuotedPatientMedicationLine(lines, line))
       && evidenceTexts.every((text) => !HISTORICAL_MEDICATION_PATTERN.test(text));
   }
 
@@ -1255,7 +1289,7 @@ function medicationRegimensMatch(left, right) {
   const sameName = leftNames.some((name) => name.length >= 4 && rightNames.has(name));
   const regimen = (med) => JSON.stringify([
     normalize(med?.dose),
-    normalize(med?.schedule).replace(/\\s*-\\s*/g, "-"),
+    normalize(med?.schedule).replace(/\s*-\s*/g, "-"),
     normalize(med?.route),
     Boolean(med?.prn),
     clean(med?.status),
