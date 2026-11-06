@@ -24,9 +24,9 @@ test("envío: si falta el informe ejecuta primero la gestión clínica", () => {
   assert.match(sendJs, /clinical-report-error/);
 });
 
-test("interfaz: las dos acciones principales están presentes desde la primera pantalla", () => {
-  assert.match(indexHtml, /id="workflowActions" class="workflow-actions"/);
-  assert.match(indexHtml, />Info Clínica<\/button>/);
+test("interfaz: las dos acciones solo aparecen tras la transcripción", () => {
+  assert.match(indexHtml, /id="workflowActions" class="workflow-actions hidden"/);
+  assert.match(indexHtml, />Organización<\/button>/);
   assert.match(indexHtml, />Envío \/ Borrar<\/button>/);
 });
 
