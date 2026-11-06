@@ -27,9 +27,7 @@ function cleanAdherence(value) {
 }
 
 function cleanMedicationName(value) {
-  return clean(value)
-    .replace(/\s*\(\s*no\s+(?:(?:se\s+)?encontr[oó]|encontrada)\s+correspondencia\s+en\s+CIMA\s*\)\s*$/i, "")
-    .trim();
+  return clean(value);
 }
 
 function medicationLine(med) {
