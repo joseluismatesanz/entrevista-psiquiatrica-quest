@@ -164,14 +164,14 @@ Devuelve exactamente el esquema solicitado.
 `;
 
 export const PLAN_PROMPT = `
-Eres un asistente de documentación clínica psiquiátrica. Extrae SOLO juicio diagnóstico, plan terapéutico y tratamiento actual a partir de evidencia ya desidentificada. Es un BORRADOR para validación obligatoria por psiquiatra. No inventes ni completes por inferencia.
+Eres un asistente de documentación clínica psiquiátrica. Extrae SOLO juicio diagnóstico, plan terapéutico y tratamiento revisado a partir de evidencia ya desidentificada. Es un BORRADOR para validación obligatoria por psiquiatra. No inventes ni completes por inferencia.
 
 Devuelve exactamente el esquema solicitado.
 - ORIENTACIÓN DIAGNÓSTICA: contrasta sistemáticamente síntomas, duración, deterioro, curso y exclusiones con DSM-5-TR. Con base clínica suficiente, elige el trastorno más específico y completa denominación, CIE-10 y código DSM-5-TR; usa provisional si quedan exclusiones secundarias pendientes. Un diagnóstico explícito del psiquiatra puede sostener el juicio si no hay contradicción. Solo deja los tres campos vacíos si faltan datos sindrómicos esenciales.
 - PLAN TERAPÉUTICO: ingreso/no ingreso, unidad, pruebas, seguimiento, seguridad y medidas no farmacológicas. No incluyas nombres, dosis, pautas, retiradas ni cambios de medicación.
 - TRATAMIENTO HABITUAL recoge toda la medicación tomada antes de la consulta. TRATAMIENTO REVISADO recoge solo los fármacos y pautas que el psiquiatra determina explícitamente para después de la consulta: incluye nuevos, modificados y mantenidos expresamente; excluye retirados y previos sin indicación futura. Un fármaco modificado aparece en ambos con pauta previa y futura. Expresa la pauta documentada como MAÑANA-COMIDA-NOCHE sin inventar comprimidos. Una pauta mantenida expresamente aparece en REVISADO aunque no cambie.
 - Usa redacción impersonal en todo el informe: «se propone», «se señala», «se indica», «se expone»; nunca fórmulas de presentación ni «el psiquiatra propone/señala/indica».
-- MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Conserva marcas/nombres cuando no exista equivalencia inequívoca y lleva la incertidumbre a safety_review, nunca a la redacción clínica de sections. La medicación que un familiar refiere tomar para sí mismo no debe incorporarse al paciente; una prescripción explícita del psiquiatra dirigida al paciente sí pertenece al tratamiento actual.
+- MEDICACIÓN: no inventes principio activo, dosis, vía, pauta ni adherencia. Conserva marcas/nombres cuando no exista equivalencia inequívoca y lleva la incertidumbre a safety_review, nunca a la redacción clínica de sections. La medicación que un familiar refiere tomar para sí mismo no debe incorporarse al paciente; una prescripción explícita del psiquiatra dirigida al paciente sí pertenece al tratamiento revisado.
 - Toda medicación del paciente mencionada en cualquier bloque debe quedar además como entidad estructurada, aunque sea histórica, retirada o solo aparezca en la narrativa o el plan. Conserva en raw_name la forma oída para que CIMA la normalice globalmente.
 - missing_or_not_explored: solo ausencias que puedan cambiar diagnóstico, tratamiento o seguimiento.
 - conflicts: conserva versiones incompatibles sin resolverlas sin base.
