@@ -385,7 +385,7 @@
         method: 'POST',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript }),
+        body: JSON.stringify({ transcript, interviewStartedAt: Number(window.__SALUD_MENTAL_INTERVIEW_STARTED_AT) || Date.now() }),
       }, {
         timeoutMs: ANALYSIS_TIMEOUT_MS,
         label: 'La organización clínica',
