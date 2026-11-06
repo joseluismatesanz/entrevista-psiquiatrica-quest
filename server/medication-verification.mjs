@@ -621,13 +621,27 @@ function extractDoseBoundaries(section42) {
 function calculatedDailyDose(med) {
   const doseMatch = clean(med?.dose).replace(/,/g, ".").match(/(\d+(?:\.\d+)?)\s*(mg|mcg|µg|ug|g)\b/i);
   const schedule = clean(med?.schedule).replace(/,/g, ".");
+  if (!doseMatch || med?.prn) return null;
+
+  let administrations = null;
   const slots = schedule.match(/^\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*$/);
-  if (!doseMatch || !slots || med?.prn) return null;
+  if (slots) {
+    administrations = slots.slice(1).reduce((sum, value) => sum + Number(value), 0);
+  } else {
+    const daily = normalize(schedule);
+    const timeSlots = new Set();
+    if (/\b(?:manana|desayuno|matutino)\b/.test(daily)) timeSlots.add("morning");
+    if (/\b(?:mediodia|comida)\b/.test(daily)) timeSlots.add("midday");
+    if (/\b(?:noche|cena|dormir|nocturno)\b/.test(daily)) timeSlots.add("night");
+    if (timeSlots.size) administrations = timeSlots.size;
+    else if (/\b(?:una\s+vez\s+al\s+dia|cada\s+dia|diari[oa]mente)\b/.test(daily)) administrations = 1;
+  }
+  if (administrations === null || administrations <= 0) return null;
+
   let strength = Number(doseMatch[1]);
   const unit = doseMatch[2].toLowerCase();
   if (unit === "g") strength *= 1000;
   else if (unit === "mcg" || unit === "µg" || unit === "ug") strength /= 1000;
-  const administrations = slots.slice(1).reduce((sum, value) => sum + Number(value), 0);
   return Number((strength * administrations).toFixed(4));
 }
 
