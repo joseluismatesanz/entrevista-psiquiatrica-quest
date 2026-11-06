@@ -8,6 +8,17 @@ import {
   presidioEndpointForRequest,
 } from "../server/presidio-deidentification.mjs";
 
+function interviewReportHeader(value) {
+  const raw = Number(value);
+  const timestamp = Number.isFinite(raw) && raw > 0 ? raw : Date.now();
+  const date = new Intl.DateTimeFormat("es-ES", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: "Europe/Madrid",
+  }).format(new Date(timestamp));
+  return `INFORME PSIQUIÁTRICO\nFecha y hora de la entrevista: ${date} (hora peninsular)\nDr. José Luis Matesanz Pérez R4`;
+}
+
 function setPrivacyHeaders(res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
   res.setHeader("Pragma", "no-cache");
@@ -239,8 +250,12 @@ export default async function handler(req, res) {
       totalMs: Date.now() - totalStartedAt,
     });
 
+    const reportHeader = interviewReportHeader(body.interviewStartedAt);
+    const report = typeof result?.report === "string" ? result.report : "";
+
     return res.status(200).json({
       ...result,
+      report: `${reportHeader}\n\n${report}`,
       deidentified_transcript: safeTranscript,
       meta: {
         ...(result?.meta || {}),
