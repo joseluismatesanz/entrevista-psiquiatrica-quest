@@ -24,8 +24,9 @@
   }
 
   const script = document.createElement('script');
-  script.src = backendMode ? 'backend-client.js?v=20261101-action-timers-3' : 'app.js';
+  script.src = backendMode ? 'backend-client.js?v=20261107-long-single-flight-1' : 'app.js';
   script.async = false;
   script.dataset.engine = backendMode ? 'structured' : 'local';
   document.body.appendChild(script);
 })();
+

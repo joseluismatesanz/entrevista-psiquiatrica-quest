@@ -58,7 +58,7 @@
     }
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => finish(new Error('La generación automática del informe ha superado el tiempo permitido.')), 230_000);
+      const timeout = setTimeout(() => finish(new Error('La generación automática del informe ha superado el tiempo permitido.')), 315_000);
       const onReady = () => finish();
       const onError = (event) => finish(new Error(event.detail?.message || 'No se pudo generar el informe clínico.'));
       function finish(error) {
@@ -88,6 +88,7 @@
   }
 
   function destroyEphemeralSession() {
+    window.dispatchEvent(new CustomEvent('clinical-session-destroyed'));
     window.__CLINICAL_SESSION_DESTROYING = true;
     window.__CLINICAL_REPORT_AVAILABLE = false;
     document.querySelectorAll('textarea').forEach((field) => { field.value = ''; });
@@ -162,3 +163,4 @@
   window.sendValidatedClinicalReport = generateSendAndDestroy;
   syncSendAction();
 })();
+

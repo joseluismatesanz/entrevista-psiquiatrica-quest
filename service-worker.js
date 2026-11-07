@@ -1,11 +1,11 @@
-const STATIC_CACHE = 'salud-mental-static-v5-action-timers';
+const STATIC_CACHE = 'salud-mental-static-v6-long-recovery';
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/styles.css',
   '/organization-v055.css',
   '/report-v056.css?v=20260909-4',
   '/blue-glasses-theme.css?v=20260930-1',
-  '/recording-focus-v063.css?v=20261031-2',
+  '/recording-focus-v063.css?v=20261107-recovery-1',
   '/assets/blue-glasses.png',
   '/icons/blue-glasses-192.png',
   '/icons/blue-glasses-512.png',
@@ -47,3 +47,4 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cached) => cached || fetch(request))
   );
 });
+

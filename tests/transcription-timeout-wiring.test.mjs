@@ -12,10 +12,10 @@ const [index, loader, shortFlow, longFlow, packageJson] = await Promise.all([
 
 test('grabación: la protección se carga antes de los controladores y evita caché antigua', () => {
   const timeoutLayer = index.indexOf('client-request-timeout.js?v=20261004-recording-1');
-  const loaderPosition = index.indexOf('loader.js?v=20261101-action-timers-3');
+  const loaderPosition = index.indexOf('loader.js?v=20261107-long-single-flight-1');
   const longPosition = index.indexOf('long-interview-v06.js?v=20261102-post-transcription-1');
   assert.ok(timeoutLayer >= 0 && loaderPosition > timeoutLayer && longPosition > loaderPosition);
-  assert.match(loader, /backend-client\.js\?v=20261101-action-timers-3/);
+  assert.match(loader, /backend-client\.js\?v=20261107-long-single-flight-1/);
   assert.match(packageJson, /node --check client-request-timeout\.js/);
 });
 
@@ -38,3 +38,4 @@ test('grabación larga: cada bloque y el cierre completo tienen límites explíc
   assert.match(longFlow, /attempt >= maxAttempts/);
   assert.match(longFlow, /finally\s*\{[\s\S]*setButton\('idle'\)/);
 });
+

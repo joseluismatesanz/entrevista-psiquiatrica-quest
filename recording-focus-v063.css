@@ -123,3 +123,8 @@ body.clinical-report-visible #workflowActions {
 @media (prefers-reduced-motion: reduce) {
   .recording-blackout-button.processing .recording-blackout-dot { animation: none; }
 }
+
+
+#analysisStatus { margin: 4px 0; color: #284c5a; line-height: 1.5; text-align: center; overflow-wrap: anywhere; }
+#analysisStatus.analysis-error { color: #982c24; background: #fff3f1; border: 1px solid #e7b9b3; padding: 14px; border-radius: 10px; }
+#reviewPreservedTranscript { padding: 12px; border: 1px solid #8da9b2; border-radius: 10px; background: white; color: #284c5a; }

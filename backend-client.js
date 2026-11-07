@@ -6,9 +6,10 @@
   const MAX_AUDIO_SECONDS = 120;
   const MAX_AUDIO_BYTES = 3_000_000;
   const TRANSCRIPTION_TIMEOUT_MS = 150_000;
-  const ANALYSIS_TIMEOUT_MS = 225_000;
+  const ANALYSIS_TIMEOUT_MS = 310_000;
   const state = {
     result: null,
+    analysisPromise: null,
     health: null,
     recorder: null,
     stream: null,
@@ -347,7 +348,43 @@
     $('copyReport').disabled = true;
   }
 
-  async function analyzeWithBackend({ showOrganization = false } = {}) {
+  function analysisNotice(message, failed = false) {
+    const actions = $('workflowActions');
+    if (!actions) return;
+    let status = $('analysisStatus');
+    if (!status) {
+      status = document.createElement('p');
+      status.id = 'analysisStatus';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      actions.appendChild(status);
+      const recover = document.createElement('button');
+      recover.id = 'reviewPreservedTranscript';
+      recover.type = 'button';
+      recover.textContent = 'Revisar o copiar transcripción';
+      recover.classList.add('hidden');
+      recover.addEventListener('click', () => {
+        document.body.classList.remove('transcription-actions-only');
+        showScreen('input');
+        $('caseText')?.focus();
+      });
+      actions.appendChild(recover);
+    }
+    status.textContent = message;
+    status.classList.toggle('analysis-error', failed);
+    $('reviewPreservedTranscript')?.classList.toggle('hidden', !failed);
+  }
+
+  function analyzeWithBackend(options = {}) {
+    if (state.analysisPromise) return state.analysisPromise;
+    const pending = performBackendAnalysis(options);
+    state.analysisPromise = pending;
+    const release = () => { if (state.analysisPromise === pending) state.analysisPromise = null; };
+    pending.then(release, release);
+    return pending;
+  }
+
+  async function performBackendAnalysis({ showOrganization = false } = {}) {
     const transcript = $('caseText').value.trim();
     if (!transcript) {
       $('sessionMessage').textContent = 'Pega o graba primero una entrevista ficticia o anonimizada.';
@@ -371,12 +408,15 @@
       actionTimer.textContent = `Organizando información clínica · ${elapsedSeconds} s`;
     };
     button.disabled = true;
+    if ($('prepareReportEmail')) $('prepareReportEmail').disabled = true;
+    analysisNotice('Preparando informe. Las entrevistas largas pueden tardar varios minutos. Conserva esta pantalla abierta.');
     button.textContent = 'Organizando información clínica…';
     updateActionTimer();
     $('sessionMessage').textContent = 'Preparando la organización clínica y el borrador del informe…';
     progressTimer = setInterval(() => {
       const elapsedSeconds = Math.max(1, Math.round((Date.now() - analysisStartedAt) / 1000));
       $('sessionMessage').textContent = `Organizando la entrevista · ${elapsedSeconds} s. La transcripción permanece disponible y el proceso tiene un límite de seguridad.`;
+      analysisNotice(`Procesando entrevista · ${elapsedSeconds} s. Se conserva la transcripción; no es necesario volver a pulsar los botones.`);
       updateActionTimer();
     }, 1_000);
 
@@ -392,6 +432,7 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || `Error del backend (${response.status})`);
+      if (!payload.assessment || typeof payload.report !== 'string' || !payload.report.trim()) throw new Error('El servidor devolvió un informe incompleto. La transcripción sigue disponible.');
       if (typeof payload.deidentified_transcript === 'string' && payload.deidentified_transcript.trim()) {
         $('caseText').value = payload.deidentified_transcript;
         $('sessionMessage').textContent = 'Transcripción desidentificada aplicada. Al volver a Entrevista puedes comprobar literalmente la máscara XXXXXXXXXXX y las entidades conservadas.';
@@ -402,10 +443,14 @@
       showScreen(showOrganization ? 'review' : 'report');
       if (!showOrganization) document.body.classList.add('clinical-report-visible');
       analysisSucceeded = true;
+      analysisNotice('Informe preparado.');
       window.dispatchEvent(new CustomEvent('clinical-report-ready'));
       return payload;
     } catch (error) {
+      state.result = null;
+      window.__CLINICAL_REPORT_AVAILABLE = false;
       console.error('Backend analysis failed without logging transcript.', error);
+      analysisNotice(`No se ha generado el informe: ${error.message} La transcripción se conserva. Puedes revisarla o volver a intentarlo.`, true);
       $('sessionMessage').textContent = `No se pudo completar el análisis: ${error.message}`;
       showScreen('input');
       document.body.classList.add('transcription-actions-only');
@@ -420,12 +465,15 @@
         const elapsedSeconds = Math.max(0, Math.floor((Date.now() - analysisStartedAt) / 1000));
         actionTimer.textContent = `${analysisSucceeded ? 'Informe creado' : 'Proceso interrumpido'} · ${elapsedSeconds} s`;
       }
+      if ($('prepareReportEmail')) $('prepareReportEmail').disabled = false;
       button.disabled = Boolean(state.result);
       button.textContent = original;
     }
   }
 
   function wipeTransientState(message = 'Sesión destruida. No queda contenido clínico ni audio en la interfaz.') {
+    window.dispatchEvent(new CustomEvent('clinical-session-destroyed'));
+    analysisNotice('');
     if (state.recorder?.state === 'recording') state.recorder.stop();
     clearRecordingTimers();
     stopMediaTracks();
@@ -466,7 +514,7 @@
     const hasTranscript = Boolean($('caseText').value.trim());
     const transcriptReady = hasTranscript && window.__LONG_INTERVIEW_INCOMPLETE !== true;
     $('workflowActions')?.classList.toggle('hidden', !transcriptReady);
-    $('analyzeCase').disabled = !transcriptReady;
+    $('analyzeCase').disabled = !transcriptReady || Boolean(state.analysisPromise);
   }
   $('caseText')?.addEventListener('input', syncWorkflowActions);
   window.addEventListener('clinical-transcription-ready', syncWorkflowActions);
@@ -511,3 +559,4 @@
   });
 
 })();
+
