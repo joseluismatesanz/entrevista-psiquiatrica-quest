@@ -1,0 +1,278 @@
+import { transcribeAudioPayload } from "../server/transcribe.mjs";
+import { redactAndAttributeSegments } from "../server/privacy-attribution.mjs";
+import { attributeClinicalSpeakerRoles } from "../server/speaker-attribution.mjs";
+import {
+  deidentifySegmentsWithPresidio,
+  presidioEndpointForRequest,
+} from "../server/presidio-deidentification.mjs";
+import {
+  createPrivacyProof,
+  verifyPrivacyProof,
+  LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+} from "../server/privacy-proof.mjs";
+
+export const SILENT_LONG_INTERVIEW_BLOCK = "SISTEMA: [BLOQUE_SILENCIOSO]";
+
+const BILLING_ERROR_CODES = new Set([
+  "billing_hard_limit_reached",
+  "credit_balance_exhausted",
+  "insufficient_funds",
+  "insufficient_quota",
+]);
+
+export function classifyTranscriptionError(error) {
+  const providerCode = String(error?.code || error?.error?.code || "").trim().toLowerCase();
+  const providerStatus = Number(error?.status || error?.statusCode || error?.response?.status || 0);
+  const rawMessage = String(error?.message || "");
+  const billingFailure = BILLING_ERROR_CODES.has(providerCode)
+    || /(?:no credits remaining|credit balance|insufficient (?:funds|quota)|billing hard limit)/i.test(rawMessage);
+
+  if (billingFailure) {
+    return {
+      status: 402,
+      error: "transcription_billing_required",
+      message: "La cuenta de transcripción configurada no tiene saldo disponible. Añade créditos en OpenAI y vuelve a intentarlo.",
+      retryable: false,
+      action_required: "add_openai_credits",
+    };
+  }
+
+  if (providerStatus === 429 || providerCode === "rate_limit_exceeded") {
+    return {
+      status: 429,
+      error: "transcription_rate_limited",
+      message: "El servicio de transcripción está temporalmente saturado. Se volverá a intentar de forma automática.",
+      retryable: true,
+    };
+  }
+
+  if (error instanceof TypeError || error instanceof RangeError) {
+    return {
+      status: 400,
+      error: providerCode || error.name || "invalid_audio",
+      message: rawMessage || "El bloque de audio no es válido.",
+      retryable: false,
+    };
+  }
+
+  return {
+    status: 502,
+    error: providerCode || error?.name || "TranscriptionError",
+    message: rawMessage || "No se pudo transcribir o desidentificar el audio.",
+    retryable: true,
+  };
+}
+
+function setPrivacyHeaders(res) {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+}
+
+function verifiedPriorContext(body) {
+  if (body?.long_interview_block !== true) return "";
+  const context = typeof body?.previous_safe_context === "string"
+    ? body.previous_safe_context.trim()
+    : "";
+  const proof = typeof body?.previous_context_proof === "string"
+    ? body.previous_context_proof
+    : "";
+  if (!context || !proof || context.length > 100_000) return "";
+  const verified = verifyPrivacyProof(context, proof, {
+    maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+  });
+  return verified ? context.slice(-2400) : "";
+}
+
+export default async function handler(req, res) {
+  setPrivacyHeaders(res);
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "method_not_allowed" });
+  }
+
+  const totalStartedAt = Date.now();
+  let blockIndex = null;
+  let stage = "request_validation";
+  try {
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const longInterviewBlock = body.long_interview_block === true;
+    blockIndex = Number.isInteger(Number(body.block_index)) ? Number(body.block_index) : null;
+    const previousSafeContext = verifiedPriorContext(body);
+
+    stage = "audio_transcription";
+    const transcriptionStartedAt = Date.now();
+    const acoustic = await transcribeAudioPayload(body, {
+      allowEmptySegments: longInterviewBlock,
+    });
+    const transcriptionMs = Date.now() - transcriptionStartedAt;
+
+    // Una pausa clínica dentro de una entrevista larga es un bloque válido sin contenido.
+    // Se firma una marca técnica para que el controlador estable pueda transportarlo de
+    // forma verificable; una capa de navegador la elimina antes de mostrar/analizar texto.
+    if (longInterviewBlock && acoustic.segments.length === 0) {
+      const silentProof = createPrivacyProof(SILENT_LONG_INTERVIEW_BLOCK, {
+        ttlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+        maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+      });
+      if (!silentProof) throw new Error("No se pudo firmar el bloque silencioso de la entrevista larga.");
+      return res.status(200).json({
+        ...acoustic,
+        transcript: SILENT_LONG_INTERVIEW_BLOCK,
+        acoustic_transcript: "",
+        participants: [],
+        review_items: [],
+        privacy_proof: silentProof,
+        meta: {
+          ...acoustic.meta,
+          long_interview_block: true,
+          silent_block: true,
+          person_name_redaction_enabled: true,
+          person_name_redaction_replacements: 0,
+          person_name_redaction_store: false,
+          person_name_redaction_fail_closed: true,
+          presidio_enabled: true,
+          presidio_language: "es",
+          presidio_replacements: 0,
+          presidio_skipped_empty_block: true,
+          presidio_store: false,
+          presidio_fail_closed: true,
+          automatic_role_attribution: true,
+          signed_privacy_proof_issued: true,
+          previous_safe_context_verified: Boolean(previousSafeContext),
+          previous_safe_context_used: false,
+          privacy_proof_ttl_seconds: Math.round(LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS / 1000),
+          performance_ms: {
+            transcription: transcriptionMs,
+            privacy_and_speaker_attribution: 0,
+            total_audio_pipeline: Date.now() - totalStartedAt,
+          },
+        },
+      });
+    }
+
+    // Primera barrera: Presidio se ejecuta dentro del mismo despliegue y elimina
+    // identificadores directos antes de enviar texto a cualquier modelo clínico.
+    // Si la barrera falla, la petición completa falla cerrada.
+    stage = "presidio_deidentification";
+    const presidioStartedAt = Date.now();
+    const presidio = await deidentifySegmentsWithPresidio(acoustic.segments, {
+      endpoint: presidioEndpointForRequest(req),
+    });
+    const presidioMs = Date.now() - presidioStartedAt;
+
+    // Presidio es la única rutina que reescribe identificadores. Esta llamada
+    // estructurada atribuye roles sobre texto ya desidentificado sin volver a
+    // copiar ni transformar cada frase.
+    // En V0.6 puede recibir únicamente contexto previo ya desidentificado y firmado,
+    // para mantener continuidad de roles entre bloques. Si falla, se conserva el
+    // camino anterior como fallback seguro.
+    const privatePassStartedAt = Date.now();
+    let processed;
+    let fallbackUsed = false;
+    stage = "speaker_role_attribution";
+    try {
+      processed = await redactAndAttributeSegments(presidio.segments, { previousSafeContext });
+    } catch {
+      fallbackUsed = true;
+      const attributed = await attributeClinicalSpeakerRoles(presidio.segments);
+      processed = {
+        transcript: attributed.transcript,
+        segments: attributed.segments,
+        participants: attributed.participants,
+        review_items: attributed.review_items,
+        replacements: presidio.replacements,
+        meta: {
+          model: attributed.meta.role_model,
+          transport: attributed.meta.role_transport,
+          store: false,
+          mask: "XXXXXXXXXXX",
+          fail_closed: true,
+          presidio_required: true,
+          duplicate_name_rewrite_skipped: true,
+          automatic_role_attribution: true,
+          critical_review_count: attributed.meta.critical_review_count,
+          previous_safe_context_used: false,
+        },
+      };
+    }
+    const privatePassMs = Date.now() - privatePassStartedAt;
+
+    const privacyProof = longInterviewBlock
+      ? createPrivacyProof(processed.transcript, {
+          ttlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+          maxTtlMs: LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS,
+        })
+      : createPrivacyProof(processed.transcript);
+
+    const responsePayload = {
+      ...acoustic,
+      transcript: processed.transcript,
+      acoustic_transcript: processed.segments.map((s) => `HABLANTE ${s.acoustic_speaker || s.speaker}: ${s.text}`).join("\n"),
+      segments: processed.segments,
+      participants: processed.participants,
+      review_items: processed.review_items,
+      ...(privacyProof ? { privacy_proof: privacyProof } : {}),
+      meta: {
+        ...acoustic.meta,
+        silent_block: false,
+        person_name_redaction_enabled: true,
+        person_name_redaction_mask: processed.meta.mask,
+        person_name_redaction_replacements: presidio.replacements,
+        person_name_redaction_store: false,
+        person_name_redaction_fail_closed: true,
+        duplicate_name_redaction_skipped_after_presidio: true,
+        presidio_enabled: true,
+        presidio_engine: presidio.meta.engine,
+        presidio_version: presidio.meta.version,
+        presidio_model: presidio.meta.model,
+        presidio_language: presidio.meta.language,
+        presidio_replacements: presidio.replacements,
+        presidio_entity_counts: presidio.entityCounts,
+        presidio_self_hosted: presidio.meta.self_hosted,
+        presidio_store: false,
+        presidio_fail_closed: true,
+        automatic_role_attribution: true,
+        role_model: processed.meta.model,
+        role_transport: processed.meta.transport,
+        role_attribution_store: false,
+        critical_role_review_count: processed.meta.critical_review_count,
+        speaker_role_confirmation_required: processed.meta.critical_review_count > 0,
+        combined_privacy_attribution: false,
+        presidio_role_attribution: !fallbackUsed,
+        signed_privacy_proof_issued: Boolean(privacyProof),
+        long_interview_block: longInterviewBlock,
+        previous_safe_context_verified: Boolean(previousSafeContext),
+        previous_safe_context_used: Boolean(processed.meta.previous_safe_context_used),
+        privacy_proof_ttl_seconds: longInterviewBlock
+          ? Math.round(LONG_INTERVIEW_PRIVACY_PROOF_TTL_MS / 1000)
+          : 600,
+        performance_ms: {
+          transcription: transcriptionMs,
+          presidio_deidentification: presidioMs,
+          privacy_and_speaker_attribution: privatePassMs,
+          total_audio_pipeline: Date.now() - totalStartedAt,
+        },
+      },
+    };
+    console.info("[transcribe] completed", {
+      blockIndex,
+      longInterviewBlock,
+      segmentCount: processed.segments.length,
+      totalMs: responsePayload.meta.performance_ms.total_audio_pipeline,
+      fallbackUsed,
+    });
+    return res.status(200).json(responsePayload);
+  } catch (error) {
+    console.error("[transcribe] failed", {
+      blockIndex,
+      stage,
+      errorName: error?.name || "TranscriptionError",
+      errorCode: error?.code || "",
+      totalMs: Date.now() - totalStartedAt,
+    });
+    const failure = classifyTranscriptionError(error);
+    return res.status(failure.status).json(failure);
+  }
+}

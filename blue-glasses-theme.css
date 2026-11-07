@@ -1,0 +1,235 @@
+:root {
+  --navy: #0d3264;
+  --blue: #1967b3;
+  --teal: #2b74b8;
+  --teal-soft: #e5f1ff;
+  --ice: #f1f7ff;
+  --line: #c7d9ee;
+  --muted: #536b82;
+  --danger: #1b5f9e;
+  --warn: #356f9f;
+  color: #102d4c;
+  background: #edf5ff;
+}
+
+body {
+  background: linear-gradient(180deg, #e8f2fb 0, #f7f9fc 42%, #edf3f8 100%);
+}
+
+.brand-header,
+.card {
+  border-color: #ccddf0;
+  box-shadow: 0 12px 30px rgba(24, 72, 124, 0.07);
+}
+
+.brand-mark {
+  width: 104px;
+  height: 72px;
+  overflow: hidden;
+  background: linear-gradient(145deg, #e9f3ff, #f9fbff);
+  border-color: #ccdcf0;
+}
+
+.brand-mark img {
+  display: block;
+  width: 92px;
+  height: auto;
+}
+
+.privacy-chip,
+.draft-badge {
+  border-color: #aac9e9;
+  background: #e8f2ff;
+  color: #174d83;
+}
+
+.privacy-banner {
+  background: #eaf3ff;
+  border-color: #cbdcf0;
+  color: #35566f;
+}
+
+.privacy-banner strong {
+  color: #174e8f;
+}
+
+.step {
+  border-color: #d2deea;
+  background: #f8fbff;
+  color: #4f6877;
+}
+
+.step.active,
+.primary {
+  background: linear-gradient(135deg, #0d3264, #1967b3);
+}
+
+.secondary {
+  border-color: #b8cee7;
+  color: #214e79;
+}
+
+.danger {
+  border-color: #a9c9eb;
+  background: #edf5ff;
+  color: #18528d;
+}
+
+.record-button {
+  border-color: #d8eaff;
+  background: linear-gradient(145deg, #2d7bd0, #13569c);
+  box-shadow: 0 14px 32px rgba(30, 103, 181, 0.24);
+}
+
+.record-button.recording {
+  background: linear-gradient(145deg, #3188e5, #0f4e91);
+  box-shadow: 0 0 0 10px rgba(44, 126, 211, 0.11), 0 16px 36px rgba(22, 91, 160, 0.3);
+}
+
+textarea,
+.speaker-row,
+.route-card,
+.report-editor {
+  border-color: #cbdcf0;
+  background: #f9fbff;
+}
+
+textarea:focus,
+.speaker-row select:focus,
+.report-section-input:focus,
+.report-editor:focus {
+  border-color: #6ea4dc;
+  box-shadow: 0 0 0 3px rgba(43, 116, 184, 0.12);
+}
+
+.analysis-principle,
+.tag,
+.route-count,
+.report-edited-label {
+  background: #e8f2ff;
+  color: #245b91;
+}
+
+.warning-card {
+  border-left-color: #5d91ca;
+}
+
+.alert-card,
+.safety-summary-card {
+  border-left-color: #2f6fab !important;
+}
+
+.sticky-actions {
+  background: rgba(237, 245, 255, 0.95);
+}
+
+.organization-attention,
+.report-pending-banner {
+  background: #f4f8ff;
+  border-color: #b8d0ea;
+  border-left-color: #4b89c8;
+  box-shadow: 0 10px 28px rgba(29, 78, 128, 0.06);
+  color: #3f5872;
+}
+
+.organization-attention-copy h2,
+.report-pending-copy h2 {
+  color: #174d83;
+}
+
+.organization-attention-copy small,
+.report-pending-copy small {
+  color: #426b96;
+}
+
+.attention-chip,
+.report-pending-chip,
+.attention-chip.pending,
+.report-pending-chip.pending,
+.attention-chip.conflict,
+.report-pending-chip.conflict,
+.attention-chip.alert,
+.report-pending-chip.review {
+  border-color: #a9c8e8;
+  background: #edf5ff;
+  color: #245b91;
+}
+
+.attention-chip.conflict,
+.report-pending-chip.conflict {
+  border-color: #88b5e2;
+  background: #e6f1ff;
+  color: #174f88;
+}
+
+.attention-chip.alert,
+.report-pending-chip.review {
+  border-color: #6fa5da;
+  background: #deedff;
+  color: #0f477e;
+}
+
+.route-card.status-supported,
+.route-card.status-denied,
+.route-card.status-not-explored,
+.route-card.status-insufficient,
+.route-card.status-discrepancy,
+.route-card.status-review {
+  border-color: #b5cde7;
+  background: #f5f9ff;
+}
+
+.route-card.status-supported,
+.route-card.status-discrepancy {
+  border-color: #91bae3;
+  background: #edf5ff;
+}
+
+.route-card.status-review {
+  border-color: #75a8dc;
+  background: #e6f1ff;
+}
+
+.route-count.status-supported,
+.route-count.status-denied,
+.route-count.status-not-explored,
+.route-count.status-insufficient,
+.route-count.status-discrepancy,
+.route-count.status-review {
+  background: #e3effd;
+  color: #245b91;
+}
+
+.route-count.status-discrepancy,
+.route-count.status-review {
+  background: #d8eaff;
+  color: #174f88;
+}
+
+.report-section-save {
+  background: #1b5f9e;
+  border-color: #1b5f9e;
+}
+
+.report-section-edited {
+  border-left-color: #70a7dc;
+}
+
+@media (max-width: 720px) {
+  .brand-header {
+    gap: 11px;
+  }
+
+  .brand-mark {
+    width: 78px;
+    height: 58px;
+  }
+
+  .brand-mark img {
+    width: 70px;
+  }
+
+  .steps {
+    background: #edf4f9;
+  }
+}
