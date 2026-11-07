@@ -396,13 +396,17 @@ export async function verifyReportMedicationMentions(inputAssessment, options = 
   }
 
   const medicationContextPattern = /\b(?:medicacion|medicación|tratamiento)\s+(?:con|de)\s+([a-záéíóúüñ][a-záéíóúüñ-]{3,})|(?:toma|tomar|tomando|iniciar|inicia|prescribir|prescribe|pautar|pauta|indicar|indica|mantener|suspender|suspende|retirar|retira|cambiar\s+a|cambio\s+a)\s+(?:(?:el|la|un|una)\s+)?([a-záéíóúüñ][a-záéíóúüñ-]{3,})/giu;
-  const nonMedicationWords = new Set(["medicacion", "tratamiento", "pauta", "ninguna", "ningun", "ningún", "actualmente", "correctamente", "adecuadamente", "ninguno"]);
+  const nonMedicationWords = new Set(["medicacion", "tratamiento", "pauta", "ninguna", "ningun", "ningún", "actualmente", "correctamente", "adecuadamente", "ninguno", "modificacion", "revision", "seguimiento", "medidas", "decisiones", "conciencia", "agua", "alcohol", "tabaco", "alimentos"]);
   for (const section of Object.values(assessment.sections || {})) {
     const text = clean(section?.text);
     if (!text) continue;
     for (const match of text.matchAll(medicationContextPattern)) {
       const candidate = clean(match[1] || match[2]);
-      if (candidate && !nonMedicationWords.has(normalize(candidate))) {
+      // Unknown vocabulary needs a dose attached to the candidate, not just an action verb.
+      const after = text.slice(match.index + match[0].length, match.index + match[0].length + 70);
+      const hasAttachedDose = /^\s+(?:de\s+)?\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|miligramos?)\b/i.test(after);
+      const explicitDrugAction = /^(?:toma|tomar|tomando|prescribir|prescribe|pautar|pauta)\b/i.test(match[0]);
+      if (candidate && (hasAttachedDose || explicitDrugAction) && !nonMedicationWords.has(normalize(candidate))) {
         candidates.set(normalize(candidate), candidate);
       }
     }
@@ -859,3 +863,4 @@ export async function checkCurrentMedicationInteractions(inputAssessment, option
     },
   };
 }
+

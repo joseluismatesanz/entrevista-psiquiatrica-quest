@@ -77,7 +77,7 @@ function medicationBlock(list, allowedStatuses) {
     .map((med) => {
       const line = medicationLine(med);
       const review = med?.cima_dose_review;
-      if (!line || !review?.note) return line;
+      if (!line || !review?.note || ["within_cima_range", "within_cima_maximum"].includes(review.status)) return line;
       const prefix = review.status === "off_label_dose" ? "OFF-LABEL — " : "CIMA — ";
       return `${line}\n${prefix}${review.note} (Ficha técnica: CIMA, secciones 4.1 y 4.2).`;
     })
@@ -120,6 +120,9 @@ export function renderClinicalReport(assessment) {
       if (Array.isArray(list)) {
         body = medicationBlock(list, ["active", "administered_once"]);
         if (!body) body = "No consta tratamiento revisado.";
+      }
+      for (const note of assessment.unresolved_medication_prescriptions || []) {
+        body += `\nAVISO — ${note}`;
       }
       const interactionReview = assessment.medication_interaction_review;
       if (interactionReview?.status === "interaction_found" && interactionReview.findings?.length) {
