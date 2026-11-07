@@ -1,0 +1,125 @@
+:root {
+  --recording-black: #000;
+}
+
+.recording-blackout {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 10000;
+  min-height: 100dvh;
+  padding: max(22px, env(safe-area-inset-top)) 18px max(26px, env(safe-area-inset-bottom));
+  background: var(--recording-black);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  text-align: center;
+}
+
+.recording-blackout-button {
+  width: min(62vw, 220px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid #474747;
+  background: #111;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 20px;
+  font-weight: 850;
+  box-shadow: 0 0 0 8px rgba(255,255,255,.025);
+}
+
+.recording-blackout-button.processing {
+  cursor: wait;
+  opacity: .78;
+}
+
+.recording-blackout-button:disabled {
+  cursor: wait;
+}
+
+.recording-blackout-button small {
+  color: #bdbdbd;
+  font-size: .72rem;
+  font-weight: 650;
+}
+
+.recording-blackout-dot {
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
+  background: #e8e8e8;
+}
+
+.recording-blackout-button.processing .recording-blackout-dot {
+  border-radius: 50%;
+  border: 3px solid #555;
+  border-top-color: #f2f2f2;
+  background: transparent;
+  animation: recordingFocusSpin .9s linear infinite;
+}
+
+#recordingBlackoutStatus {
+  max-width: 34rem;
+  margin: 0;
+  color: #9c9c9c;
+  font-size: .82rem;
+}
+
+html.recording-focus-active,
+body.recording-focus-active {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  background: #000 !important;
+  color-scheme: dark;
+}
+
+body.transcription-actions-only .app-shell > :not(#workflowActions) {
+  display: none !important;
+}
+
+body.transcription-actions-only .app-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+}
+
+.workflow-actions {
+  width: min(100%, 420px);
+  margin: 18px auto;
+  display: grid;
+  gap: 14px;
+}
+
+.workflow-main-button {
+  width: 100%;
+  min-height: 64px;
+  border-radius: 16px;
+  font-size: 1.05rem;
+}
+
+.workflow-main-button:disabled {
+  opacity: .45;
+}
+
+body.clinical-report-visible #workflowActions {
+  margin-top: 10px;
+}
+
+@keyframes recordingFocusSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-blackout-button.processing .recording-blackout-dot { animation: none; }
+}
