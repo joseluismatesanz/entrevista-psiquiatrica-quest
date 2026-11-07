@@ -275,6 +275,10 @@ def _engines():
 def _keep_result(text, result):
     if result.entity_type not in ALLOWED_ENTITIES:
         return False
+    if result.entity_type == "PERSON":
+        for match in re.finditer(r"\b(?:duloxetina|venlafaxina|escitalopram|fluoxetina|sertralina|mirtazapina)\b(?=\s+(?:de\s+)?\d+(?:[.,]\d+)?\s*(?:mg|miligramos)\b)", text, re.I):
+            if match.start() <= result.start < result.end <= match.end():
+                return False
     detected = text[result.start:result.end]
     if result.entity_type in {"PERSON", "LOCATION", "ORGANIZATION"}:
         normalized = detected.strip(" .,:;-").upper()
@@ -386,3 +390,4 @@ class handler(BaseHTTPRequestHandler):
             "store": False,
             "fail_closed": True,
         })
+

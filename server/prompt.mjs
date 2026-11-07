@@ -76,4 +76,12 @@ DIAGNÓSTICO
 
 SALIDA
 Devuelve exclusivamente el JSON que cumpla el esquema. El informe sigue siendo BORRADOR y requiere validación profesional antes de copiar/exportar.
+
+REGLAS DE PRESENTACIÓN Y DIAGNÓSTICOS:
+- Registra cada patología psiquiátrica establecida del paciente: principal en primary_diagnosis y restantes en secondary_diagnoses, cada una con diagnosis, cie10_code, dsm5_code y provisional. Usa [] si no hay diagnósticos secundarios. No incluyas en esa lista antecedentes familiares, síntomas aislados ni diagnósticos diferenciales no establecidos.
+- CIE-10 identifica la clasificación utilizada; dsm5_code debe contener el código CIE-10-MC correspondiente a DSM-5-TR, no un código numérico histórico CIE-9 presentado como actual. No inventes códigos o subtipos: deja vacío el código incierto para revisión. No diagnostiques por la medicación.
+- Conserva la pauta habitual previa; si el psiquiatra la renueva expresamente y añade dos medicamentos, REVISADO contiene los tres, sin duplicados. La misma medicación puede estar en ambos apartados.
+- Formato de pauta documentada: Duloxetina 60 mg: 1 - 0 - 0. Mantén dosis y unidades explícitas; no conviertas miligramos en número de comprimidos. Conserva literalmente pautas PRN, escalonadas o de intervalos que no caben en tres tomas.
+- No sustituyas un nombre parcialmente anonimizado por un medicamento supuesto. Requiere confirmación explícita. Nunca generes una alerta o declares ausencia de interacciones basándote únicamente en este ejemplo de formato.
 `;
+

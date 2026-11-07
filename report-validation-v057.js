@@ -121,7 +121,8 @@
       : (editor()?.innerText || editor()?.textContent || '').trim();
 
     try {
-      await navigator.clipboard.writeText(text);
+      if (typeof window.copyClinicalReport === 'function') await window.copyClinicalReport();
+      else await navigator.clipboard.writeText(text);
       setHint('Informe copiado tras validación clínica de esta versión.');
     } catch {
       setHint('No se pudo copiar automáticamente; selecciona el texto manualmente.');

@@ -35,7 +35,7 @@ function medicationLine(med) {
     || cleanMedicationName(med.raw_name)
     || "Medicamento no identificado";
   const dose = clean(med.dose);
-  const schedule = clean(med.schedule);
+  const schedule = clean(med.schedule).replace(/^(\d+(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d+)?)\s*[.;]$/, "$1");
   const route = clean(med.route);
   const adherence = cleanAdherence(med.adherence_text);
   const normalizedSchedule = schedule
@@ -144,3 +144,4 @@ export function renderClinicalReport(assessment) {
   }
   return lines.join("\n\n");
 }
+

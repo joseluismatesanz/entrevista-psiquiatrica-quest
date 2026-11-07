@@ -394,6 +394,15 @@ function lineMentionsMedication(line, med) {
 }
 
 function medicationPlanCutoffIndex(lines, med, planAnchorIndex) {
+  // A later explicit history question resets a generic introductory plan anchor.
+  const historyQuestion = lines.find((line) => line.index > planAnchorIndex
+    && line.speaker === "PSIQUIATRA"
+    && HABITUAL_MEDICATION_QUESTION_PATTERN.test(normalize(line.text)));
+  if (historyQuestion) {
+    planAnchorIndex = lines.find((line) => line.index > historyQuestion.index
+      && line.speaker === "PSIQUIATRA"
+      && CURRENT_PLAN_ANCHOR_PATTERN.test(normalize(line.text)))?.index ?? Number.POSITIVE_INFINITY;
+  }
   const firstExplicitPrescription = lines.find((line) => {
     if (line.speaker !== "PSIQUIATRA" || !(lineMentionsMedication(line, med) || [med.raw_name, med.display_name].some((name) => normalize(name) && normalize(line.text).includes(normalize(name))))) return false;
     const text = normalize(line.text);
@@ -970,7 +979,7 @@ function cleanAdherence(value) {
 function medicationLine(med) {
   const name = clean(med.display_name) || clean(med.raw_name) || "Medicamento no identificado";
   const dose = clean(med.dose);
-  const schedule = clean(med.schedule);
+  const schedule = clean(med.schedule).replace(/^(\d+(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d+)?)\s*[.;]$/, "$1");
   const route = clean(med.route);
   const adherence = cleanAdherence(med.adherence_text);
 

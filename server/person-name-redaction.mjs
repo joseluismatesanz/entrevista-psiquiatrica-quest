@@ -67,6 +67,7 @@ REGLAS OBLIGATORIAS:
 - Conserva títulos o roles: "Dra. García" -> "Dra. ${PERSON_NAME_MASK}"; "mi hija Ana" -> "mi hija ${PERSON_NAME_MASK}".
 - NO sustituyas parentescos o roles genéricos como madre, padre, paciente, psiquiatra, enfermera.
 - NO sustituyas medicamentos, diagnósticos, hospitales, centros sanitarios, ciudades, países, calles, organismos, marcas ni fechas.
+- Conserva íntegros los nombres de medicamentos como duloxetina, venlafaxina, escitalopram, fluoxetina, sertralina y mirtazapina; no ocultes sílabas ni partes de estos nombres como si fueran personas.
 - No resumas, no corrijas, no reformules y no cambies ninguna otra palabra.
 - Si el texto ya contiene ${PERSON_NAME_MASK}, consérvalo exactamente y no lo cuentes como una nueva sustitución.
 - residual_person_name debe ser true si después de tu redacción queda algún nombre o apellido de persona explícito en redacted_text. Debe ser false solo si no queda ninguno.
@@ -200,3 +201,4 @@ export async function redactPersonNamesInTranscript(inputTranscript, options = {
     meta: result.meta,
   };
 }
+

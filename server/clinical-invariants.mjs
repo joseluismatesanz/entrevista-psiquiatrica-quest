@@ -25,7 +25,17 @@ function canonicalDiagnosticText(judgment) {
   const { diagnosis, cie10, dsm5 } = diagnosticFields(judgment);
   if (!diagnosis || !cie10 || !dsm5) return "";
 
-  let text = `JUICIO CLÍNICO: ${diagnosis}. CIE-10: ${cie10}. DSM-5-TR: ${dsm5}.`;
+  let text = `JUICIO CLÍNICO: ${diagnosis}. CIE-10: ${cie10}. DSM-5-TR (CIE-10-MC): ${/^[A-Z]\d/i.test(dsm5) ? dsm5 : "pendiente de verificación"}.`;
+  const seen = new Set([diagnosis.toLocaleLowerCase('es')]);
+  for (const item of judgment?.secondary_diagnoses || []) {
+    const name = String(item.diagnosis || '').trim();
+    if (!name || seen.has(name.toLocaleLowerCase('es'))) continue;
+    seen.add(name.toLocaleLowerCase('es'));
+    const cie = String(item.cie10_code || '').trim() || 'pendiente de verificación';
+    const rawDsm = String(item.dsm5_code || '').trim();
+    const dsm = /^[A-Z]\d/i.test(rawDsm) ? rawDsm : 'pendiente de verificación';
+    text += `\n${name}${item.provisional ? ' (provisional)' : ''}. CIE-10: ${cie}. DSM-5-TR (CIE-10-MC): ${dsm}.`;
+  }
   const differential = Array.isArray(judgment?.differential)
     ? judgment.differential.map((x) => String(x || "").trim()).filter(Boolean)
     : [];
@@ -328,3 +338,4 @@ export function collectClinicalInvariantViolations(assessment) {
 
   return violations;
 }
+

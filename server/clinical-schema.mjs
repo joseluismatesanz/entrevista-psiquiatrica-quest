@@ -73,6 +73,12 @@ export const ClinicalAssessmentSchema = z.object({
   }).strict(),
   diagnostic_judgment: z.object({
     primary_diagnosis: z.string(),
+    secondary_diagnoses: z.array(z.object({
+      diagnosis: z.string(),
+      cie10_code: z.string(),
+      dsm5_code: z.string(),
+      provisional: z.boolean(),
+    }).strict()),
     cie10_code: z.string(),
     dsm5_code: z.string(),
     provisional: z.boolean(),
@@ -103,3 +109,4 @@ export const ClinicalAssessmentSchema = z.object({
     clinician_validation_required: z.literal(true),
   }).strict(),
 }).strict();
+

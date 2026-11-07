@@ -237,8 +237,32 @@
     return blocks.map((block) => {
       const title = block.querySelector('h3')?.textContent?.trim() || '';
       const body = block.querySelector('.report-section-text')?.textContent?.trim() || '';
-      return `${title}\n${body}`.trim();
+      return `${title}${title === 'INFORME PSIQUIÁTRICO' ? ':' : ''} ${body}`.trim();
     }).filter(Boolean).join('\n\n');
+  }
+
+  function getClinicalReportHtml() {
+    const blocks = [...(document.getElementById('reportEditor')?.querySelectorAll('.report-section-block') || [])];
+    return blocks.map((block) => {
+      const title = block.querySelector('h3')?.textContent?.trim() || '';
+      const body = block.querySelector('.report-section-text')?.textContent?.trim() || '';
+      return `<p><strong>${escapeHtml(title)}${title === 'INFORME PSIQUIÁTRICO' ? ':' : ''}</strong> ${escapeHtml(body).replace(/\n/g, '<br>')}</p>`;
+    }).join('');
+  }
+
+  async function copyClinicalReport() {
+    const text = getClinicalReportText();
+    const html = getClinicalReportHtml();
+    if (html && window.ClipboardItem && navigator.clipboard?.write) {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' }),
+        })]);
+        return;
+      } catch { /* Fall back when rich clipboard is unavailable. */ }
+    }
+    await navigator.clipboard.writeText(text);
   }
 
   function refreshReportScreen() {
@@ -292,7 +316,7 @@
     const checkbox = document.getElementById('validateCheck');
     if (!checkbox?.checked) return;
     try {
-      await navigator.clipboard.writeText(getClinicalReportText());
+      await copyClinicalReport();
       const message = document.getElementById('sessionMessage');
       if (message) message.textContent = 'Informe copiado tras validación clínica.';
     } catch {
@@ -302,7 +326,10 @@
   }, { capture: true });
 
   window.getClinicalReportText = getClinicalReportText;
+  window.getClinicalReportHtml = getClinicalReportHtml;
+  window.copyClinicalReport = copyClinicalReport;
   window.addEventListener('pageshow', resetReportValidation);
   window.addEventListener('clinical-report-ready', refreshReportScreen);
   refreshReportScreen();
 })();
+
