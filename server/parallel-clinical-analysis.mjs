@@ -31,15 +31,7 @@ const conflict = z.object({
   topic: z.string(),
   accounts: z.array(z.object({ source_id: z.string(), statement: z.string() }).strict()).min(2),
 }).strict();
-const diagnosticJudgment = z.object({
-  primary_diagnosis: z.string(),
-  cie10_code: z.string(),
-  dsm5_code: z.string(),
-  provisional: z.boolean(),
-  differential: z.array(z.string()),
-  basis_summary: z.string(),
-  requires_clinician_validation: z.literal(true),
-}).strict();
+const diagnosticJudgment = ClinicalAssessmentSchema.shape.diagnostic_judgment;
 const safetyItem = z.object({
   topic: z.string(),
   evidence: z.string(),
@@ -164,6 +156,8 @@ Devuelve exactamente el esquema solicitado.
 `;
 
 export const PLAN_PROMPT = `
+Registra cada patología establecida por separado: principal en primary_diagnosis y secundarias en secondary_diagnoses con diagnosis, cie10_code, dsm5_code y provisional. Usa [] si no hay secundarias; no conviertas diferenciales en diagnósticos. dsm5_code identifica el código CIE-10-MC actual de DSM-5-TR; no inventes códigos y deja vacío el dudoso para revisión.
+
 Eres un asistente de documentación clínica psiquiátrica. Extrae SOLO juicio diagnóstico, plan terapéutico y tratamiento revisado a partir de evidencia ya desidentificada. Es un BORRADOR para validación obligatoria por psiquiatra. No inventes ni completes por inferencia.
 
 Devuelve exactamente el esquema solicitado.
