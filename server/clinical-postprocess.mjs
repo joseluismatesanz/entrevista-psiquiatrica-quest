@@ -45,8 +45,8 @@ const FAMILY_SPEAKER_LABELS = new Set([
 const PATIENT_SPEAKER_PATTERN = /^(?:PACIENTE|ENTREVISTAD[OA]|USUARI[OA])(?:\s+\d+)?$/i;
 const FAMILY_SELF_MEDICATION_PATTERN = /\b(?:yo\s+)?(?:ahora\s+mismo\s+)?(?:estoy\s+tomando|estaba\s+tomando|tomo|tomaba|he\s+tomado|me\s+tomo)\b/i;
 const COLLATERAL_PATIENT_MEDICATION_PATTERN = /\b(?:ella|el|él|mi\s+hij[oa]|la\s+paciente|le\s+(?:doy|damos|administro|administramos)|se\s+(?:la|lo)?\s*toma)\b/i;
-const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:este\s+es\s+el\s+tratamiento\s+que\s+(?:vamos|voy)\s+a\s+cambiar\s+por\s+el\s+siguiente|tratamiento\s+(?:que\s+)?(?:vamos|voy)\s+a\s+cambiar\s+por\b|a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
-const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
+const CURRENT_PLAN_ANCHOR_PATTERN = /\b(?:va\s+a\s+tomar\s+usted|usted\s+va\s+a\s+tomar|este\s+es\s+el\s+tratamiento\s+que\s+(?:vamos|voy)\s+a\s+cambiar\s+por\s+el\s+siguiente|tratamiento\s+(?:que\s+)?(?:vamos|voy)\s+a\s+cambiar\s+por\b|a\s+partir\s+de\s+(?:este\s+momento|ahora|hoy)|desde\s+ahora|tratamiento\s+que\s+tiene\s+que\s+hacer|le\s+voy\s+a\s+explicar\s+como\s+es\s+el\s+tratamiento|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)\b)\b/i;
+const CLINICIAN_PRESCRIPTION_PATTERN = /\b(?:va\s+a\s+tomar\s+usted|usted\s+va\s+a\s+tomar|debe(?:s)?\s+(?:de\s+)?tomar|debera\s+tomar|tomara|tome|se\s+toma|se\s+(?:indica|pauta|prescribe|inicia)|(?:voy|vamos)\s+a\s+(?:iniciar|poner|pautar|prescribir|indicar|dejar)|(?:inicio|iniciamos|pauto|pautamos|prescribo|prescribimos|indico|indicamos)|de\s+rescate|a\s+demanda|antes\s+de\s+dormir)\b/i;
 const CLINICIAN_MAINTENANCE_PATTERN = /\b(?:mantener|mantengo|mantenemos|mantenga|continuar|continua|contin\u00fao|seguimos\s+con|seguir\s+con|sin\s+cambios|misma\s+pauta|resto\s+del\s+tratamiento)\b/i;
 const CLINICIAN_TREATMENT_CHANGE_PATTERN = /\b(?:iniciar|inicio|inicia|iniciamos|introducir|introduzco|introduce|introducimos|anadir|anado|anade|anadimos|empezar|empezamos|comenzar|comenzamos|sustituir|sustituye|cambiar|cambio|cambia|cambiamos|aumentar|aumento|aumenta|aumentamos|incrementar|incremento|incrementa|incrementamos|subir|subo|sube|subimos|reducir|reduzco|reduce|reducimos|disminuir|disminuyo|disminuye|disminuimos|bajar|bajo|baja|bajamos|ajustar|ajusto|ajusta|ajustamos|titular|titulo|titula|titulamos)\b/i;
 const CLINICIAN_DISCONTINUATION_PATTERN = /\b(?:retirar|retiro|retiramos|suspender|suspendo|suspendemos|suprimir|suprimo|suprimimos|quitar|quito|quitamos|dejar\s+de\s+tomar|no\s+continuar|sustituir|sustituyo|sustituimos)\b/i;
@@ -82,10 +82,10 @@ function isQuotedPatientMedicationLine(lines, line) {
   const text = normalize(line.text);
   if (!FAMILY_SELF_MEDICATION_PATTERN.test(text)) return false;
   const position = lines.indexOf(line);
-  const context = lines.slice(Math.max(0, position - 2), position)
+  const context = lines.slice(Math.max(0, position - 2), position + 1)
     .map((item) => normalize(item.text))
     .join(" ");
-  return /\b(?:textualmente|tal\s+cual|usted\s+(?:dice|refiere|ha\s+dicho)|segun\s+(?:aparece\s+en\s+el\s+informe)|refiere\s+que)\b/i.test(context);
+  return /\b(?:textualmente|literalmente|tal\s+cual|usted\s+(?:dice|refiere|ha\s+dicho)|segun\s+(?:aparece\s+en\s+el\s+informe)|refiere\s+que)\b/i.test(context);
 }
 
 
@@ -153,8 +153,10 @@ function recoverExplicitPatientHabitualMedications(assessment, transcript, warni
         ? nextMedicationIndex
         : medicationIndex + wanted.length + 100;
       const nearby = text.slice(medicationIndex + wanted.length, nearbyEnd)
+        .split(/\s+y\s+(?=\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui|miligramos?)\s+de\b)/i)[0]
         .split(/\s+y\s+(?=[a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2}\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui)\b)/i)[0];
-      const dose = nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui|miligramos?)\b/i);
+      const leadingDose = text.slice(0, medicationIndex).match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui|miligramos?)\s+de\s*$/i);
+      const dose = leadingDose || nearby.match(/\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui|miligramos?)\b/i);
       const schedules = nearby.match(/\b(?:por\s+la\s+manana|por\s+la\s+noche|al\s+mediodia|en\s+la\s+comida|antes\s+de\s+dormir|para\s+dormir|a\s+demanda|cada\s+\d+\s+horas?|\d+\s+veces?\s+al\s+dia)\b/gi);
       habitual.push({
         raw_name: canonical[0].toUpperCase() + canonical.slice(1),
@@ -174,12 +176,14 @@ function recoverExplicitPatientHabitualMedications(assessment, transcript, warni
     }
   const doseMedicationPattern = /\b([a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2})\s+(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|µg|g|ml|ui|miligramos?)\b/giu;
     const contextWords = new Set([
-      "tomo", "toma", "tomando", "estoy", "estaba", "tratamiento", "medicacion",
+      "yo", "es", "usted", "tomo", "toma", "tomando", "estoy", "estaba", "tratamiento", "medicacion",
       "farmaco", "pauta", "con", "de", "del", "por", "para", "la", "el", "los",
       "las", "un", "una", "al", "en", "cada", "dia", "y", "e", "manana", "noche",
       "mediodia", "dosis", "oral", "actualmente", "habitual", "antes",
     ]);
     for (const match of text.matchAll(doseMedicationPattern)) {
+      // Una dosis seguida de «de <fármaco>» pertenece al nombre posterior.
+      if (/^\s+de\s+[a-z]/i.test(text.slice(match.index + match[0].length))) continue;
       const words = match[1].split(/\s+/);
       while (words.length && contextWords.has(normalize(words[0]))) words.shift();
       while (words.length && contextWords.has(normalize(words.at(-1)))) words.pop();
@@ -1408,3 +1412,4 @@ export function applyClinicalPostprocessing(inputAssessment, transcript) {
     },
   };
 }
+
