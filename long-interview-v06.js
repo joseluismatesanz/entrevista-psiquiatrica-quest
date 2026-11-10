@@ -730,6 +730,9 @@
     if (missingIndexes.length) {
       throw new Error(`Faltan bloques de audio antes de publicar la transcripción (${missingIndexes.join(', ')}).`);
     }
+    if (!visibleProcessedTranscript()) {
+      throw new Error('La transcripción no contiene voz reconocida. Comprueba el micrófono antes de iniciar otra entrevista.');
+    }
     state.finalTranscript = aggregate.transcript;
     const verifiedBlocks = [...state.processedBlocks].sort((a, b) => a.index - b.index).map((block) => ({
       block_index: block.index,
