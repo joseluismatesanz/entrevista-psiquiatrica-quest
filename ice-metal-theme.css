@@ -1,0 +1,93 @@
+/* Visual layer over APROBADA 1.0. Recording blackout remains in its own stylesheet. */
+:root {
+  --navy: #253e52;
+  --blue: #326583;
+  --teal: #38799c;
+  --teal-soft: #e4f4fc;
+  --ice: #f2f9fd;
+  --line: #bccdd8;
+  --muted: #526778;
+  color: #263e50;
+  background: #eef3f6;
+}
+body {
+  background: radial-gradient(ellipse at 85% 0%, #d6f2ff 0, transparent 45%),
+    linear-gradient(125deg, #dce3e8 0%, #fafcfd 34%, #e8f0f5 63%, #d9e6ee 100%);
+  min-height: 100vh;
+}
+.brand-header {
+  background: linear-gradient(115deg, #cbd6de 0%, #f9fcff 29%, #e2f2fa 54%, #fff 70%, #d0dce5 100%);
+  border: 1px solid #b6c7d3;
+  box-shadow: inset 0 1px 0 #fff, 0 12px 32px #375a7214;
+}
+.brand-mark {
+  width: 210px;
+  height: 96px;
+  padding: 4px;
+  perspective: 650px;
+  overflow: visible;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+}
+.brand-mark img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  animation: focvs-turn 7s ease-in-out infinite;
+  filter: drop-shadow(0 5px 3px #335b7633);
+}
+.brand-mark.motion-paused img { animation-play-state: paused; }
+.brand-mark:focus-visible, button:focus-visible {
+  outline: 3px solid #38799c;
+  outline-offset: 4px;
+}
+@keyframes focvs-turn {
+  0%, 24% { transform: rotateX(0deg); }
+  86%, 100% { transform: rotateX(-360deg); }
+}
+.card {
+  border-color: #c5d2dc;
+  background: linear-gradient(125deg, #ffffff 0%, #f7fbfd 65%, #edf4f8 100%);
+  box-shadow: inset 0 1px 0 #fff, 0 8px 24px #375a7210;
+}
+.step, .secondary {
+  background: linear-gradient(175deg, #fff 0%, #e7eef3 52%, #d7e2e9 100%);
+  border-color: #b8cad6;
+  color: #38566b;
+}
+.step.active, .primary, .report-section-save {
+  color: #153e59;
+  background: linear-gradient(165deg, #f5fcff 0%, #c9e8f8 40%, #a5cce2 53%, #d7edf9 100%);
+  border: 1px solid #8eb4cc;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 12px #42779720;
+}
+.record-button, .record-button.recording {
+  color: #1b435d;
+  border-color: #e5edf2;
+  background: linear-gradient(145deg, #fff 0%, #d1ecfa 32%, #9dbed2 51%, #e6f6ff 76%, #bfd4e1 100%);
+  box-shadow: inset 0 2px 3px #fff, inset 0 -3px 5px #65899c40, 0 0 0 1px #b6cbd8, 0 14px 28px #48728b29;
+}
+.record-dot { background: #35647f; }
+.privacy-chip, .draft-badge, .tag, .route-count {
+  background: linear-gradient(140deg, #f6fcff, #dceef8);
+  border-color: #b0cadb;
+  color: #315973;
+}
+.privacy-banner { background: #edf6fbe6; border-color: #c4d8e5; color: #425e72; }
+.privacy-banner strong { color: #315973; }
+textarea, .speaker-row, .report-editor { background: #fcfeff; border-color: #bdcfdc; }
+.steps { background: transparent; }
+@media (max-width: 720px) {
+  .brand-header { gap: 12px; }
+  .brand-mark { width: 112px; height: 72px; }
+  .brand-mark img { width: 100%; }
+  .brand-copy { min-width: 0; }
+  .brand-copy h1 { font-size: 1.5rem; }
+  .brand-copy > p:last-child { font-size: .78rem; }
+  .steps { background: #e9f1f7f5; }
+}
+@media print {
+  .brand-mark img { animation: none; }
+}

@@ -31,8 +31,8 @@ test('PWA: la portada declara instalación móvil y modo aplicación', () => {
   }
 });
 
-test('identidad visual: usa las gafas y una gama azul sin alterar los controles', () => {
-  assert.match(index, /src="assets\/blue-glasses\.png"/);
+test('identidad visual: usa FOCVS y una gama azul sin alterar los controles', () => {
+  assert.match(index, /src="assets\/focvs-metal\.png"/);
   assert.match(index, /href="blue-glasses-theme\.css\?v=/);
   assert.match(index, /id="recordButton"/);
   assert.match(theme, /\.record-button\s*\{/);

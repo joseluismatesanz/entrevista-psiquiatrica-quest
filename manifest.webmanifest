@@ -7,8 +7,8 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
-  "background_color": "#edf5ff",
-  "theme_color": "#123b79",
+  "background_color": "#eef3f6",
+  "theme_color": "#e3edf3",
   "icons": [
     {
       "src": "/icons/blue-glasses-192.png",

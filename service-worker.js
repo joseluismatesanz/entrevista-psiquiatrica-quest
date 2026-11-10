@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'salud-mental-static-v6-long-recovery';
+const STATIC_CACHE = 'salud-mental-static-v7-ice-focvs';
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/styles.css',
@@ -7,6 +7,9 @@ const STATIC_ASSETS = [
   '/blue-glasses-theme.css?v=20260930-1',
   '/recording-focus-v063.css?v=20261107-recovery-1',
   '/assets/blue-glasses.png',
+  '/assets/focvs-metal.png',
+  '/ice-metal-theme.css?v=20261110-1',
+  '/brand-motion.js?v=20261110-1',
   '/icons/blue-glasses-192.png',
   '/icons/blue-glasses-512.png',
   '/icons/blue-glasses-apple-touch.png'
