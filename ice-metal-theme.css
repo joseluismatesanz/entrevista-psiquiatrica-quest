@@ -24,6 +24,7 @@ body {
   width: 210px;
   height: 96px;
   padding: 4px;
+  -webkit-perspective: 650px;
   perspective: 650px;
   overflow: visible;
   border: 0;
@@ -35,17 +36,19 @@ body {
   height: auto;
   display: block;
   object-fit: contain;
-  animation: focvs-turn 7s ease-in-out infinite;
+  -webkit-animation: focvs-turn 5s linear infinite;
+  animation: focvs-turn 5s linear infinite;
+  will-change: transform;
   filter: drop-shadow(0 5px 3px #335b7633);
 }
-.brand-mark.motion-paused img { animation-play-state: paused; }
+.brand-mark.motion-paused img { -webkit-animation-play-state: paused; animation-play-state: paused; }
 .brand-mark:focus-visible, button:focus-visible {
   outline: 3px solid #38799c;
   outline-offset: 4px;
 }
 @keyframes focvs-turn {
-  0%, 24% { transform: rotateX(0deg); }
-  86%, 100% { transform: rotateX(-360deg); }
+  from { transform: rotateX(0deg); }
+  to { transform: rotateX(-360deg); }
 }
 .card {
   border-color: #c5d2dc;
